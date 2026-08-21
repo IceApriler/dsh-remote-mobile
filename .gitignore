@@ -1,0 +1,41 @@
+# 依赖目录
+node_modules/
+
+# 编译构建产物
+lib/
+dist/
+*.tsbuildinfo
+
+# 打包归档产物
+*.tgz
+*.tar.gz
+
+# 日志文件
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# 环境变量及本地配置文件
+.env
+.env.local
+.env.*.local
+
+# 操作系统与编辑器缓存
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.sublime-project
+*.sublime-workspace
+
+# 临时与测试产物
+.temp/
+.cache/
+coverage/

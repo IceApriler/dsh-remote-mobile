@@ -1,0 +1,4 @@
+- insert:
+    - id: remote-mobile
+      name: 'dsh-remote-mobile'
+

@@ -1,0 +1,11 @@
+# 开发源代码与单测
+src/
+test/
+scripts/
+tsconfig.json
+
+# 系统与编辑器文件
+.DS_Store
+*.log
+.git/
+.gitignore

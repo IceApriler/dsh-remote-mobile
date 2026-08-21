@@ -1,0 +1,58 @@
+{
+  "name": "dsh-remote-mobile",
+  "version": "1.0.0",
+  "description": "DeepSeek Hub (DSH) Mobile & Remote Access Security Guard Plugin: Tailscale & LAN bypass, QR scan auth, RSA encryption, brute-force protection, and realtime SSE push.",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek",
+    "tailscale",
+    "remote-access",
+    "mobile",
+    "cordis-plugin",
+    "auth"
+  ],
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "scripts": {
+    "build": "tsc && node scripts/build-client.js",
+    "build:server": "tsc",
+    "build:client": "node scripts/build-client.js",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/**/*.test.js",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-sidebar"
+      ],
+      "platform": "web"
+    }
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "README_EN.md",
+    "LICENSE"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "typescript": "^7.0.2"
+  }
+}
