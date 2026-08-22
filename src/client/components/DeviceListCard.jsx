@@ -1,6 +1,6 @@
 import React from 'react';
 import { formatTime } from '../utils/format.js';
-import { t } from '../i18n.js';
+import { t, formatDeviceName, formatAuthType } from '../i18n.js';
 
 function isCurrentLocalIp(ip, status) {
   if (!ip) return false;
@@ -124,7 +124,7 @@ export function DeviceListCard({ status, revokeDevice, revokeAll, lang }) {
                       gap: '8px',
                     }}
                   >
-                    <span>{dev.deviceName || (lang === 'en' ? 'Mobile Device' : '移动端设备')}</span>
+                    <span>{formatDeviceName(dev.deviceName, lang)}</span>
                     <span
                       style={{
                         fontSize: '11px',
@@ -138,7 +138,7 @@ export function DeviceListCard({ status, revokeDevice, revokeAll, lang }) {
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      {dev.authType}
+                      {formatAuthType(dev.authType, lang)}
                     </span>
                   </div>
                   <div

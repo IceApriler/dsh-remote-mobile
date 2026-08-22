@@ -1,6 +1,6 @@
 import React from 'react';
 import { formatTime } from '../utils/format.js';
-import { t } from '../i18n.js';
+import { t, formatDeviceName, formatAuthType, formatFailedAttempts } from '../i18n.js';
 
 function isCurrentLocalIp(ip, status) {
   if (!ip) return false;
@@ -197,29 +197,20 @@ export function SecurityCard({ status, unlockIp, clearIpStats, lang }) {
                       flexWrap: 'wrap',
                     }}
                   >
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                      {effectiveDeviceName ? (
-                        <span style={{ color: 'var(--dsw-alias-label-primary, inherit)' }}>
-                          {effectiveDeviceName}
-                        </span>
-                      ) : null}
-                      {effectiveDeviceName ? (
-                        <span style={{ color: 'var(--dsw-alias-label-tertiary, #888)', fontWeight: 'normal' }}>
-                          ·
-                        </span>
-                      ) : null}
-                      <span style={{ color: effectiveDeviceName ? 'var(--dsw-alias-label-secondary, #888)' : 'inherit' }}>
-                        {ipLabel}
-                      </span>
+                    <span style={{ fontWeight: '600' }}>
+                      {stat.deviceName
+                        ? `${formatDeviceName(stat.deviceName, lang)} · ${stat.ip}${isLocal ? (lang === 'en' ? ' (Local)' : ' (本机)') : ''}`
+                        : `${stat.ip}${isLocal ? (lang === 'en' ? ' (Local)' : ' (本机)') : ''}`}
                     </span>
 
                     {effectiveAuthType ? (() => {
-                      let bg = 'rgba(148,163,184,0.15)';
-                      let color = '#94a3b8';
+                      const translatedAuth = formatAuthType(effectiveAuthType, lang);
+                      let bg = 'rgba(59,130,246,0.12)';
+                      let color = '#3b82f6';
                       if (effectiveAuthType.indexOf('免密') !== -1 || effectiveAuthType.indexOf('Bypass') !== -1) {
                         bg = 'rgba(16,185,129,0.15)';
                         color = '#10b981';
-                      } else if (effectiveAuthType.indexOf('扫码') !== -1 || effectiveAuthType.indexOf('Pairing') !== -1) {
+                      } else if (effectiveAuthType.indexOf('扫码') !== -1 || effectiveAuthType.indexOf('Pairing') !== -1 || effectiveAuthType.indexOf('QR') !== -1) {
                         bg = 'rgba(59,130,246,0.15)';
                         color = '#3b82f6';
                       } else if (effectiveAuthType.indexOf('密码') !== -1 || effectiveAuthType.indexOf('Password') !== -1) {
@@ -238,7 +229,7 @@ export function SecurityCard({ status, unlockIp, clearIpStats, lang }) {
                             whiteSpace: 'nowrap',
                           }}
                         >
-                          {effectiveAuthType}
+                          {translatedAuth}
                         </span>
                       );
                     })() : null}
@@ -269,9 +260,7 @@ export function SecurityCard({ status, unlockIp, clearIpStats, lang }) {
                           whiteSpace: 'nowrap',
                         }}
                       >
-                        {lang === 'en'
-                          ? `⚠️ ${stat.failedAttempts} failed attempts`
-                          : `⚠️ 曾失败 ${stat.failedAttempts} 次`}
+                        {formatFailedAttempts(stat.failedAttempts, lang)}
                       </span>
                     ) : !effectiveAuthType ? (
                       <span

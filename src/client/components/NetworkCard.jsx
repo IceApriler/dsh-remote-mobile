@@ -41,20 +41,21 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
       {/* 网络条目 1: Tailscale 虚拟私网 */}
       <div
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: '12px',
           paddingBottom: '16px',
           borderBottom: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.12))',
           marginBottom: '16px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          gap: '16px',
         }}
       >
-        <div style={{ flex: '1 1 260px', minWidth: '240px' }}>
+        {/* 左侧内容区：标题 + 徽标 + URL + 说明 */}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          {/* 标题与状态徽标 */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '16px', flexShrink: 0 }}>🔒</span>
-            <span style={{ fontSize: '14px', fontWeight: '700', whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--dsw-alias-label-primary, inherit)' }}>
               {t('tailscaleSectionTitle', lang)}
             </span>
             {status.tailscaleIp ? (
@@ -90,11 +91,11 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
             )}
           </div>
 
+          {/* 访问链接行 */}
           {status.tailscaleIp ? (
             <div
               style={{
                 fontSize: '13px',
-                marginTop: '6px',
                 fontFamily: 'monospace',
                 color: 'var(--dsw-alias-brand-primary, #3b82f6)',
                 display: 'flex',
@@ -108,9 +109,9 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
                 type="button"
                 onClick={() => copyText(`http://${tsHost}:${port}`, t('copiedTip', lang))}
                 style={{
-                  padding: '2px 6px',
+                  padding: '2px 8px',
                   background: 'transparent',
-                  border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.2))',
+                  border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.25))',
                   borderRadius: '4px',
                   fontSize: '11px',
                   cursor: 'pointer',
@@ -127,7 +128,6 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
               style={{
                 fontSize: '12px',
                 color: 'var(--dsw-alias-label-tertiary, #888)',
-                marginTop: '4px',
                 lineHeight: '1.4',
               }}
             >
@@ -140,7 +140,6 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
               style={{
                 fontSize: '12px',
                 color: 'var(--dsw-alias-label-tertiary, #888)',
-                marginTop: '4px',
                 lineHeight: '1.4',
               }}
             >
@@ -149,9 +148,9 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
           ) : null}
         </div>
 
-        {/* Tailscale 免密开关 (iOS 风格切换开关) */}
+        {/* 右侧：Tailscale 免密开关 (固定在右上角) */}
         {status.tailscaleIp ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, paddingTop: '2px' }}>
             <span
               style={{
                 fontSize: '12px',
@@ -216,19 +215,20 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
 
       {/* 网络条目 2: 局域网 Wi-Fi */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {/* 顶部主体：左侧信息 + 右侧开关 */}
         <div
           style={{
             display: 'flex',
-            alignItems: 'center',
             justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: '12px',
+            alignItems: 'flex-start',
+            gap: '16px',
           }}
         >
-          <div style={{ flex: '1 1 260px', minWidth: '240px' }}>
+          {/* 左侧内容区：标题 + 徽标 + URL */}
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '16px', flexShrink: 0 }}>🏠</span>
-              <span style={{ fontSize: '14px', fontWeight: '700', whiteSpace: 'nowrap' }}>
+              <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--dsw-alias-label-primary, inherit)' }}>
                 {t('lanSectionTitle', lang)}
               </span>
               <span
@@ -246,10 +246,11 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
                 {lang === 'en' ? 'Ready' : '已就绪'}
               </span>
             </div>
+
+            {/* 访问链接行 */}
             <div
               style={{
                 fontSize: '13px',
-                marginTop: '6px',
                 fontFamily: 'monospace',
                 color: 'var(--dsw-alias-brand-primary, #3b82f6)',
                 display: 'flex',
@@ -263,9 +264,9 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
                 type="button"
                 onClick={() => copyText(`http://${lanHost}:${port}`, t('copiedTip', lang))}
                 style={{
-                  padding: '2px 6px',
+                  padding: '2px 8px',
                   background: 'transparent',
-                  border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.2))',
+                  border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.25))',
                   borderRadius: '4px',
                   fontSize: '11px',
                   cursor: 'pointer',
@@ -279,8 +280,8 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
             </div>
           </div>
 
-          {/* 局域网免密开关 (高危醒目警告开关) */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+          {/* 右侧：局域网免密开关 (固定在右上角) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, paddingTop: '2px' }}>
             <span
               style={{
                 fontSize: '12px',

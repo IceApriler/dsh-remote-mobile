@@ -248,19 +248,6 @@ export var translations = {
  * 获取当前界面的语言标识 ('zh' 或 'en')
  */
 export function resolveLocale(ctx, status) {
-  try {
-    if (ctx) {
-      if (typeof ctx.get === 'function') {
-        var loc = ctx.get('locale');
-        if (loc && loc.snapshot && loc.snapshot.active) {
-          return loc.snapshot.active.startsWith('en') ? 'en' : 'zh';
-        }
-      }
-      if (ctx.locale && ctx.locale.snapshot && ctx.locale.snapshot.active) {
-        return ctx.locale.snapshot.active.startsWith('en') ? 'en' : 'zh';
-      }
-    }
-  } catch (e) {}
 
   if (typeof document !== 'undefined' && document.documentElement && document.documentElement.lang) {
     return document.documentElement.lang.toLowerCase().startsWith('en') ? 'en' : 'zh';
@@ -294,3 +281,56 @@ export function t(key, lang, params) {
   }
   return text;
 }
+
+/**
+ * 翻译设备名称 (中英双语自适应)
+ */
+export function formatDeviceName(name, lang) {
+  if (!name) return lang === 'en' ? 'Mobile Device' : '移动端设备';
+  if (lang !== 'en') return name;
+
+  return name
+    .replace(/手机/g, 'Phone')
+    .replace(/移动设备/g, 'Mobile Device')
+    .replace(/微信内置浏览器/g, 'WeChat Browser')
+    .replace(/局域网免密临时设备/g, 'LAN Bypass Device')
+    .replace(/Tailscale免密临时设备/g, 'Tailscale Bypass Device');
+}
+
+/**
+ * 翻译认证类型徽章 (中英双语自适应)
+ */
+export function formatAuthType(authType, lang) {
+  if (!authType) return lang === 'en' ? '⚪ Pending' : '⚪ 待认证';
+  if (lang !== 'en') return authType;
+
+  if (authType.includes('扫码配对') || authType.includes('配对码')) {
+    if (authType.includes('365')) return '📱 QR Pairing (365d)';
+    return '📱 QR Authenticated';
+  }
+  if (authType.includes('长期密码') || authType.includes('密码验证')) {
+    if (authType.includes('365')) return '🔑 Password Auth (365d)';
+    return '🔑 Password Auth';
+  }
+  if (authType.includes('局域网') || authType.includes('LAN')) {
+    return '⚡ LAN Direct Bypass';
+  }
+  if (authType.includes('Tailscale')) {
+    return '⚡ Tailscale Bypass';
+  }
+  if (authType.includes('待认证') || authType.includes('未认证')) {
+    return '⚪ Pending';
+  }
+  return authType;
+}
+
+/**
+ * 格式化输错次数 (单复数兼容)
+ */
+export function formatFailedAttempts(count, lang) {
+  if (lang === 'en') {
+    return count === 1 ? '⚠️ 1 failed attempt' : `⚠️ ${count} failed attempts`;
+  }
+  return `⚠️ 曾失败 ${count} 次`;
+}
+
