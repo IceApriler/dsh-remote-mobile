@@ -2,7 +2,7 @@
 
 # dsh-remote-mobile
 
-**DeepSeek Hub (DSH) 远程移动端与局域网安全接入插件**
+**DeepSeek Harness (DSH) 远程移动端与局域网安全接入插件**
 
 [![npm version](https://img.shields.io/npm/v/dsh-remote-mobile.svg?style=flat-square&color=3b82f6)](https://www.npmjs.com/package/dsh-remote-mobile)
 [![npm downloads](https://img.shields.io/npm/dm/dsh-remote-mobile.svg?style=flat-square&color=22c55e)](https://www.npmjs.com/package/dsh-remote-mobile)
@@ -33,7 +33,7 @@
 <span id="about"></span>
 ## 📖 这是什么
 
-`dsh-remote-mobile` 是专为 **DeepSeek Hub (DSH)** 深度定制的远程与移动端安全治理插件。
+`dsh-remote-mobile` 是专为 **DeepSeek Harness (DSH)** 深度定制的远程与移动端安全治理插件。
 
 DSH 核心服务出于安全考虑默认仅监听本地回环地址（`127.0.0.1`），手机、平板或其他电脑无法从外部访问 Web 控制台。本项目通过**访问控制中间件**与**请求隔离技术**，安全地开放了 **Tailscale 虚拟私网** 以及 **本地局域网 (Wi-Fi/LAN)** 访问能力，并提供传输加密、扫码配对、长期密码认证与防暴力破解审计体系。
 
@@ -77,7 +77,7 @@ dsh plugin --profile web add dsh-remote-mobile
     host: '0.0.0.0'
     port: 3080
 
-# 2. 禁用 @linxin666/dsh-web-ui-all 内置的旧版远程插件（必选：防止路由冲突与界面覆盖）
+# 2. 禁用 @linxin666/dsh-web-ui-all 内置的远程插件（必选：防止功能冲突）
 - id: web-ui-remote-web-ui
   disabled: true
 ```

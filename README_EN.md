@@ -2,7 +2,7 @@
 
 # dsh-remote-mobile
 
-**DeepSeek Hub (DSH) Mobile & Remote Access Security Guard Plugin**
+**DeepSeek Harness (DSH) Mobile & Remote Access Security Guard Plugin**
 
 [![npm version](https://img.shields.io/npm/v/dsh-remote-mobile.svg?style=flat-square&color=3b82f6)](https://www.npmjs.com/package/dsh-remote-mobile)
 [![npm downloads](https://img.shields.io/npm/dm/dsh-remote-mobile.svg?style=flat-square&color=22c55e)](https://www.npmjs.com/package/dsh-remote-mobile)
@@ -33,7 +33,7 @@ English Documentation · [简体中文](./README.md)
 <span id="about"></span>
 ## 📖 About
 
-`dsh-remote-mobile` is a dedicated remote and mobile security governance plugin designed specifically for **DeepSeek Hub (DSH)**.
+`dsh-remote-mobile` is a dedicated remote and mobile security governance plugin designed specifically for **DeepSeek Harness (DSH)**.
 
 By default, DSH strictly listens only to the local loopback address (`127.0.0.1`), preventing mobile devices, tablets, or external computers from accessing the Web console. This plugin uses **access control middleware** and **request isolation** to securely open up **Tailscale Private Network** and **Local Area Network (LAN / Wi-Fi)** access, complete with RSA transmission encryption, QR code pairing, persistent password auth, and automated brute-force defense.
 
@@ -77,7 +77,7 @@ Because DSH defaults to `127.0.0.1`, ensure your `~/.dsh/profiles/web/cordis.pat
     host: '0.0.0.0'
     port: 3080
 
-# 2. Disable legacy remote plugin built into @linxin666/dsh-web-ui-all (Required: prevent route conflicts)
+# 2. Disable built-in remote plugin in @linxin666/dsh-web-ui-all (Required: prevent feature conflict)
 - id: web-ui-remote-web-ui
   disabled: true
 ```
