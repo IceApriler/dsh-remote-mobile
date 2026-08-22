@@ -129,18 +129,20 @@ Open the DSH Web Console in your browser, navigate to **Settings ⚙️ -> Remot
 - **Direct Bypass Mode**: Enable passwordless direct bypass independently for Tailscale or LAN. Disabling bypass immediately cleans up temporary credentials and resets device state.
 - **Device Session Management**: Real-time inspection of connected device types, OS, browser, source IP, and last active timestamp, with single-device revocation and one-click bulk revocation.
 
-### 3. Security
-- **Transport RSA Asymmetric Encryption**: Login authentication endpoints support client-side RSA encryption (RSA-OAEP-SHA256 & PKCS#1 v1.5 compatible), ensuring passwords and pairing codes are never transmitted in plaintext.
+### 3. Security & Cryptography
+- **Transport RSA Asymmetric Encryption**: Login endpoints support client-side RSA encryption. In secure contexts (HTTPS) this prioritizes native Web Crypto `RSA-OAEP-SHA256`; in DSH's default HTTP LAN/Tailscale access (non-secure context) it falls back to a pure JS shim using `crypto.getRandomValues()` for cryptographically secure random padding. Sensitive passwords and pairing codes are encrypted on the client before network transmission.
 - **scrypt Slow Hash Storage**: Server persists passwords with `scrypt` salted slow-hashing (`scrypt:${salt}:${hash}`). Verification uses `crypto.timingSafeEqual` constant-time comparison to prevent timing side-channel attacks.
 - **Brute-Force Defense & Rate Limiting**:
   - Automatically locks out IPs for 15 minutes after reaching consecutive failed attempt thresholds (default: 5), returning HTTP 429;
-  - Sliding-window rate limiting (default: 60 visits/min) to prevent high-frequency scraping;
+  - Sliding-window rate limiting (default: 60 visits/min) to prevent high-frequency brute-force scraping;
   - Audit logs and lockout states persist to disk and restore across restarts;
   - Administrators can manually unlock blocked IPs with one click in the panel.
+- **Intelligent Static Asset Whitelisting**: The authentication gate automatically allows verified frontend asset extensions (`.js`, `.css`, `.png`, `.svg`, `.woff2`, etc., 20+ types) while strictly blocking extensionless or dynamic API routes (e.g. `/plugins/xxx/admin`), ensuring smooth third-party plugin rendering without manual whitelist configuration.
+- **Resilient Atomic Persistence & Debounce**: 500ms debounce write-throttling to safeguard disk I/O, coupled with `beforeExit` process flush hooks and atomic temporary file replacement (`renameSync`) for YAML configuration.
 - **Real Socket IP Extraction**: Relies strictly on underlying Socket connection addresses, preventing spoofed `X-Forwarded-For` header attacks.
 
 ### 4. Real-Time Sync & Internationalization
-- **SSE Real-Time Push**: Push notifications for new device pairing, reconnections, revocations, and security alerts via Server-Sent Events.
+- **SSE Real-Time Push**: Push notifications for new device pairing, reconnections, revocations, and security alerts via Server-Sent Events, with bidirectional close listeners and idempotent cleanup.
 - **Adaptive Bilingual UI**: Automatically switches between English and Simplified Chinese based on DSH settings and browser language preferences.
 - **Non-HTTPS Compatibility Patch**: Injects `crypto.randomUUID` Polyfill into HTML templates to fix missing native Web Crypto APIs in HTTP non-secure mobile browser contexts.
 

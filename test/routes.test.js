@@ -17,20 +17,23 @@ function createMockReqRes({ method = 'GET', url = '/', headers = {}, body = null
   let responseHeaders = {}
   let responseBody = ''
 
-  const res = {
-    writeHead(code, hdrs = {}) {
-      statusCode = code
-      responseHeaders = { ...responseHeaders, ...hdrs }
-    },
-    setHeader(key, val) {
-      responseHeaders[key] = val
-    },
-    end(chunk) {
-      if (chunk) responseBody += chunk
-      res.emit?.('finish')
-    },
-    destroy() {},
+  const res = new EventEmitter()
+  res.writeHead = function(code, hdrs = {}) {
+    statusCode = code
+    responseHeaders = { ...responseHeaders, ...hdrs }
   }
+  res.setHeader = function(key, val) {
+    responseHeaders[key] = val
+  }
+  res.write = function(chunk) {
+    if (chunk) responseBody += chunk
+    return true
+  }
+  res.end = function(chunk) {
+    if (chunk) responseBody += chunk
+    res.emit('finish')
+  }
+  res.destroy = function() {}
 
   process.nextTick(() => {
     if (body !== null) {
@@ -240,4 +243,37 @@ test('API 路由处理器功能与安全集成测试 (api.ts)', async (t) => {
     assert.equal(store.getOptions().maxFailedAttempts, 8)
     assert.equal(store.getOptions().lockDurationMs, 1200000)
   })
+
+  await t.test('extractTokenFromRequest 能够正确从 URL ?token=xxx 参数中提取令牌', () => {
+    const mockReq = {
+      url: '/?token=myTestToken123456',
+      headers: {},
+    }
+    const token = store.extractTokenFromRequest(mockReq)
+    assert.equal(token, 'myTestToken123456')
+  })
+
+  await t.test('GET /api/remote-mobile/events SSE 断连事件清理具有幂等性且不泄漏监听器', async () => {
+    const eventsRoute = findRoute('GET', '/api/remote-mobile/events')
+    assert.ok(eventsRoute)
+
+    const initialConnectedListeners = store.listenerCount('device-connected')
+    const initialSecurityListeners = store.listenerCount('ip-security-updated')
+
+    const { req, res } = createMockReqRes({ method: 'GET', url: '/api/remote-mobile/events' })
+    await eventsRoute.handler(req, res)
+
+    // 验证事件监听器已注册
+    assert.equal(store.listenerCount('device-connected'), initialConnectedListeners + 1)
+    assert.equal(store.listenerCount('ip-security-updated'), initialSecurityListeners + 1)
+
+    // 模拟客户端关闭连接：触发 req close 和 res close
+    req.emit('close')
+    res.emit?.('close')
+
+    // 验证监听器被正确注销并回退到初始计数
+    assert.equal(store.listenerCount('device-connected'), initialConnectedListeners)
+    assert.equal(store.listenerCount('ip-security-updated'), initialSecurityListeners)
+  })
 })
+

@@ -382,6 +382,76 @@ test('SessionStore 与设备会话生命周期测试', async (t) => {
 
     rmSync(tempYaml, { force: true })
   })
+
+  await t.test('设备撤销后对应 IP 的安全审计归因状态正确回退为 ⚪ 待认证', () => {
+    const revokeStore = new SessionStore({
+      devicesFile: `/tmp/dsh-revoke-stat-${Date.now()}.json`,
+      secret: 'myPass2026',
+    })
+    const clientIp = '10.10.1.77'
+    const res = revokeStore.verify('myPass2026', 'iPhone', clientIp)
+    assert.equal(res.success, true)
+
+    let stat = revokeStore.getIpSecurityStats().find(s => s.ip === clientIp)
+    assert.equal(stat?.authType, '🔑 长期密码认证')
+
+    // 撤销该设备会话
+    revokeStore.revokeDevice(res.token)
+
+    // 再次记录打开页面访问，审计状态回退为 ⚪ 待认证
+    revokeStore.recordAuthVisit(clientIp)
+    stat = revokeStore.getIpSecurityStats().find(s => s.ip === clientIp)
+    assert.equal(stat?.authType, '⚪ 待认证')
+  })
+
+  await t.test('loadPersistedData 完全忽略历史 devices.json 中的 data.config（无反向覆盖）', async () => {
+    const { writeFileSync, rmSync } = await import('node:fs')
+    const legacyFile = `/tmp/dsh-legacy-config-${Date.now()}.json`
+    // 构造含恶性历史 config 的 devices.json（试图打开 LAN 免密）
+    writeFileSync(legacyFile, JSON.stringify({
+      config: {
+        allowLan: true,
+        allowTailscale: true,
+        secret: 'dangerousSecret',
+      },
+      devices: [],
+      ipStats: [],
+    }), 'utf8')
+
+    const legacyStore = new SessionStore({
+      devicesFile: legacyFile,
+      allowLan: false,
+      allowTailscale: false,
+    })
+
+    // 验证 data.config 被完全忽略，配置保持默认 false
+    assert.equal(legacyStore.getOptions().allowLan, false)
+    assert.equal(legacyStore.getOptions().allowTailscale, false)
+    assert.equal(legacyStore.hasSecret(), false)
+
+    rmSync(legacyFile, { force: true })
+  })
+
+  await t.test('高频 recordAuthVisit 防抖写盘与 flushPersistedData 立即落盘', async () => {
+    const debFile = `/tmp/dsh-debounce-test-${Date.now()}.json`
+    const debStore = new SessionStore({ devicesFile: debFile })
+
+    // 1. 连续触发 10 次高频访问
+    for (let i = 1; i <= 10; i++) {
+      debStore.recordAuthVisit(`10.10.1.${i}`)
+    }
+
+    // 2. 调用 flushPersistedData 立即落盘并验证数据完整
+    debStore.flushPersistedData()
+
+    const restoredStore = new SessionStore({ devicesFile: debFile })
+    const stats = restoredStore.getIpSecurityStats()
+    assert.equal(stats.length, 10)
+
+    const { rmSync, existsSync } = await import('node:fs')
+    if (existsSync(debFile)) rmSync(debFile, { force: true })
+  })
 })
+
 
 

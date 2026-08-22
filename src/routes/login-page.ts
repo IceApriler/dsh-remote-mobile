@@ -13,7 +13,7 @@ export function getLoginPageHtml(publicKeyPem?: string, lang: 'zh' | 'en' = 'zh'
     headerDesc: isEn ? 'Enter 6-digit dynamic pairing code or persistent password' : '请输入 6 位动态配对码或长期访问密码',
     placeholder: isEn ? '6-digit code or password' : '6 位临时配对码 / 长期密码',
     submitBtn: isEn ? 'Authorize & Connect' : '立即授权连接',
-    footerSecurity: isEn ? '🔒 Protected by 2048-bit RSA-OAEP end-to-end encryption' : '🔒 全程受 2048 位 RSA-OAEP 端到端加密保护',
+    footerSecurity: isEn ? '🔒 Protected by 2048-bit RSA encryption' : '🔒 全程受 2048 位 RSA 加密保护',
     verifying: isEn ? '🔐 Encrypting & verifying...' : '🔐 正在 RSA 加密与验证...',
     success: isEn ? 'Authorization successful! Entering workspace...' : '授权成功！正在进入工作区...',
     networkErr: isEn ? 'Network connection error, please try again' : '网络连接异常，请检查网络',
@@ -194,7 +194,7 @@ export function getLoginPageHtml(publicKeyPem?: string, lang: 'zh' | 'en' = 'zh'
     const statusMsg = document.getElementById('statusMsg');
     const submitBtn = document.getElementById('submitBtn');
 
-    // 解析 SPKI 格式公钥并提取 n 和 e
+    // 解析 SPKI 格式公钥并提取 n 和 e（用于纯 JS 垫片计算）
     function parseSpkiKey(pemStr) {
       const b64 = pemStr.replace(/-----BEGIN PUBLIC KEY-----/g, '').replace(/-----END PUBLIC KEY-----/g, '').replace(/\\s/g, '');
       const binary = window.atob(b64);
@@ -244,15 +244,25 @@ export function getLoginPageHtml(publicKeyPem?: string, lang: 'zh' | 'en' = 'zh'
       return res;
     }
 
+    // 纯 JS RSA 垫片加密：使用 CSPRNG (crypto.getRandomValues) 填充
     function rsaEncryptPureJs(plainText, pubPem) {
       const { n, e, keyLen } = parseSpkiKey(pubPem);
       const msgBytes = new TextEncoder().encode(plainText);
       const padLen = keyLen - 3 - msgBytes.length;
-      const pad = [];
-      while (pad.length < padLen) {
-        const r = Math.floor(Math.random() * 255) + 1;
-        pad.push(r);
+      if (padLen < 8) throw new Error('Message too long');
+
+      const pad = new Uint8Array(padLen);
+      if (window.crypto && typeof window.crypto.getRandomValues === 'function') {
+        window.crypto.getRandomValues(pad);
+        for (let i = 0; i < padLen; i++) {
+          if (pad[i] === 0) pad[i] = (Math.floor(Math.random() * 254) + 1);
+        }
+      } else {
+        for (let i = 0; i < padLen; i++) {
+          pad[i] = Math.floor(Math.random() * 255) + 1;
+        }
       }
+
       const em = new Uint8Array(keyLen);
       em[0] = 0x00;
       em[1] = 0x02;
@@ -275,22 +285,54 @@ export function getLoginPageHtml(publicKeyPem?: string, lang: 'zh' | 'en' = 'zh'
       return window.btoa(binary);
     }
 
-    function encryptCredential(plainText) {
+    // 尝试使用 Web Crypto API 原生 RSA-OAEP SHA-256 加密（安全上下文可用）
+    async function trySubtleEncrypt(plainText, pubPem) {
+      if (!window.crypto || !window.crypto.subtle) return null;
+      const b64 = pubPem.replace(/-----BEGIN PUBLIC KEY-----/g, '').replace(/-----END PUBLIC KEY-----/g, '').replace(/\\s/g, '');
+      const binary = window.atob(b64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+      const cryptoKey = await window.crypto.subtle.importKey(
+        'spki',
+        bytes.buffer,
+        { name: 'RSA-OAEP', hash: 'SHA-256' },
+        false,
+        ['encrypt']
+      );
+
+      const encBuffer = await window.crypto.subtle.encrypt(
+        { name: 'RSA-OAEP' },
+        cryptoKey,
+        new TextEncoder().encode(plainText)
+      );
+
+      const encBytes = new Uint8Array(encBuffer);
+      let binaryEnc = '';
+      for (let i = 0; i < encBytes.length; i++) binaryEnc += String.fromCharCode(encBytes[i]);
+      return window.btoa(binaryEnc);
+    }
+
+    async function encryptCredential(plainText) {
       try {
-        const encryptedB64 = rsaEncryptPureJs(plainText, SERVER_RSA_KEY);
-        return { encryptedCredential: encryptedB64 };
+        const subtleB64 = await trySubtleEncrypt(plainText, SERVER_RSA_KEY);
+        if (subtleB64) return { encryptedCredential: subtleB64 };
+      } catch (e) {}
+
+      try {
+        const pureB64 = rsaEncryptPureJs(plainText, SERVER_RSA_KEY);
+        return { encryptedCredential: pureB64 };
       } catch (err) {
         console.error('RSA encrypt error:', err);
         return { credential: plainText };
       }
     }
 
-    // 自动检测 URL 参数里的 token 快速登录
+    // 检测 URL 参数里的 token，仅回填输入框，不自动触发验证
     const urlParams = new URLSearchParams(window.location.search);
     const queryToken = urlParams.get('token');
     if (queryToken) {
       input.value = queryToken;
-      doVerify(queryToken);
     }
 
     form.addEventListener('submit', (e) => {
@@ -307,7 +349,7 @@ export function getLoginPageHtml(publicKeyPem?: string, lang: 'zh' | 'en' = 'zh'
       statusMsg.style.display = 'none';
 
       try {
-        const payload = encryptCredential(credential);
+        const payload = await encryptCredential(credential);
         const res = await fetch('/api/remote-mobile/verify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -340,3 +382,4 @@ export function getLoginPageHtml(publicKeyPem?: string, lang: 'zh' | 'en' = 'zh'
 </body>
 </html>`
 }
+

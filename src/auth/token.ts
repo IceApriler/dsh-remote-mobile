@@ -1,5 +1,5 @@
 import { randomBytes, randomInt } from 'node:crypto'
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync, unlinkSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { homedir } from 'node:os'
 import { EventEmitter } from 'node:events'
@@ -82,9 +82,10 @@ export function readGlobalLocale(filePath = GLOBAL_SETTINGS_FILE): 'zh' | 'en' {
 }
 
 /**
- * 将最新的插件配置安全写回 ~/.dsh/settings.yaml 中的 dsh-remote-mobile 命名空间
+ * 将最新的插件配置安全原子写回 ~/.dsh/settings.yaml 中的 dsh-remote-mobile 命名空间
  */
 export function writeBackToSettingsYaml(options: SessionStoreOptions, filePath = GLOBAL_SETTINGS_FILE): boolean {
+  const tmpPath = `${filePath}.${process.pid}.${Date.now()}.tmp`
   try {
     if (!existsSync(filePath)) return false
     const content = readFileSync(filePath, 'utf8')
@@ -120,9 +121,13 @@ export function writeBackToSettingsYaml(options: SessionStoreOptions, filePath =
       updatedContent = lines.join('\n')
     }
 
-    writeFileSync(filePath, updatedContent, 'utf8')
+    writeFileSync(tmpPath, updatedContent, 'utf8')
+    renameSync(tmpPath, filePath)
     return true
   } catch {
+    try {
+      if (existsSync(tmpPath)) unlinkSync(tmpPath)
+    } catch {}
     return false
   }
 }
@@ -198,12 +203,22 @@ export function parseDeviceName(ua = ''): string {
   return `📱 移动设备 (${browser})`
 }
 
+const activeStores = new Set<SessionStore>()
+if (typeof process !== 'undefined' && typeof process.on === 'function') {
+  process.on('beforeExit', () => {
+    for (const s of activeStores) {
+      try { s.flushPersistedData() } catch {}
+    }
+  })
+}
+
 export class SessionStore extends EventEmitter {
   private sessions = new Map<string, SessionRecord>()
   private shortCodes = new Map<string, ShortCodeRecord>()
   private ipStats = new Map<string, IpSecurityStat>()
   private options: Required<SessionStoreOptions>
   private settingsMutator?: (patch: Partial<SessionStoreOptions>) => void
+  private debounceTimer: NodeJS.Timeout | null = null
   public readonly persistPath: string
   public readonly settingsFilePath: string | null
 
@@ -244,6 +259,7 @@ export class SessionStore extends EventEmitter {
     }
     this.persistPath = this.options.devicesFile
     this.loadPersistedData()
+    activeStores.add(this)
   }
 
   getOptions(): Required<SessionStoreOptions> {
@@ -418,7 +434,7 @@ export class SessionStore extends EventEmitter {
     }
 
     this.emit('ip-security-updated', { stats: this.getIpSecurityStats() })
-    this.savePersistedData()
+    this.savePersistedDataDebounced()
     return { allowed: true }
   }
 
@@ -684,7 +700,7 @@ export class SessionStore extends EventEmitter {
 
     if (isReconnecting) {
       this.emit('device-online', session)
-      this.savePersistedData()
+      this.savePersistedDataDebounced()
     }
     return true
   }
@@ -833,20 +849,6 @@ export class SessionStore extends EventEmitter {
             if (s && s.token) this.sessions.set(s.token, s)
           }
         } else if (data && typeof data === 'object') {
-          if (data.config) {
-            if (typeof data.config.allowTailscale === 'boolean') {
-              this.options.allowTailscale = data.config.allowTailscale
-            }
-            if (typeof data.config.allowLan === 'boolean') {
-              this.options.allowLan = data.config.allowLan
-            }
-            if (typeof data.config.secretHash === 'string') {
-              this.options.secretHash = data.config.secretHash
-            } else if (typeof data.config.secret === 'string' && data.config.secret) {
-              // 自动将老版本的明文 secret 迁移升级为安全加盐哈希
-              this.options.secretHash = hashSecret(data.config.secret)
-            }
-          }
           if (Array.isArray(data.devices)) {
             for (const s of data.devices) {
               if (s && s.token) {
@@ -889,7 +891,35 @@ export class SessionStore extends EventEmitter {
     } catch {}
   }
 
+  /**
+   * 同步立即持久化落盘（由关键路径调用：配对成功、密码认证、撤销设备、手动改密/配置等）
+   */
   savePersistedData() {
+    this.flushPersistedData()
+  }
+
+  /**
+   * 500ms 防抖持久化落盘（由高频访问路径调用：每次打开 /auth、validateToken 重连时间戳更新等）
+   */
+  savePersistedDataDebounced() {
+    if (this.debounceTimer) return
+    this.debounceTimer = setTimeout(() => {
+      this.debounceTimer = null
+      this.flushPersistedData()
+    }, 500)
+    if (typeof (this.debounceTimer as any).unref === 'function') {
+      ;(this.debounceTimer as any).unref()
+    }
+  }
+
+  /**
+   * 立即执行待写的持久化数据落盘并清理定时器
+   */
+  flushPersistedData() {
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer)
+      this.debounceTimer = null
+    }
     try {
       mkdirSync(dirname(this.persistPath), { recursive: true })
       const payload = {
@@ -900,3 +930,4 @@ export class SessionStore extends EventEmitter {
     } catch {}
   }
 }
+

@@ -10,9 +10,9 @@ interface KeyPair {
   privateKey: string
 }
 
-let keyPair: KeyPair
+let keyPair: KeyPair | null = null
 
-function loadOrCreateKeyPair(): KeyPair {
+function loadOrCreateKeyPair(): KeyPair | null {
   try {
     if (existsSync(RSA_KEY_FILE)) {
       const content = readFileSync(RSA_KEY_FILE, 'utf8')
@@ -23,33 +23,42 @@ function loadOrCreateKeyPair(): KeyPair {
     }
   } catch {}
 
-  const pair = generateKeyPairSync('rsa', {
-    modulusLength: 2048,
-    publicKeyEncoding: {
-      type: 'spki',
-      format: 'pem',
-    },
-    privateKeyEncoding: {
-      type: 'pkcs8',
-      format: 'pem',
-    },
-  })
-
   try {
-    mkdirSync(dirname(RSA_KEY_FILE), { recursive: true })
-    writeFileSync(RSA_KEY_FILE, JSON.stringify(pair, null, 2), { encoding: 'utf8', mode: 0o600 })
-  } catch {}
+    const pair = generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+      publicKeyEncoding: {
+        type: 'spki',
+        format: 'pem',
+      },
+      privateKeyEncoding: {
+        type: 'pkcs8',
+        format: 'pem',
+      },
+    })
 
-  return pair
+    try {
+      mkdirSync(dirname(RSA_KEY_FILE), { recursive: true })
+      writeFileSync(RSA_KEY_FILE, JSON.stringify(pair, null, 2), { encoding: 'utf8', mode: 0o600 })
+    } catch {}
+
+    return pair
+  } catch {
+    return null
+  }
 }
 
-keyPair = loadOrCreateKeyPair()
+function getKeyPair(): KeyPair | null {
+  if (keyPair) return keyPair
+  keyPair = loadOrCreateKeyPair()
+  return keyPair
+}
 
 /**
  * 获取服务端的持久化 RSA 公钥 (PEM 格式)
  */
 export function getPublicKeyPem(): string {
-  return keyPair.publicKey
+  const pair = getKeyPair()
+  return pair ? pair.publicKey : ''
 }
 
 /**
@@ -57,6 +66,9 @@ export function getPublicKeyPem(): string {
  */
 export function decryptWithPrivateKey(encryptedBase64: string): string {
   if (!encryptedBase64) return ''
+  const pair = getKeyPair()
+  if (!pair || !pair.privateKey) return ''
+
   try {
     const buffer = Buffer.from(encryptedBase64, 'base64')
     // 2048 位 RSA 密文标准长度必须为 256 字节
@@ -66,7 +78,7 @@ export function decryptWithPrivateKey(encryptedBase64: string): string {
     try {
       const decrypted = privateDecrypt(
         {
-          key: keyPair.privateKey,
+          key: pair.privateKey,
           padding: constants.RSA_PKCS1_OAEP_PADDING,
           oaepHash: 'sha256',
         },
@@ -79,7 +91,7 @@ export function decryptWithPrivateKey(encryptedBase64: string): string {
     try {
       const decrypted = privateDecrypt(
         {
-          key: keyPair.privateKey,
+          key: pair.privateKey,
           padding: constants.RSA_PKCS1_OAEP_PADDING,
           oaepHash: 'sha1',
         },
@@ -92,7 +104,7 @@ export function decryptWithPrivateKey(encryptedBase64: string): string {
     try {
       const decrypted = privateDecrypt(
         {
-          key: keyPair.privateKey,
+          key: pair.privateKey,
           padding: constants.RSA_PKCS1_PADDING,
         },
         buffer

@@ -12,14 +12,25 @@ test('全局安全门禁中间件测试', async (t) => {
   const gate = createGlobalAuthGate(store)
 
   await t.test('公开路径判定', () => {
-    // 仅 /auth、public-key、verify 允许未授权公开访问（安全加固，与原始全公开不同）
+    // 仅 /auth、public-key、verify 与合法静态文件允许未授权公开访问
     assert.equal(isPublicPath('/auth'), true)
     assert.equal(isPublicPath('/auth?token=123456'), true)
     assert.equal(isPublicPath('/api/remote-mobile/verify'), true)
     assert.equal(isPublicPath('/api/remote-mobile/public-key'), true)
-    assert.equal(isPublicPath('/plugins/xxx.js'), true)
     assert.equal(isPublicPath('/assets/yyy.css'), true)
     assert.equal(isPublicPath('/favicon.ico'), true)
+
+    // /plugins/ 下合法前端静态文件扩展名放行
+    assert.equal(isPublicPath('/plugins/xxx.js'), true)
+    assert.equal(isPublicPath('/plugins/dsh-pet/dist/index.mjs'), true)
+    assert.equal(isPublicPath('/plugins/dsh-pet/assets/cat.png'), true)
+    assert.equal(isPublicPath('/plugins/dsh-pet/style.css'), true)
+    assert.equal(isPublicPath('/plugins/dsh-pet/fonts/icon.woff2'), true)
+
+    // /plugins/ 下无扩展名或动态管理 API 必须严格拦截
+    assert.equal(isPublicPath('/plugins/dsh-admin/delete-database'), false)
+    assert.equal(isPublicPath('/plugins/super-tool/api/run-shell'), false)
+    assert.equal(isPublicPath('/plugins/foo'), false)
 
     // 敏感/管理类端点必须全部保持非公开，防止未授权绕过获取权限
     const sensitiveEndpoints = [

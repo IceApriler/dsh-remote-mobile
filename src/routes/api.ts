@@ -384,14 +384,20 @@ export function createRoutes(store: SessionStore) {
           ;(keepAlive as any).unref()
         }
 
-        req.on('close', () => {
+        let cleaned = false
+        const cleanup = () => {
+          if (cleaned) return
+          cleaned = true
           clearInterval(keepAlive)
           store.off('device-connected', onConnected)
           store.off('device-online', onOnline)
           store.off('device-revoked', onRevoked)
           store.off('ip-security-updated', onSecurityUpdated)
           store.off('ip-security-alert', onSecurityAlert)
-        })
+        }
+
+        req.on('close', cleanup)
+        res.on('close', cleanup)
       },
     },
   ]

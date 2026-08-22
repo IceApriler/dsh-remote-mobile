@@ -10,6 +10,8 @@ export function isLoopbackRequest(req: IncomingMessage): boolean {
   return ip === '127.0.0.1' || ip === '::1' || ip === 'localhost'
 }
 
+const STATIC_ASSET_EXT_REGEX = /\.(js|mjs|cjs|css|png|jpg|jpeg|gif|svg|webp|ico|woff|woff2|ttf|eot|otf|map|json|txt|wasm)$/i
+
 /**
  * 判断是否为无需鉴权的公开静态/登录路径
  */
@@ -18,7 +20,7 @@ export function isPublicPath(url = ''): boolean {
   if (pathname === '/auth') return true
   if (pathname.startsWith('/api/remote-mobile/public-key')) return true
   if (pathname.startsWith('/api/remote-mobile/verify')) return true
-  if (pathname.startsWith('/plugins/')) return true
+  if (pathname.startsWith('/plugins/') && STATIC_ASSET_EXT_REGEX.test(pathname)) return true
   if (pathname.startsWith('/assets/')) return true
   if (pathname === '/favicon.ico') return true
   return false
