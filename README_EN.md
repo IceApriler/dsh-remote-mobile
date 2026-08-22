@@ -10,7 +10,7 @@
 [![license](https://img.shields.io/npm/l/dsh-remote-mobile.svg?style=flat-square&color=10b981)](https://github.com/IceApriler/dsh-remote-mobile/blob/master/LICENSE)
 
 <p align="center">
-  <b>Break Loopback Limits · QR Instant Pairing · Full Workspace Parity · End-to-End Security Gateway</b>
+  <b>Break Loopback Limits · QR Quick Pairing · Full Workspace Parity · Transport-Layer Encryption</b>
 </p>
 
 English Documentation · [简体中文](./README.md)
@@ -35,18 +35,18 @@ English Documentation · [简体中文](./README.md)
 
 `dsh-remote-mobile` is a dedicated remote and mobile security governance plugin designed specifically for **DeepSeek Hub (DSH)**.
 
-By default, DSH strictly listens only to the local loopback address (`127.0.0.1`), preventing mobile devices, tablets, or external computers from accessing the Web console. This plugin uses **global security gate middleware** and **request context virtualization** to securely open up **Tailscale Private Network** and **Local Area Network (LAN / Wi-Fi)** access, complete with RSA transmission encryption, QR code pairing, persistent password auth, and automated brute-force defense.
+By default, DSH strictly listens only to the local loopback address (`127.0.0.1`), preventing mobile devices, tablets, or external computers from accessing the Web console. This plugin uses **access control middleware** and **request isolation** to securely open up **Tailscale Private Network** and **Local Area Network (LAN / Wi-Fi)** access, complete with RSA transmission encryption, QR code pairing, persistent password auth, and automated brute-force defense.
 
 ---
 
 <span id="advantages"></span>
 ## ⚡ Key Advantages
 
-* 🚀 **Break Network Barriers with Full Workspace Parity**: Solves the core issue of accessing DSH Web over LAN and Tailscale. When accessed on mobile devices, **creating workspaces, switching workspaces, and executing terminal commands are 100% supported** without any feature degradation!
-* 📱 **Unified Codebase with Web (Zero Backend Overhead)**: Mobile devices share the exact same DSH Web core runtime and ecosystem plugins (such as `dsh-pet`, task boards, etc.). Zero duplicate backend maintenance needed; future enhancements only require standard responsive styling adjustments!
-* 🛡️ **End-to-End Security Gateway & Encryption**: Built-in client-side RSA asymmetric public key encryption, `scrypt` salted slow-hashing password persistence, and automated IP lockout upon consecutive brute-force failures.
-* 📲 **Out-of-the-Box Instant QR Pairing**: Auto-detects Tailscale CGNAT and LAN IP addresses to generate dedicated pairing QR codes. Authenticate and obtain persistent credentials in under 5 seconds.
-* 🔄 **SSE Real-Time Push Stream**: Device connection, reconnection, revocation, and security alert events are broadcasted instantaneously via Server-Sent Events without polling.
+* 🚀 **Break Network Barriers with Full Workspace Parity**: Solves the core issue of accessing DSH Web over LAN and Tailscale. When accessed on mobile devices, **creating workspaces, switching workspaces, and executing terminal commands are supported** without feature degradation.
+* 📱 **Unified Codebase with Web**: Mobile devices share the same DSH Web core runtime and ecosystem plugins (such as `dsh-pet`, task boards, etc.). No duplicate backend maintenance is needed; future enhancements only require standard responsive styling adjustments.
+* 🛡️ **Security Gateway & Transport Encryption**: Built-in client-side RSA asymmetric public key encryption, `scrypt` salted slow-hashing password persistence, and automated IP lockout upon consecutive brute-force failures, blocking unauthorized access over public/LAN networks.
+* 📲 **Quick QR Pairing**: Auto-detects Tailscale CGNAT and LAN IP addresses to generate dedicated pairing QR codes. Scan the code to authenticate and obtain persistent credentials.
+* 🔄 **SSE Real-Time Push**: Device connection, reconnection, revocation, and security alert events are pushed in real time via Server-Sent Events without polling.
 
 ---
 
@@ -127,11 +127,11 @@ Open the DSH Web Console in your browser, navigate to **Settings ⚙️ -> Remot
 - **Dynamic 6-Digit Pairing Codes**: Generates 6-digit short codes (5-minute validity, single-use) that exchange for 365-day persistent authentication cookies on mobile.
 - **Persistent Access Passwords**: Set customizable persistent passwords (minimum 6 characters with letters and numbers) for seamless long-term logins across multiple devices.
 - **Direct Bypass Mode**: Enable passwordless direct bypass independently for Tailscale or LAN. Disabling bypass immediately cleans up temporary credentials and resets device state.
-- **Device Session Management**: Real-time inspection of connected device types, OS, browser, source IP, and last active timestamp, with single-device kick-off and one-click bulk revocation.
+- **Device Session Management**: Real-time inspection of connected device types, OS, browser, source IP, and last active timestamp, with single-device revocation and one-click bulk revocation.
 
-### 3. Enterprise-Grade Security
+### 3. Security
 - **Transport RSA Asymmetric Encryption**: Login authentication endpoints support client-side RSA encryption (RSA-OAEP-SHA256 & PKCS#1 v1.5 compatible), ensuring passwords and pairing codes are never transmitted in plaintext.
-- **scrypt Slow Hash Storage**: Server persists passwords with `scrypt` salted slow-hashing (`scrypt:${salt}:${hash}`). Verification uses `crypto.timingSafeEqual` constant-time comparison to eliminate timing side-channel attacks.
+- **scrypt Slow Hash Storage**: Server persists passwords with `scrypt` salted slow-hashing (`scrypt:${salt}:${hash}`). Verification uses `crypto.timingSafeEqual` constant-time comparison to prevent timing side-channel attacks.
 - **Brute-Force Defense & Rate Limiting**:
   - Automatically locks out IPs for 15 minutes after reaching consecutive failed attempt thresholds (default: 5), returning HTTP 429;
   - Sliding-window rate limiting (default: 60 visits/min) to prevent high-frequency scraping;
@@ -140,7 +140,7 @@ Open the DSH Web Console in your browser, navigate to **Settings ⚙️ -> Remot
 - **Real Socket IP Extraction**: Relies strictly on underlying Socket connection addresses, preventing spoofed `X-Forwarded-For` header attacks.
 
 ### 4. Real-Time Sync & Internationalization
-- **SSE Full-Duplex Channel**: Real-time push notifications for new device pairing, reconnections, revocations, and security alerts.
+- **SSE Real-Time Push**: Push notifications for new device pairing, reconnections, revocations, and security alerts via Server-Sent Events.
 - **Adaptive Bilingual UI**: Automatically switches between English and Simplified Chinese based on DSH settings and browser language preferences.
 - **Non-HTTPS Compatibility Patch**: Injects `crypto.randomUUID` Polyfill into HTML templates to fix missing native Web Crypto APIs in HTTP non-secure mobile browser contexts.
 
@@ -190,6 +190,12 @@ ln -s $(pwd) ~/.dsh/profiles/web/node_modules/dsh-remote-mobile
 
 </details>
 
+### Uninstalling
+
+```bash
+dsh plugin --profile web remove dsh-remote-mobile
+```
+
 ---
 
 ## ⚙️ Advanced Configuration
@@ -214,7 +220,7 @@ dsh-remote-mobile:
 |---|---|---|
 | `~/.dsh/settings.yaml` | Global security policies & bypass toggles | User R/W |
 | `~/.dsh/remote-mobile/devices.json` | Authorized devices, sessions & IP audit statistics | Local persistence |
-| `~/.dsh/remote-mobile/rsa_private.key` | Server RSA private key | `0o600` (Restricted to current user) |
+| `~/.dsh/remote-mobile/rsa-keys.json` | Server RSA keypair (public & private) | Local storage, `0o600` (Restricted to current user) |
 
 ---
 
@@ -234,14 +240,14 @@ dsh-remote-mobile:
 <summary><b>Q2: What is the difference between Tailscale Bypass and LAN Bypass?</b></summary>
 
 **Answer**:
-* **Tailscale Bypass**: Highly secure. Tailscale operates over an end-to-end encrypted WireGuard overlay where only devices logged into your account can connect.
+* **Tailscale Bypass**: Highly secure. Tailscale operates over an encrypted WireGuard overlay where only devices logged into your account can connect.
 * **LAN Bypass**: Inherent risks. Anyone connected to your Wi-Fi (including guests or unauthorized devices) can control your workspace. **Never enable this on untrusted networks**.
 </details>
 
 <details>
 <summary><b>Q3: Does mobile support creating and switching workspaces normally?</b></summary>
 
-**Answer**: **Fully Supported!** The plugin virtualizes the full execution context, granting mobile devices 100% feature parity with the desktop Web interface.
+**Answer**: **Supported.** The plugin uses request isolation so that mobile devices get the same workspace management and execution capabilities as the desktop Web interface.
 </details>
 
 ---
