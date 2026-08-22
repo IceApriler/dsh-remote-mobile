@@ -1,99 +1,71 @@
+<div align="center">
+
 # dsh-remote-mobile
 
-English Documentation | [简体中文](./README.md)
+**DeepSeek Hub (DSH) Mobile & Remote Access Security Guard Plugin**
 
-`dsh-remote-mobile` is a remote and mobile security access plugin tailored for DeepSeek Hub (DSH).
+[![npm version](https://img.shields.io/npm/v/dsh-remote-mobile.svg?style=flat-square&color=3b82f6)](https://www.npmjs.com/package/dsh-remote-mobile)
+[![license](https://img.shields.io/npm/l/dsh-remote-mobile.svg?style=flat-square&color=10b981)](https://github.com/IceApriler/dsh-remote-mobile/blob/master/LICENSE)
+[![node](https://img.shields.io/node/v/dsh-remote-mobile.svg?style=flat-square&color=8b5cf6)](https://nodejs.org)
+[![dsh-compatible](https://img.shields.io/badge/DSH-Compatible-orange?style=flat-square)](https://github.com/deepseek-ai)
 
-By default, the DSH core service restricts Web UI access to localhost (`127.0.0.1`). This project safely enables Tailscale VPN and Local Area Network (LAN/Wi-Fi) remote connectivity using a custom authentication gate and context virtualization. It features QR code pairing, persistent passwords, brute-force rate-limiting, local data persistence, and realtime SSE push notifications.
+<p align="center">
+  <b>Break Loopback Limits · QR Instant Pairing · Full Workspace Parity · End-to-End Security Gateway</b>
+</p>
 
----
+English Documentation · [简体中文](./README.md)
 
-## 🌟 Key Features
-
-### 1. Network Connectivity
-- **Tailscale Virtual Private Network**: Automatically detects Tailscale CGNAT IPs (`100.64.0.0/10`), generates a dedicated access QR code, and offers an end-to-end encrypted passwordless bypass option.
-- **Local Area Network (LAN / Wi-Fi)**: Automatically detects RFC 1918 private IPs (`192.168.x.x`, `10.x.x.x`, `172.16-31.x.x`), provides an independent LAN QR code, and includes high-risk visual safety warnings.
-- **Quick QR Pairing**: Direct scanning with mobile camera or WeChat to open the authorization portal.
-
-### 2. Multi-Tiered Authentication
-- **Dynamic 6-Digit Code**: Generates temporary one-time pairing codes (valid for 5 minutes). Entering it on mobile grants a 365-day persistent session cookie.
-- **Persistent Password (Secret)**: Set a custom password (letters + numbers, 6+ chars) to gain persistent authentication on any mobile device.
-- **Passwordless Bypass Mode**: Selectively enable bypass for Tailscale or LAN. Turning off bypass automatically purges temporary credentials and resets device statuses.
-- **Device Management**: View connected device types, OS, browsers, IP addresses, and last seen timestamps. Supports individual device revocation and one-click global purge.
-
-### 3. Enterprise-Grade Security
-- **Transport Layer Encryption**: Login verification supports RSA encryption (RSA-OAEP-SHA256 & PKCS#1 v1.5 compatible). Passwords and codes are encrypted on the browser before network transit.
-- **Slow Salted Hashing**: Stores passwords locally using `scrypt` slow hashing (`scrypt:${salt}:${hash}`). Employs `crypto.timingSafeEqual` for constant-time comparisons against timing attacks.
-- **Brute-Force & Rate-Limiting Defense**:
-  - Automatically locks out an IP for 15 minutes after 5 consecutive failed attempts (returns HTTP 429);
-  - Sliding-window rate limiter (default: 60 requests/min) to prevent high-frequency abuse;
-  - Audit logs and lockout states persist across DSH restarts;
-  - Manual one-click IP unlock support from the management UI.
-- **Socket-Level Verification**: Only inspects low-level socket remote addresses, defending against forged `X-Forwarded-For` headers.
-
-### 4. Realtime Push & Full Internationalization (i18n)
-- **Server-Sent Events (SSE)**: Delivers instant push notifications for new device pairing, reconnections, revocations, and security alerts without client polling.
-- **Bilingual Adaptive UI**: Dynamically switches between English and Simplified Chinese based on DSH preferences and browser settings.
-- **Non-HTTPS Crypto Polyfill**: Injects a lightweight `crypto.randomUUID` Polyfill into HTML headers to support mobile browsers running in HTTP non-secure contexts.
+<p align="center">
+  <a href="#-about">About</a> •
+  <a href="#-quick-start">Quick Start</a> •
+  <a href="#-required-configuration">Required Config</a> •
+  <a href="#-ui-preview">UI Preview</a> •
+  <a href="#-key-advantages">Key Advantages</a> •
+  <a href="#-features">Features</a> •
+  <a href="#-all-installation-methods">Installation</a> •
+  <a href="#-faq">FAQ</a>
+</p>
 
 ---
 
-## 🛠️ Installation & Setup
+</div>
 
-### Step 1: Install the Plugin
+## 📖 About
 
-#### Option 1: One-Click via DSH CLI (Recommended)
+`dsh-remote-mobile` is a dedicated remote and mobile security governance plugin designed specifically for **DeepSeek Hub (DSH)**.
 
-Use the DSH built-in plugin manager to install from npm directly into the web profile:
+By default, DSH strictly listens only to the local loopback address (`127.0.0.1`), preventing mobile devices, tablets, or external computers from accessing the Web console. This plugin uses **global security gate middleware** and **request context virtualization** to securely open up **Tailscale Private Network** and **Local Area Network (LAN / Wi-Fi)** access, complete with RSA transmission encryption, QR code pairing, persistent password auth, and automated brute-force defense.
+
+---
+
+## ⚡ Key Advantages
+
+* 🚀 **Break Network Barriers with Full Workspace Parity**: Solves the core issue of accessing DSH Web over LAN and Tailscale. When accessed on mobile devices, **creating workspaces, switching workspaces, and executing terminal commands are 100% supported** without any feature degradation!
+* 📱 **Unified Codebase with Web (Zero Backend Overhead)**: Mobile devices share the exact same DSH Web core runtime and ecosystem plugins (such as `dsh-pet`, task boards, etc.). Zero duplicate backend maintenance needed; future enhancements only require standard responsive styling adjustments!
+* 🛡️ **End-to-End Security Gateway & Encryption**: Built-in client-side RSA asymmetric public key encryption, `scrypt` salted slow-hashing password persistence, and automated IP lockout upon consecutive brute-force failures.
+* 📲 **Out-of-the-Box Instant QR Pairing**: Auto-detects Tailscale CGNAT and LAN IP addresses to generate dedicated pairing QR codes. Authenticate and obtain persistent credentials in under 5 seconds.
+* 🔄 **SSE Real-Time Push Stream**: Device connection, reconnection, revocation, and security alert events are broadcasted instantaneously via Server-Sent Events without polling.
+
+---
+
+## 🚀 Quick Start
+
+### 1. One-Command Installation
+
+Run the DSH official plugin management command in your terminal (Recommended):
 
 ```bash
 dsh plugin --profile web add dsh-remote-mobile
 ```
 
-#### Option 2: Visual Install via Web Settings (Plugin Manager)
-
-Open the DSH Web UI in your browser:
-1. Navigate to **Settings ⚙️ -> Plugins**;
-2. Switch to the **"Plugin Manager"** (插件管理) tab at the top;
-3. Enter the npm package name **`dsh-remote-mobile`** in the input field and click **"Install"** (安装);
-4. Restart DSH to activate the plugin.
-
-#### Option 3: Manual Installation via Package Manager in Profile Directory
-
-```bash
-# 1. Enter the DSH Web Profile directory
-cd ~/.dsh/profiles/web
-
-# 2. Install via pnpm
-pnpm add dsh-remote-mobile
-
-# 3. Check ~/.dsh/profiles/web/package.json
-# Ensure "dsh-remote-mobile" is present in dsh.profile.bundles
-```
-
-#### Option 4: Local Development & Source Installation
-
-```bash
-# 1. Clone or download the repository locally
-cd ~/Myfile/www-self/dsh-remote-mobile
-
-# 2. Install dependencies, build and pack
-npm install
-npm run build && npm test && npm pack
-
-# 3. Install the packed tarball into DSH
-cd ~/.dsh/profiles/web
-pnpm add /path/to/dsh-remote-mobile/dsh-remote-mobile-1.0.0.tgz
-```
-
 ---
 
-### Step 2: Configure Network Binding (Required)
+### 2. Required Configuration (Open External Listening)
 
-Since DSH defaults to listening only on `127.0.0.1` (localhost), you need to bind the webserver to `0.0.0.0` in `~/.dsh/profiles/web/cordis.patch.yml` to accept connections from Tailscale or LAN:
+Because DSH defaults to `127.0.0.1`, ensure your `~/.dsh/profiles/web/cordis.patch.yml` includes the following configuration to allow external connectivity:
 
 ```yaml
-# 1. Override webserver to listen on 0.0.0.0:3080 (Required for remote access)
+# 1. Allow webserver to listen for external connections (Required)
 - id: webserver
   name: '@deepseek-ai/dsh-host-webserver'
   inject: [webStartup]
@@ -101,78 +73,171 @@ Since DSH defaults to listening only on `127.0.0.1` (localhost), you need to bin
     host: '0.0.0.0'
     port: 3080
 
-# 2. Disable the built-in remote plugin from @linxin666/dsh-web-ui-all (Required: prevent route conflicts and UI overlaps)
+# 2. Disable legacy remote plugin built into @linxin666/dsh-web-ui-all (Required: prevent route conflicts)
 - id: web-ui-remote-web-ui
   disabled: true
 ```
 
-> **💡 Note**: The plugin is automatically registered by the DSH Bundle loader. You **do not** need to add `id: remote-mobile` to `cordis.patch.yml`.
+> **💡 Note**: Plugin self-registration is automatically handled by the DSH Bundle system. You do **not** need to add `id: remote-mobile` manually.
 
 ---
 
-### Step 3: Start DSH
+### 3. Launch & Pair
 
 ```bash
-dsh web
+dsh web --no-open
 ```
 
-Open `http://127.0.0.1:3080` in your PC browser and navigate to **Settings ⚙️ -> Remote & Mobile** to configure pairing.
+Open the DSH Web Console in your browser, navigate to **Settings ⚙️ -> Remote & Mobile Access**, and scan the QR code with your mobile camera or WeChat to start using DSH on mobile!
 
 ---
 
-## ⚙️ Configuration
+## 🖼️ UI Preview
 
-Options can be customized in `~/.dsh/settings.yaml` (or interactively configured via **Settings ⚙️ -> Remote & Mobile**):
+### Desktop DSH Plugin Control Panel
+
+| Network Access & QR Pairing | Persistent Passwords, Device Sessions & IP Audit |
+| :---: | :---: |
+| ![PC Settings - Network & QR](images/pc-dsh-setting-1.png) | ![PC Settings - Passwords & Devices](images/pc-dsh-setting-2.png) |
+
+---
+
+### Mobile Live Demonstration (Same-Origin Auth & Full Workspace Control)
+
+| Mobile QR Auth & Login Page | Full DSH Workspace Control on Mobile |
+| :---: | :---: |
+| ![Mobile Auth Page](images/mobile-auth.jpg) | ![Mobile Workspace Control](images/mobile-dsh.jpg) |
+
+---
+
+## 🌟 Features
+
+### 1. Network Access
+- **Tailscale Private Network**: Automatically detects local Tailscale IP (`100.64.0.0/10` CGNAT subnet), creates pairing QR codes, and supports direct passwordless bypass (transport encryption guaranteed by Tailscale WireGuard tunnels).
+- **Local Area Network (LAN / Wi-Fi)**: Automatically detects RFC 1918 private IPs (`192.168.x.x`, `10.x.x.x`, `172.16-31.x.x`), generates LAN pairing QR codes with direct link previews and prominent high-risk security warnings.
+- **Instant QR Pairing**: Scan QR codes directly with any mobile camera or scanner app to authenticate.
+
+### 2. Multi-Tier Authentication
+- **Dynamic 6-Digit Pairing Codes**: Generates 6-digit short codes (5-minute validity, single-use) that exchange for 365-day persistent authentication cookies on mobile.
+- **Persistent Access Passwords**: Set customizable persistent passwords (minimum 6 characters with letters and numbers) for seamless long-term logins across multiple devices.
+- **Direct Bypass Mode**: Enable passwordless direct bypass independently for Tailscale or LAN. Disabling bypass immediately cleans up temporary credentials and resets device state.
+- **Device Session Management**: Real-time inspection of connected device types, OS, browser, source IP, and last active timestamp, with single-device kick-off and one-click bulk revocation.
+
+### 3. Enterprise-Grade Security
+- **Transport RSA Asymmetric Encryption**: Login authentication endpoints support client-side RSA encryption (RSA-OAEP-SHA256 & PKCS#1 v1.5 compatible), ensuring passwords and pairing codes are never transmitted in plaintext.
+- **scrypt Slow Hash Storage**: Server persists passwords with `scrypt` salted slow-hashing (`scrypt:${salt}:${hash}`). Verification uses `crypto.timingSafeEqual` constant-time comparison to eliminate timing side-channel attacks.
+- **Brute-Force Defense & Rate Limiting**:
+  - Automatically locks out IPs for 15 minutes after reaching consecutive failed attempt thresholds (default: 5), returning HTTP 429;
+  - Sliding-window rate limiting (default: 60 visits/min) to prevent high-frequency scraping;
+  - Audit logs and lockout states persist to disk and restore across restarts;
+  - Administrators can manually unlock blocked IPs with one click in the panel.
+- **Real Socket IP Extraction**: Relies strictly on underlying Socket connection addresses, preventing spoofed `X-Forwarded-For` header attacks.
+
+### 4. Real-Time Sync & Internationalization
+- **SSE Full-Duplex Channel**: Real-time push notifications for new device pairing, reconnections, revocations, and security alerts.
+- **Adaptive Bilingual UI**: Automatically switches between English and Simplified Chinese based on DSH settings and browser language preferences.
+- **Non-HTTPS Compatibility Patch**: Injects `crypto.randomUUID` Polyfill into HTML templates to fix missing native Web Crypto APIs in HTTP non-secure mobile browser contexts.
+
+---
+
+## 📦 All Installation Methods
+
+<details>
+<summary><b>Expand to view all 4 installation methods</b></summary>
+
+### Method 1: DSH CLI One-Command Install (Recommended)
+```bash
+dsh plugin --profile web add dsh-remote-mobile
+```
+
+### Method 2: Web GUI Plugin Marketplace Install
+1. Open DSH Web console in your browser;
+2. Navigate to **Settings ⚙️ -> Plugins**;
+3. Switch to the **Plugin Management** tab at the top;
+4. Enter the npm package name **`dsh-remote-mobile`** and click **Install**;
+5. Restart DSH after installation completes.
+
+### Method 3: Install via Package Manager in Profile Directory
+```bash
+# 1. Navigate to DSH Web Profile directory
+cd ~/.dsh/profiles/web
+
+# 2. Install using pnpm
+pnpm add dsh-remote-mobile
+```
+
+### Method 4: Local Source Development (Instant Symlink Sync)
+```bash
+# 1. Clone source code
+git clone https://github.com/IceApriler/dsh-remote-mobile.git
+cd dsh-remote-mobile
+
+# 2. Install dependencies & build
+npm install
+npm run build
+
+# 3. Create symlink to DSH runtime (changes take effect instantly on npm run build)
+rm -rf ~/.dsh/profiles/web/node_modules/dsh-remote-mobile
+ln -s $(pwd) ~/.dsh/profiles/web/node_modules/dsh-remote-mobile
+```
+
+</details>
+
+---
+
+## ⚙️ Advanced Configuration
+
+Fully integrated with the DSH official Settings system. Configurations can be adjusted in the Web UI or edited in `~/.dsh/settings.yaml` under the `dsh-remote-mobile` namespace:
 
 ```yaml
 dsh-remote-mobile:
-  # Bypass options
-  allowTailscale: true        # boolean, default: false - Allow passwordless Tailscale access
-  allowLan: false             # boolean, default: false - Allow passwordless LAN (Wi-Fi) access
-
-  # Persistent password hash (auto-generated when saved in the UI)
-  secretHash: ''              # string, default: empty
-
-  # Advanced security policies
-  maxVisitsPerMinute: 60      # number, default: 60 - Max visits to /auth per minute per IP
-  maxFailedAttempts: 5        # number, default: 5 - Lockout threshold for wrong passwords
-  lockDurationMs: 900000      # number, default: 900000 (15 min) - Lockout duration in ms
+  allowTailscale: false       # boolean, default false: allow passwordless access via Tailscale
+  allowLan: false             # boolean, default false: allow passwordless access via LAN (High Risk)
+  secretHash: ""              # string, default empty: scrypt salted hash of the persistent password
+  maxVisitsPerMinute: 60      # number, default 60: max login page visits per minute per IP
+  maxFailedAttempts: 5        # number, default 5: max consecutive failed attempts before IP lockout
+  lockDurationMs: 900000      # number, default 900000 (15 mins): IP lockout duration in ms
 ```
 
-| Option | Type | Default | Description |
-|---|---|---|---|
-| `allowTailscale` | `boolean` | `false` | Enable passwordless access for Tailscale nodes |
-| `allowLan` | `boolean` | `false` | Enable passwordless access for local Wi-Fi devices (High Risk) |
-| `secretHash` | `string` | `""` | Salted scrypt hash for persistent password |
-| `maxVisitsPerMinute` | `number` | `60` | Max /auth page visits per minute per IP |
-| `maxFailedAttempts` | `number` | `5` | Maximum failed attempts before IP lockout |
-| `lockDurationMs` | `number` | `900000` | IP lockout duration (ms) |
+---
+
+## 📂 Local File Storage Locations
+
+| Path | Description | Security Level |
+|---|---|---|
+| `~/.dsh/settings.yaml` | Global security policies & bypass toggles | User R/W |
+| `~/.dsh/remote-mobile/devices.json` | Authorized devices, sessions & IP audit statistics | Local persistence |
+| `~/.dsh/remote-mobile/rsa_private.key` | Server RSA private key | `0o600` (Restricted to current user) |
 
 ---
 
-## 📂 Local Storage Paths
+## ❓ FAQ
 
-- **Device Sessions & Security Audit**: `~/.dsh/remote-mobile/devices.json`
-- **RSA Transport Keypair**: `~/.dsh/remote-mobile/rsa-keys.json` (auto-generated on first launch with `0600` permissions)
+<details>
+<summary><b>Q1: Getting "Connection Refused" or cannot open page when scanning on mobile?</b></summary>
 
----
+**Answer**: Please verify the following 3 items:
+1. Ensure `host: '0.0.0.0'` is properly configured in `cordis.patch.yml` and DSH has been restarted;
+2. For LAN access, ensure your mobile phone and computer are connected to the exact same Wi-Fi router;
+3. If OS firewall is active on the computer, ensure inbound traffic on port `3080` is allowed.
+</details>
 
-## 🔒 Security Best Practices
+<details>
+<summary><b>Q2: What is the difference between Tailscale Bypass and LAN Bypass?</b></summary>
 
-1. **LAN Bypass Risk**: **NEVER enable `allowLan`** on public Wi-Fi, cafes, hotels, or untrusted shared networks.
-2. **Tailscale Recommended**: Prioritize Tailscale for encrypted private access without exposing ports to the public internet.
-3. **Password Strength**: When setting a persistent password, choose a strong alphanumeric combination (6+ characters).
+**Answer**:
+* **Tailscale Bypass**: Highly secure. Tailscale operates over an end-to-end encrypted WireGuard overlay where only devices logged into your account can connect.
+* **LAN Bypass**: Inherent risks. Anyone connected to your Wi-Fi (including guests or unauthorized devices) can control your workspace. **Never enable this on untrusted networks**.
+</details>
 
----
+<details>
+<summary><b>Q3: Does mobile support creating and switching workspaces normally?</b></summary>
 
-## 🗑️ Uninstalling
-
-```bash
-dsh plugin --profile web remove dsh-remote-mobile
-```
+**Answer**: **Fully Supported!** The plugin virtualizes the full execution context, granting mobile devices 100% feature parity with the desktop Web interface.
+</details>
 
 ---
 
 ## 📄 License
 
-[MIT License](./LICENSE)
+This project is licensed under the [MIT License](LICENSE).
