@@ -5,9 +5,9 @@
 **DeepSeek Hub (DSH) Mobile & Remote Access Security Guard Plugin**
 
 [![npm version](https://img.shields.io/npm/v/dsh-remote-mobile.svg?style=flat-square&color=3b82f6)](https://www.npmjs.com/package/dsh-remote-mobile)
+[![npm downloads](https://img.shields.io/npm/dm/dsh-remote-mobile.svg?style=flat-square&color=22c55e)](https://www.npmjs.com/package/dsh-remote-mobile)
+[![node](https://img.shields.io/badge/node-%3E%3D18.0.0-8b5cf6?style=flat-square)](https://nodejs.org)
 [![license](https://img.shields.io/npm/l/dsh-remote-mobile.svg?style=flat-square&color=10b981)](https://github.com/IceApriler/dsh-remote-mobile/blob/master/LICENSE)
-[![node](https://img.shields.io/node/v/dsh-remote-mobile.svg?style=flat-square&color=8b5cf6)](https://nodejs.org)
-[![dsh-compatible](https://img.shields.io/badge/DSH-Compatible-orange?style=flat-square)](https://github.com/deepseek-ai)
 
 <p align="center">
   <b>Break Loopback Limits · QR Instant Pairing · Full Workspace Parity · End-to-End Security Gateway</b>
