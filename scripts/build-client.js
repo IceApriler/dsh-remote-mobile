@@ -14,12 +14,17 @@ const outClientDts = resolve(rootDir, 'lib/client.d.ts');
 
 mkdirSync(dirname(outClientJs), { recursive: true });
 
-// 1. 同步 version 到 src/client/version.js
+// 1. 同步 version 和 buildTime 到 src/client/version.js
+const now = new Date();
+const pad = (n) => String(n).padStart(2, '0');
+const buildTime = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+
 const versionContent = `/**
- * 客户端版本号定义
- * 在 build-client.js 自动化打包时会自动同步 package.json 中的 version
+ * 客户端版本号与构建时间定义
+ * 在 build-client.js 自动化打包时会自动同步
  */
 export const PLUGIN_VERSION = 'v${pkg.version || '1.0.0'}';
+export const BUILD_TIME = '${buildTime}';
 `;
 writeFileSync(resolve(rootDir, 'src/client/version.js'), versionContent, 'utf8');
 
@@ -56,7 +61,7 @@ ${compiledCode}
 `;
 
 writeFileSync(outClientJs, bundleContent, 'utf8');
-console.log(`✅ [build-client] 成功使用 esbuild 编译 JSX 并构建 Bundle -> lib/client.js (v${pkg.version})`);
+console.log(`✅ [build-client] 成功使用 esbuild 编译 JSX 并构建 Bundle -> lib/client.js (v${pkg.version}, ${buildTime})`);
 
 // 4. 输出 client.d.ts 类型声明
 const dtsContent = `declare const _default: (ctx: any) => void;
@@ -66,3 +71,19 @@ export declare function apply(ctx: any): void;
 export declare function TailscaleMobileSection(props: any): any;
 `;
 writeFileSync(outClientDts, dtsContent, 'utf8');
+
+// 5. 若检测到 DSH 运行环境且非软链接，自动同步拷贝最新 lib 产物
+const dshProfileMod = resolve(process.env.HOME || '', '.dsh/profiles/web/node_modules/dsh-remote-mobile');
+try {
+  import('node:fs').then(({ existsSync, lstatSync, copyFileSync, mkdirSync }) => {
+    if (existsSync(dshProfileMod)) {
+      const isSymlink = lstatSync(dshProfileMod).isSymbolicLink();
+      if (!isSymlink) {
+        mkdirSync(resolve(dshProfileMod, 'lib'), { recursive: true });
+        copyFileSync(outClientJs, resolve(dshProfileMod, 'lib/client.js'));
+        copyFileSync(outClientDts, resolve(dshProfileMod, 'lib/client.d.ts'));
+        console.log(`🔄 [build-client] 自动同步最新 client.js 产物到 DSH 运行目录 -> ~/.dsh/profiles/web/node_modules/dsh-remote-mobile/lib/client.js`);
+      }
+    }
+  });
+} catch {}

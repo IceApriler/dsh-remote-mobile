@@ -51,10 +51,10 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
           marginBottom: '16px',
         }}
       >
-        <div style={{ flex: 1, minWidth: '220px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '16px' }}>🔒</span>
-            <span style={{ fontSize: '14px', fontWeight: '700' }}>
+        <div style={{ flex: '1 1 260px', minWidth: '240px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '16px', flexShrink: 0 }}>🔒</span>
+            <span style={{ fontSize: '14px', fontWeight: '700', whiteSpace: 'nowrap' }}>
               {t('tailscaleSectionTitle', lang)}
             </span>
             {status.tailscaleIp ? (
@@ -66,6 +66,8 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
                   background: 'rgba(16,185,129,0.15)',
                   color: '#10b981',
                   fontWeight: '600',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
                 }}
               >
                 {lang === 'en' ? 'Connected' : '已连接'}
@@ -79,6 +81,8 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
                   background: 'rgba(239,68,68,0.15)',
                   color: '#ef4444',
                   fontWeight: '600',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
                 }}
               >
                 {lang === 'en' ? 'Not Connected' : '未连接'}
@@ -90,17 +94,20 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
             <div
               style={{
                 fontSize: '13px',
-                marginTop: '4px',
+                marginTop: '6px',
                 fontFamily: 'monospace',
                 color: 'var(--dsw-alias-brand-primary, #3b82f6)',
+                display: 'flex',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '8px',
               }}
             >
-              {`http://${tsHost}:${port}`}
+              <span>{`http://${tsHost}:${port}`}</span>
               <button
                 type="button"
                 onClick={() => copyText(`http://${tsHost}:${port}`, t('copiedTip', lang))}
                 style={{
-                  marginLeft: '8px',
                   padding: '2px 6px',
                   background: 'transparent',
                   border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.2))',
@@ -108,6 +115,8 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
                   fontSize: '11px',
                   cursor: 'pointer',
                   color: 'var(--dsw-alias-label-secondary, inherit)',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
                 }}
               >
                 {t('copyUrlBtn', lang)}
@@ -119,6 +128,7 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
                 fontSize: '12px',
                 color: 'var(--dsw-alias-label-tertiary, #888)',
                 marginTop: '4px',
+                lineHeight: '1.4',
               }}
             >
               {t('tailscaleGuide', lang)}
@@ -131,6 +141,7 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
                 fontSize: '12px',
                 color: 'var(--dsw-alias-label-tertiary, #888)',
                 marginTop: '4px',
+                lineHeight: '1.4',
               }}
             >
               {t('tailscaleBypassDesc', lang)}
@@ -140,7 +151,7 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
 
         {/* Tailscale 免密开关 (iOS 风格切换开关) */}
         {status.tailscaleIp ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
             <span
               style={{
                 fontSize: '12px',
@@ -148,6 +159,7 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
                   ? 'var(--dsw-alias-brand-primary, #3b82f6)'
                   : 'var(--dsw-alias-label-secondary, #888)',
                 fontWeight: '600',
+                whiteSpace: 'nowrap',
               }}
             >
               {status.allowTailscale ? t('directBypassOn', lang) : t('directBypassOff', lang)}
@@ -160,6 +172,7 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
                 height: '24px',
                 cursor: 'pointer',
                 userSelect: 'none',
+                flexShrink: 0,
               }}
             >
               <input
@@ -212,10 +225,10 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
             gap: '12px',
           }}
         >
-          <div style={{ flex: 1, minWidth: '220px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '16px' }}>🏠</span>
-              <span style={{ fontSize: '14px', fontWeight: '700' }}>
+          <div style={{ flex: '1 1 260px', minWidth: '240px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '16px', flexShrink: 0 }}>🏠</span>
+              <span style={{ fontSize: '14px', fontWeight: '700', whiteSpace: 'nowrap' }}>
                 {t('lanSectionTitle', lang)}
               </span>
               <span
@@ -226,6 +239,8 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
                   background: 'rgba(16,185,129,0.15)',
                   color: '#10b981',
                   fontWeight: '600',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
                 }}
               >
                 {lang === 'en' ? 'Ready' : '已就绪'}
@@ -234,17 +249,20 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
             <div
               style={{
                 fontSize: '13px',
-                marginTop: '4px',
+                marginTop: '6px',
                 fontFamily: 'monospace',
                 color: 'var(--dsw-alias-brand-primary, #3b82f6)',
+                display: 'flex',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '8px',
               }}
             >
-              {`http://${lanHost}:${port}`}
+              <span>{`http://${lanHost}:${port}`}</span>
               <button
                 type="button"
                 onClick={() => copyText(`http://${lanHost}:${port}`, t('copiedTip', lang))}
                 style={{
-                  marginLeft: '8px',
                   padding: '2px 6px',
                   background: 'transparent',
                   border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.2))',
@@ -252,6 +270,8 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
                   fontSize: '11px',
                   cursor: 'pointer',
                   color: 'var(--dsw-alias-label-secondary, inherit)',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
                 }}
               >
                 {t('copyUrlBtn', lang)}
@@ -260,7 +280,7 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
           </div>
 
           {/* 局域网免密开关 (高危醒目警告开关) */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
             <span
               style={{
                 fontSize: '12px',
@@ -269,12 +289,13 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
                 display: 'flex',
                 alignItems: 'center',
                 gap: '4px',
+                whiteSpace: 'nowrap',
               }}
             >
               {status.allowLan
                 ? lang === 'en'
-                  ? '🚨 LAN Bypass Enabled (HIGH RISK)'
-                  : '🚨 局域网免密已开启（高危状态）'
+                  ? '🚨 LAN Bypass (High Risk)'
+                  : '🚨 局域网免密（高危）'
                 : t('directBypassOff', lang)}
             </span>
             <label
@@ -285,6 +306,7 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
                 height: '24px',
                 cursor: 'pointer',
                 userSelect: 'none',
+                flexShrink: 0,
               }}
             >
               <input

@@ -188,13 +188,14 @@ export function QrPairingCard({
             onClick={copyDirectLink}
             style={{
               padding: '6px 16px',
-              background: 'var(--dsw-alias-brand-primary, #3b82f6)',
-              color: 'white',
+              background: '#2563eb',
+              color: '#ffffff',
               border: 'none',
               borderRadius: '6px',
               fontSize: '12px',
               fontWeight: '600',
               cursor: 'pointer',
+              boxShadow: '0 2px 6px rgba(37, 99, 235, 0.3)',
               transition: 'background-color 0.2s',
             }}
           >

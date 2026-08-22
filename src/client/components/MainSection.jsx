@@ -19,7 +19,7 @@ import { DeviceListCard } from './DeviceListCard.jsx';
 import { SecurityCard } from './SecurityCard.jsx';
 import { StorageCard } from './StorageCard.jsx';
 import { ConfigCard } from './ConfigCard.jsx';
-import { PLUGIN_VERSION } from '../version.js';
+import { PLUGIN_VERSION, BUILD_TIME } from '../version.js';
 import { t, resolveLocale } from '../i18n.js';
 
 /**
@@ -62,6 +62,7 @@ export function TailscaleMobileSection(props) {
   const [maxFailedInput, setMaxFailedInput] = useState('5');
   const [lockDurationMinsInput, setLockDurationMinsInput] = useState('15');
   const [isSaving, setIsSaving] = useState(false);
+  const [showVersionTip, setShowVersionTip] = useState(false);
   const [currentLang, setCurrentLang] = useState(resolveLocale(ctx, status));
 
   const refreshStatusOnly = useCallback(() => {
@@ -493,18 +494,61 @@ export function TailscaleMobileSection(props) {
             >
               {t('title', currentLang)}
             </h3>
-            <span
-              style={{
-                fontSize: '11px',
-                padding: '2px 7px',
-                borderRadius: '10px',
-                background: 'rgba(59,130,246,0.15)',
-                color: 'var(--dsw-alias-brand-primary, #3b82f6)',
-                fontWeight: '600',
+            <div
+              style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}
+              onMouseEnter={() => setShowVersionTip(true)}
+              onMouseLeave={() => setShowVersionTip(false)}
+              onClick={() => {
+                setToast({
+                  message: `📦 dsh-remote-mobile ${PLUGIN_VERSION} (${currentLang === 'en' ? 'Build: ' : '构建时间: '}${BUILD_TIME})`,
+                  type: 'info',
+                });
+                setTimeout(() => setToast(null), 3000);
               }}
             >
-              {PLUGIN_VERSION}
-            </span>
+              <span
+                style={{
+                  fontSize: '11px',
+                  padding: '2px 7px',
+                  borderRadius: '10px',
+                  background: 'rgba(59,130,246,0.15)',
+                  color: 'var(--dsw-alias-brand-primary, #3b82f6)',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                {PLUGIN_VERSION}
+              </span>
+
+              {/* 鼠标悬停 0 延迟即时浮现的 Tooltip 气泡 */}
+              {showVersionTip ? (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 6px)',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    backgroundColor: '#0f172a',
+                    color: '#f8fafc',
+                    padding: '5px 10px',
+                    borderRadius: '6px',
+                    fontSize: '11px',
+                    fontWeight: '500',
+                    whiteSpace: 'nowrap',
+                    boxShadow: '0 8px 16px rgba(0,0,0,0.3)',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    zIndex: 9999,
+                    pointerEvents: 'none',
+                    lineHeight: '1.4',
+                    textAlign: 'center',
+                  }}
+                >
+                  {`${currentLang === 'en' ? 'Build: ' : '打包时间: '}${BUILD_TIME}`}
+                </div>
+              ) : null}
+            </div>
           </div>
           <div
             style={{

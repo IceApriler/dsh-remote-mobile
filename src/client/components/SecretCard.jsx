@@ -151,8 +151,8 @@ export function SecretCard({
           style={{
             padding: '0 16px',
             height: '38px',
-            background: 'var(--dsw-alias-brand-primary, #3b82f6)',
-            color: 'white',
+            background: '#2563eb',
+            color: '#ffffff',
             border: 'none',
             borderRadius: '8px',
             fontSize: '13px',
@@ -160,6 +160,7 @@ export function SecretCard({
             cursor: 'pointer',
             whiteSpace: 'nowrap',
             flexShrink: 0,
+            boxShadow: '0 2px 6px rgba(37, 99, 235, 0.3)',
           }}
         >
           {t('saveSecretBtn', lang)}

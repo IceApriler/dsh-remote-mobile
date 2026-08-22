@@ -262,15 +262,16 @@ export function ConfigCard({
           disabled={isSaving}
           style={{
             padding: '6px 18px',
-            background: 'var(--dsw-alias-brand-primary, #3b82f6)',
+            background: '#2563eb',
             border: 'none',
-            color: 'white',
+            color: '#ffffff',
             borderRadius: '6px',
             fontSize: '12px',
             fontWeight: '600',
             cursor: isSaving ? 'not-allowed' : 'pointer',
             opacity: isSaving ? 0.7 : 1,
             whiteSpace: 'nowrap',
+            boxShadow: '0 2px 6px rgba(37, 99, 235, 0.3)',
           }}
         >
           {isSaving ? t('savingConfigBtn', lang) : t('saveConfigBtn', lang)}
