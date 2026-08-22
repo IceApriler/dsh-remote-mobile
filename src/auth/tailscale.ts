@@ -39,10 +39,11 @@ export function isLanIp(rawIp?: string): boolean {
 }
 
 /**
- * 提取请求的客户端真实 IP（基于底层 Socket 连接，防止外部伪造 X-Forwarded-For）
+ * 提取请求的客户端真实 IP（基于底层 Socket 连接，防止外部伪造 X-Forwarded-For，且兼容虚拟化场景）
  */
-export function getClientIp(req: { socket?: { remoteAddress?: string }; headers?: Record<string, string | string[] | undefined> }): string {
-  return req.socket?.remoteAddress?.replace(/^::ffff:/, '') || '127.0.0.1'
+export function getClientIp(req: { socket?: { remoteAddress?: string; __dsh_real_remote_address__?: string }; headers?: Record<string, string | string[] | undefined> }): string {
+  const realAddress = req.socket?.__dsh_real_remote_address__ || req.socket?.remoteAddress
+  return realAddress?.replace(/^::ffff:/, '') || '127.0.0.1'
 }
 
 /**

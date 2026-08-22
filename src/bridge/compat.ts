@@ -65,6 +65,11 @@ export function patchHttpServerWithVirtualizer(
   server.removeAllListeners('request')
 
   server.on('request', (req: IncomingMessage, res: ServerResponse) => {
+    // 0. 优先在 Socket 首道关卡记录未经虚拟化篡改的真实客户端物理 IP (防止 Keep-Alive 连接复用污染)
+    if (req.socket && !(req.socket as any).__dsh_real_remote_address__) {
+      (req.socket as any).__dsh_real_remote_address__ = req.socket.remoteAddress
+    }
+
     // 1. 响应层拦截：在主文档 index.html 响应流中的 <head> 首行注入 Crypto Polyfill
     const originalEnd = res.end
     let isHtml = false

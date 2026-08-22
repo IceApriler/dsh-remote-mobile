@@ -16,10 +16,18 @@ mkdirSync(dirname(outClientJs), { recursive: true })
 
 function stripImportsAndExports(code) {
   return code
-    .replace(/^import\s+.*?;\s*$/gm, '')
-    .replace(/^export\s+(?:default\s+)?/gm, '')
+    .replace(/^import\s+[\s\S]*?;\s*$/gm, '')
+    .replace(/^export\s+(?:default\s+)?(?:var|let|const|function|async function|class)?\s*/gm, (match) => {
+      if (match.includes('default')) return '';
+      return match.replace(/^export\s+/, '');
+    })
 }
 
+// 读取 package.json 获取最新版本号
+const pkg = JSON.parse(readFileSync(resolve(rootDir, 'package.json'), 'utf8'))
+const pluginVersion = `v${pkg.version || '1.0.0'}`
+
+const versionCode = `var PLUGIN_VERSION = ${JSON.stringify(pluginVersion)};`
 const i18nCode = stripImportsAndExports(readFileSync(resolve(clientDir, 'i18n.js'), 'utf8'))
 const qrcodeCode = stripImportsAndExports(readFileSync(resolve(clientDir, 'qrcode.js'), 'utf8'))
 const formatCode = stripImportsAndExports(readFileSync(resolve(clientDir, 'utils/format.js'), 'utf8'))
@@ -48,7 +56,10 @@ window.__ModuleLoader__.load({
     var React = require("react");
     var jsx = require("react/jsx-runtime");
 
-    // --- 0. 国际化多语言引擎 ---
+    // --- 0. 版本号 ---
+    ${versionCode}
+
+    // --- 1. 国际化多语言引擎 ---
 ${i18nCode}
 
     // --- 1. 二维码生成引擎 ---
@@ -91,31 +102,40 @@ ${mainSectionCode}
         }
         meta.content = "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover";
 
-        // 全局长连接监听 (SSE 模式)：0 延时实时接收新设备配对/重新上线事件
-        if (!window.__DSH_TAILSCALE_SSE_LISTENER__) {
-          window.__DSH_TAILSCALE_SSE_LISTENER__ = true;
-          try {
-            var eventSource = new EventSource("/api/remote-mobile/events");
-            eventSource.onmessage = function(event) {
-              try {
-                var data = JSON.parse(event.data || "{}");
-                if (data.type === "device-connected" && data.device) {
-                  showGlobalDeviceToast(data.device, "device-connected");
-                  window.dispatchEvent(new CustomEvent("dsh-device-updated", { detail: data }));
-                } else if (data.type === "device-online" && data.device) {
-                  showGlobalDeviceToast(data.device, "device-online");
-                  window.dispatchEvent(new CustomEvent("dsh-device-updated", { detail: data }));
-                } else if (data.type === "device-revoked") {
-                  window.dispatchEvent(new CustomEvent("dsh-device-updated", { detail: data }));
-                } else if (data.type === "ip-security-alert") {
-                  showGlobalSecurityToast(data);
-                  window.dispatchEvent(new CustomEvent("dsh-device-updated", { detail: data }));
-                } else if (data.type === "ip-security-updated") {
-                  window.dispatchEvent(new CustomEvent("dsh-device-updated", { detail: data }));
-                }
-              } catch (e) {}
-            };
-          } catch (e) {}
+        // 全局长连接监听 (SSE 模式)：0 延时实时接收新设备配对/重新上线/IP审计事件，带自动重连
+        if (!window.__DSH_REMOTE_MOBILE_SSE_LISTENER__) {
+          window.__DSH_REMOTE_MOBILE_SSE_LISTENER__ = true;
+          var initSse = function() {
+            try {
+              var eventSource = new EventSource("/api/remote-mobile/events");
+              eventSource.onmessage = function(event) {
+                try {
+                  var data = JSON.parse(event.data || "{}");
+                  if (data.type === "device-connected" && data.device) {
+                    showGlobalDeviceToast(data.device, "device-connected");
+                    window.dispatchEvent(new CustomEvent("dsh-device-updated", { detail: data }));
+                  } else if (data.type === "device-online" && data.device) {
+                    showGlobalDeviceToast(data.device, "device-online");
+                    window.dispatchEvent(new CustomEvent("dsh-device-updated", { detail: data }));
+                  } else if (data.type === "device-revoked") {
+                    window.dispatchEvent(new CustomEvent("dsh-device-updated", { detail: data }));
+                  } else if (data.type === "ip-security-alert") {
+                    showGlobalSecurityToast(data);
+                    window.dispatchEvent(new CustomEvent("dsh-device-updated", { detail: data }));
+                  } else if (data.type === "ip-security-updated") {
+                    window.dispatchEvent(new CustomEvent("dsh-device-updated", { detail: data }));
+                  }
+                } catch (e) {}
+              };
+              eventSource.onerror = function() {
+                try { eventSource.close(); } catch (e) {}
+                setTimeout(initSse, 3000);
+              };
+            } catch (e) {
+              setTimeout(initSse, 5000);
+            }
+          };
+          initSse();
         }
 
         var slots = null;

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import { SessionStore } from '../lib/auth/token.js'
 import { patchHttpServerWithVirtualizer, CRYPTO_POLYFILL_SNIPPET } from '../lib/bridge/compat.js'
+import { getClientIp } from '../lib/auth/tailscale.js'
 
 test('上下文虚拟化与兼容性补丁测试 (compat.ts)', async (t) => {
   await t.test('HTML 响应自动注入 crypto.randomUUID Polyfill 脚本', (t, done) => {
@@ -82,6 +83,53 @@ test('上下文虚拟化与兼容性补丁测试 (compat.ts)', async (t) => {
         'sec-fetch-site': 'cross-site',
       },
       socket: { remoteAddress: '100.81.241.99' },
+    }
+    const res = {
+      writeHead() {},
+      setHeader() {},
+      end() {},
+    }
+
+    mockServer.emit('request', req, res)
+  })
+
+  await t.test('socket 虚拟化后经 __dsh_real_remote_address__ 保留真实客户端 IP', (t, done) => {
+    const mockServer = new EventEmitter()
+    const store = new SessionStore({ devicesFile: `/tmp/dsh-compat-test-${Date.now()}.json` })
+
+    // 门禁放行，且执行真实 IP 记录（步骤 0）与 socket 虚拟化
+    const gateMiddleware = (req, res, next) => {
+      next?.()
+      return true
+    }
+
+    let assertDoneOnce = false
+    mockServer.on('request', (req, res) => {
+      if (assertDoneOnce) return
+      assertDoneOnce = true
+
+      // 首次请求：真实 remoteAddress 应先被记录到 socket 上
+      assert.equal(req.socket.__dsh_real_remote_address__, '192.168.3.34')
+
+      // 虚拟化后 socket.remoteAddress 已变为 127.0.0.1
+      assert.equal(req.socket.remoteAddress, '127.0.0.1')
+
+      // 但 getClientIp 应优先读取 __dsh_real_remote_address__ 返回真实 IP
+      assert.equal(getClientIp(req), '192.168.3.34')
+
+      // 模拟该连接上第二次（keep-alive 复用）请求：真实 IP 必须仍然保留
+      const req2 = { headers: req.headers, socket: req.socket, url: '/auth' }
+      assert.equal(getClientIp(req2), '192.168.3.34')
+      done()
+    })
+
+    patchHttpServerWithVirtualizer(mockServer, gateMiddleware, store)
+
+    // 构造 socket，使其 remoteAddress 可被 defineProperty 覆盖
+    const socket = { remoteAddress: '192.168.3.34' }
+    const req = {
+      headers: { host: '100.81.241.99:3080' },
+      socket,
     }
     const res = {
       writeHead() {},

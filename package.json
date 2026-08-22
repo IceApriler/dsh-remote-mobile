@@ -1,6 +1,6 @@
 {
   "name": "dsh-remote-mobile",
-  "version": "1.0.0",
+  "version": "1.0.4",
   "description": "DeepSeek Hub (DSH) Mobile & Remote Access Security Guard Plugin: Tailscale & LAN bypass, QR scan auth, RSA encryption, brute-force protection, and realtime SSE push.",
   "keywords": [
     "dsh",
@@ -28,6 +28,7 @@
     "build:server": "tsc",
     "build:client": "node scripts/build-client.js",
     "typecheck": "tsc --noEmit",
+    "pretest": "node scripts/build-client.js",
     "test": "node --test test/**/*.test.js",
     "prepublishOnly": "npm run build && npm test"
   },

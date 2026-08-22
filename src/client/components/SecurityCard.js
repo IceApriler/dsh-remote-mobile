@@ -176,8 +176,8 @@ export function renderSecurityCard(jsx, status, unlockIp, clearIpStats, lang) {
                     style: { fontSize: "11px", color: "var(--dsw-alias-label-tertiary, #888)", lineHeight: "1.4", wordBreak: "break-word" },
                     children: [
                       lang === 'en'
-                        ? ("Visits: " + stat.authVisits + " · Attempts: " + stat.totalAttempts + " · Consecutive fails: " + stat.failedAttempts + " · Last seen: " + formatTime(stat.lastSeenAt))
-                        : ("打开登录页 " + stat.authVisits + " 次 · 尝试配对 " + stat.totalAttempts + " 次 · 连续失败 " + stat.failedAttempts + " 次 · 最近访问 " + formatTime(stat.lastSeenAt))
+                        ? ("Visits: " + stat.authVisits + " · Attempts: " + stat.totalAttempts + " · Consecutive fails: " + stat.failedAttempts + " · Last seen: " + formatTime(stat.lastSeenAt, lang))
+                        : ("打开登录页 " + stat.authVisits + " 次 · 尝试配对 " + stat.totalAttempts + " 次 · 连续失败 " + stat.failedAttempts + " 次 · 最近访问 " + formatTime(stat.lastSeenAt, lang))
                     ]
                   })
                 ]

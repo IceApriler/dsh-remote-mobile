@@ -3,7 +3,7 @@
  */
 
 export function fetchStatus() {
-  return fetch('/api/remote-mobile/status').then(function(res) {
+  return fetch('/api/remote-mobile/status?_t=' + Date.now()).then(function(res) {
     return res.json();
   });
 }

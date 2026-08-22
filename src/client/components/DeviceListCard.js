@@ -127,8 +127,8 @@ export function renderDeviceListCard(jsx, status, revokeDevice, revokeAll, lang)
                     },
                     children: [
                       (lang === 'en' ? "IP: " : "来源 IP: "), ipLabel,
-                      (lang === 'en' ? " · Authorized: " : " · 授权于 "), formatTime(dev.createdAt),
-                      (lang === 'en' ? " · Last seen: " : " · 最近活跃 "), formatTime(dev.lastSeenAt)
+                      (lang === 'en' ? " · Authorized: " : " · 授权于 "), formatTime(dev.createdAt, lang),
+                      (lang === 'en' ? " · Last seen: " : " · 最近活跃 "), formatTime(dev.lastSeenAt, lang)
                     ]
                   })
                 ]

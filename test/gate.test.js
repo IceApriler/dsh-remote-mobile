@@ -12,12 +12,33 @@ test('全局安全门禁中间件测试', async (t) => {
   const gate = createGlobalAuthGate(store)
 
   await t.test('公开路径判定', () => {
+    // 仅 /auth、public-key、verify 允许未授权公开访问（安全加固，与原始全公开不同）
     assert.equal(isPublicPath('/auth'), true)
     assert.equal(isPublicPath('/auth?token=123456'), true)
     assert.equal(isPublicPath('/api/remote-mobile/verify'), true)
-    assert.equal(isPublicPath('/api/remote-mobile/status'), false)
     assert.equal(isPublicPath('/api/remote-mobile/public-key'), true)
+    assert.equal(isPublicPath('/plugins/xxx.js'), true)
+    assert.equal(isPublicPath('/assets/yyy.css'), true)
     assert.equal(isPublicPath('/favicon.ico'), true)
+
+    // 敏感/管理类端点必须全部保持非公开，防止未授权绕过获取权限
+    const sensitiveEndpoints = [
+      '/api/remote-mobile/status',
+      '/api/remote-mobile/events',
+      '/api/remote-mobile/generate-code',
+      '/api/remote-mobile/toggle-bypass',
+      '/api/remote-mobile/update-options',
+      '/api/remote-mobile/set-secret',
+      '/api/remote-mobile/clear-secret',
+      '/api/remote-mobile/revoke-device',
+      '/api/remote-mobile/revoke-all',
+      '/api/remote-mobile/unlock-ip',
+      '/api/remote-mobile/clear-ip-stats',
+    ]
+    for (const endpoint of sensitiveEndpoints) {
+      assert.equal(isPublicPath(endpoint), false, `${endpoint} 不应是公开路径`)
+    }
+
     assert.equal(isPublicPath('/'), false)
     assert.equal(isPublicPath('/api/conversation/create'), false)
   })
@@ -192,5 +213,55 @@ test('全局安全门禁中间件测试', async (t) => {
     gate(adminReq, res, () => { passed = true })
     assert.equal(passed, false)
     assert.equal(statusCode, 401)
+  })
+
+  await t.test('未认证非 loopback 请求访问全部敏感端点均被拦截，公开端点可访问', () => {
+    store.updateOptions({ allowLan: false, allowTailscale: false })
+    const sensitiveEndpoints = [
+      '/api/remote-mobile/status',
+      '/api/remote-mobile/events',
+      '/api/remote-mobile/generate-code',
+      '/api/remote-mobile/toggle-bypass',
+      '/api/remote-mobile/update-options',
+      '/api/remote-mobile/set-secret',
+      '/api/remote-mobile/clear-secret',
+      '/api/remote-mobile/revoke-device',
+      '/api/remote-mobile/revoke-all',
+      '/api/remote-mobile/unlock-ip',
+      '/api/remote-mobile/clear-ip-stats',
+      '/api/conversation/create',
+    ]
+    for (const endpoint of sensitiveEndpoints) {
+      const req = {
+        method: 'POST',
+        url: endpoint,
+        socket: { remoteAddress: '100.80.0.1' }, // Tailscale CGNAT 网段但未开启免密
+        headers: { accept: 'application/json' },
+      }
+      let passed = false
+      let statusCode = null
+      const res = { writeHead(code) { statusCode = code }, end() {} }
+      gate(req, res, () => { passed = true })
+      assert.equal(passed, false, `${endpoint} 应被拦截`)
+      assert.equal(statusCode, 401, `${endpoint} 应返回 401`)
+    }
+
+    // 公开端点仍应可从外部未授权访问
+    const publicEndpoints = [
+      ['GET', '/auth'],
+      ['GET', '/api/remote-mobile/public-key'],
+      ['POST', '/api/remote-mobile/verify'],
+    ]
+    for (const [method, endpoint] of publicEndpoints) {
+      const req = {
+        method,
+        url: endpoint,
+        socket: { remoteAddress: '100.80.0.1' },
+        headers: { accept: 'text/html' },
+      }
+      let passed = false
+      gate(req, {}, () => { passed = true })
+      assert.equal(passed, true, `${endpoint} 应公开放行`)
+    }
   })
 })

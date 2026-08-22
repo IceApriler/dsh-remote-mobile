@@ -10,6 +10,7 @@ import { renderDeviceListCard } from './DeviceListCard.js';
 import { renderSecurityCard } from './SecurityCard.js';
 import { renderStorageCard } from './StorageCard.js';
 import { renderConfigCard } from './ConfigCard.js';
+import { PLUGIN_VERSION } from '../version.js';
 import { t, resolveLocale } from '../i18n.js';
 
 export function createTailscaleMobileSection(React, jsx) {
@@ -23,7 +24,6 @@ export function createTailscaleMobileSection(React, jsx) {
       tailscaleIp: '',
       lanIp: '',
       code: '',
-      token: '',
       expiresAt: 0,
       hasSecret: false,
       allowTailscale: false,
@@ -90,7 +90,7 @@ export function createTailscaleMobileSection(React, jsx) {
     var currentLang = langState[0];
     var setCurrentLang = langState[1];
 
-    var refreshStatusAndCode = useCallback(function() {
+    var refreshStatusOnly = useCallback(function() {
       fetchStatus().then(function(data) {
         if (data.tailscaleIp) {
           setSelectedTab('tailscale');
@@ -123,6 +123,10 @@ export function createTailscaleMobileSection(React, jsx) {
           };
         });
       }).catch(function() {});
+    }, [ctx]);
+
+    var refreshStatusAndCode = useCallback(function() {
+      refreshStatusOnly();
 
       generatePairCode().then(function(data) {
         if (data.success) {
@@ -130,7 +134,6 @@ export function createTailscaleMobileSection(React, jsx) {
             return {
               ...prev,
               code: data.code,
-              token: data.token,
               expiresAt: data.expiresAt
             };
           });
@@ -138,38 +141,93 @@ export function createTailscaleMobileSection(React, jsx) {
           setTimeLeft(remain);
         }
       }).catch(function() {});
-    }, []);
+    }, [refreshStatusOnly]);
 
     useEffect(function() {
       refreshStatusAndCode();
 
-      // 监听 DSH locale 服务动态切换
+      // 监听 DSH locale 服务动态切换（注意：不能在此处提前 return，否则后续
+      // dsh-device-updated 监听与 3 秒轮询都不会注册，导致实时刷新失效）
+      var localeUnsubs = [];
       try {
         var loc = ctx && (typeof ctx.get === 'function' ? ctx.get('locale') : ctx.locale);
         if (loc && typeof loc.subscribe === 'function') {
           var unsub = loc.subscribe(function() {
             setCurrentLang(resolveLocale(ctx, status));
           });
-          if (typeof unsub === 'function') return unsub;
+          if (typeof unsub === 'function') localeUnsubs.push(unsub);
         }
       } catch (e) {}
 
       var handleDeviceUpdate = function(e) {
-        refreshStatusAndCode();
-        if (e.detail && e.detail.device) {
-          var dev = e.detail.device;
-          var msg = (e.detail.type === 'device-connected')
+        if (!e || !e.detail) return;
+        var detail = e.detail;
+
+        // 1. IP 安全审计即时更新
+        if (detail.stats && Array.isArray(detail.stats)) {
+          setStatus(function(prev) {
+            return { ...prev, ipSecurityStats: detail.stats };
+          });
+        }
+
+        // 2. 设备连接/上线即时乐观更新
+        if (detail.device) {
+          var dev = detail.device;
+          setStatus(function(prev) {
+            var prevList = prev.devices || [];
+            var nextList = [dev].concat(prevList.filter(function(d) { return d.token !== dev.token; }));
+            return {
+              ...prev,
+              devicesCount: nextList.length,
+              devices: nextList
+            };
+          });
+
+          var msg = (detail.type === 'device-connected')
             ? t('toastDeviceConnected', currentLang, { name: dev.deviceName || 'Device', ip: dev.ip })
             : t('toastDeviceOnline', currentLang, { name: dev.deviceName || 'Device', ip: dev.ip });
           setToast({ message: msg, type: 'info' });
           setTimeout(function() { setToast(null); }, 4000);
         }
+
+        // 3. 设备注销即时移除
+        if (detail.type === 'device-revoked') {
+          setStatus(function(prev) {
+            var prevList = prev.devices || [];
+            var nextList = detail.all ? [] : prevList.filter(function(d) { return d.token !== detail.token; });
+            return {
+              ...prev,
+              devicesCount: nextList.length,
+              devices: nextList
+            };
+          });
+        }
+
+        // 4. 安全告警即时弹窗
+        if (detail.type === 'ip-security-alert') {
+          var alertMsg = t('toastIpLocked', currentLang, { ip: detail.ip });
+          setToast({ message: alertMsg, type: 'danger' });
+          setTimeout(function() { setToast(null); }, 5000);
+        }
+
+        // 5. 触发后台全量校准
+        refreshStatusOnly();
       };
       window.addEventListener('dsh-device-updated', handleDeviceUpdate);
+
+      // 面板打开时的 3 秒定时自动探针（双保险极速实时同步）
+      var pollTimer = setInterval(function() {
+        refreshStatusOnly();
+      }, 3000);
+
       return function() {
+        clearInterval(pollTimer);
         window.removeEventListener('dsh-device-updated', handleDeviceUpdate);
+        for (var i = 0; i < localeUnsubs.length; i++) {
+          localeUnsubs[i]();
+        }
       };
-    }, []);
+    }, [refreshStatusAndCode, refreshStatusOnly, currentLang, ctx]);
 
     // 倒计时
     useEffect(function() {
@@ -410,7 +468,7 @@ export function createTailscaleMobileSection(React, jsx) {
                         color: "var(--dsw-alias-brand-primary, #3b82f6)",
                         fontWeight: "600"
                       },
-                      children: "v1.0.0"
+                      children: PLUGIN_VERSION
                     })
                   ]
                 }),
