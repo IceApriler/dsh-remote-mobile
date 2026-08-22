@@ -1,6 +1,6 @@
 {
   "name": "dsh-remote-mobile",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "DeepSeek Harness 移动端与远程访问安全网关插件 | DeepSeek Harness (DSH) Mobile & Remote Access Security Guard Plugin: Tailscale & LAN bypass, QR scan auth, RSA encryption, brute-force protection, and realtime SSE push.",
   "keywords": [
     "dsh",
