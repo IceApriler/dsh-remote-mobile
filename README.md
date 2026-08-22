@@ -2,7 +2,7 @@
 
 # dsh-remote-mobile
 
-**DeepSeek Harness (DSH) 远程移动端与局域网安全接入插件**
+**DeepSeek Harness (DSH) 远程与移动端安全网关插件**
 
 [![npm version](https://img.shields.io/npm/v/dsh-remote-mobile.svg?style=flat-square&color=3b82f6)](https://www.npmjs.com/package/dsh-remote-mobile)
 [![npm downloads](https://img.shields.io/npm/dm/dsh-remote-mobile.svg?style=flat-square&color=22c55e)](https://www.npmjs.com/package/dsh-remote-mobile)
@@ -10,7 +10,7 @@
 [![license](https://img.shields.io/npm/l/dsh-remote-mobile.svg?style=flat-square&color=10b981)](https://github.com/IceApriler/dsh-remote-mobile/blob/master/LICENSE)
 
 <p align="center">
-  <b>突破本地限制 · 扫码直连 · 工作区全功能复用 · 传输层加密</b>
+  <b>零改动底层代码 · 突破本地限制 · 扫码直连 · 工作区全功能复用 · 传输层加密</b>
 </p>
 
 [English Documentation](./README_EN.md) · [简体中文](./README.md)

@@ -2,7 +2,7 @@
 
 # dsh-remote-mobile
 
-**DeepSeek Harness (DSH) Mobile & Remote Access Security Guard Plugin**
+**DeepSeek Harness (DSH) Remote & Mobile Security Guard Plugin**
 
 [![npm version](https://img.shields.io/npm/v/dsh-remote-mobile.svg?style=flat-square&color=3b82f6)](https://www.npmjs.com/package/dsh-remote-mobile)
 [![npm downloads](https://img.shields.io/npm/dm/dsh-remote-mobile.svg?style=flat-square&color=22c55e)](https://www.npmjs.com/package/dsh-remote-mobile)
@@ -10,7 +10,7 @@
 [![license](https://img.shields.io/npm/l/dsh-remote-mobile.svg?style=flat-square&color=10b981)](https://github.com/IceApriler/dsh-remote-mobile/blob/master/LICENSE)
 
 <p align="center">
-  <b>Break Loopback Limits · QR Quick Pairing · Full Workspace Parity · Transport-Layer Encryption</b>
+  <b>Zero Core Modifications · Break Loopback Limits · QR Quick Pairing · Full Workspace Parity · Transport Encryption</b>
 </p>
 
 English Documentation · [简体中文](./README.md)
