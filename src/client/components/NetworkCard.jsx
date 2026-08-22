@@ -1,0 +1,372 @@
+import React from 'react';
+import { t } from '../i18n.js';
+
+/**
+ * 卡片 1: 网络接入地址与免密直连管理 (支持中英文国际化与高危醒目警示)
+ */
+export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang }) {
+  const tsHost = status.tailscaleIp || '100.x.y.z';
+  const lanHost = status.lanIp || '127.0.0.1';
+  const port = (typeof window !== 'undefined' && window.location.port) || '3080';
+
+  return (
+    <div
+      style={{
+        background: 'var(--dsw-alias-bg-layer-3, rgba(128,128,128,0.06))',
+        border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.15))',
+        borderRadius: '12px',
+        padding: '18px 20px',
+      }}
+    >
+      <div
+        style={{
+          fontSize: '15px',
+          fontWeight: '600',
+          color: 'var(--dsw-alias-label-primary, inherit)',
+          marginBottom: '4px',
+        }}
+      >
+        {t('netCardTitle', lang)}
+      </div>
+      <div
+        style={{
+          fontSize: '12px',
+          color: 'var(--dsw-alias-label-tertiary, #888)',
+          marginBottom: '16px',
+        }}
+      >
+        {t('netCardDesc', lang)}
+      </div>
+
+      {/* 网络条目 1: Tailscale 虚拟私网 */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '12px',
+          paddingBottom: '16px',
+          borderBottom: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.12))',
+          marginBottom: '16px',
+        }}
+      >
+        <div style={{ flex: 1, minWidth: '220px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '16px' }}>🔒</span>
+            <span style={{ fontSize: '14px', fontWeight: '700' }}>
+              {t('tailscaleSectionTitle', lang)}
+            </span>
+            {status.tailscaleIp ? (
+              <span
+                style={{
+                  fontSize: '11px',
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                  background: 'rgba(16,185,129,0.15)',
+                  color: '#10b981',
+                  fontWeight: '600',
+                }}
+              >
+                {lang === 'en' ? 'Connected' : '已连接'}
+              </span>
+            ) : (
+              <span
+                style={{
+                  fontSize: '11px',
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                  background: 'rgba(239,68,68,0.15)',
+                  color: '#ef4444',
+                  fontWeight: '600',
+                }}
+              >
+                {lang === 'en' ? 'Not Connected' : '未连接'}
+              </span>
+            )}
+          </div>
+
+          {status.tailscaleIp ? (
+            <div
+              style={{
+                fontSize: '13px',
+                marginTop: '4px',
+                fontFamily: 'monospace',
+                color: 'var(--dsw-alias-brand-primary, #3b82f6)',
+              }}
+            >
+              {`http://${tsHost}:${port}`}
+              <button
+                type="button"
+                onClick={() => copyText(`http://${tsHost}:${port}`, t('copiedTip', lang))}
+                style={{
+                  marginLeft: '8px',
+                  padding: '2px 6px',
+                  background: 'transparent',
+                  border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.2))',
+                  borderRadius: '4px',
+                  fontSize: '11px',
+                  cursor: 'pointer',
+                  color: 'var(--dsw-alias-label-secondary, inherit)',
+                }}
+              >
+                {t('copyUrlBtn', lang)}
+              </button>
+            </div>
+          ) : (
+            <div
+              style={{
+                fontSize: '12px',
+                color: 'var(--dsw-alias-label-tertiary, #888)',
+                marginTop: '4px',
+              }}
+            >
+              {t('tailscaleGuide', lang)}
+            </div>
+          )}
+
+          {status.tailscaleIp ? (
+            <div
+              style={{
+                fontSize: '12px',
+                color: 'var(--dsw-alias-label-tertiary, #888)',
+                marginTop: '4px',
+              }}
+            >
+              {t('tailscaleBypassDesc', lang)}
+            </div>
+          ) : null}
+        </div>
+
+        {/* Tailscale 免密开关 (iOS 风格切换开关) */}
+        {status.tailscaleIp ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span
+              style={{
+                fontSize: '12px',
+                color: status.allowTailscale
+                  ? 'var(--dsw-alias-brand-primary, #3b82f6)'
+                  : 'var(--dsw-alias-label-secondary, #888)',
+                fontWeight: '600',
+              }}
+            >
+              {status.allowTailscale ? t('directBypassOn', lang) : t('directBypassOff', lang)}
+            </span>
+            <label
+              style={{
+                position: 'relative',
+                display: 'inline-block',
+                width: '44px',
+                height: '24px',
+                cursor: 'pointer',
+                userSelect: 'none',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={!!status.allowTailscale}
+                onChange={toggleTailscale}
+                style={{ opacity: 0, width: 0, height: 0, margin: 0 }}
+              />
+              <span
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  backgroundColor: status.allowTailscale
+                    ? 'var(--dsw-alias-brand-primary, #3b82f6)'
+                    : 'var(--dsw-alias-border-l2, rgba(128,128,128,0.3))',
+                  transition: 'background-color 0.25s ease',
+                  borderRadius: '24px',
+                }}
+              />
+              <span
+                style={{
+                  position: 'absolute',
+                  top: '3px',
+                  left: '3px',
+                  width: '18px',
+                  height: '18px',
+                  backgroundColor: '#ffffff',
+                  borderRadius: '50%',
+                  boxShadow: '0 2px 4px rgba(0, 0, 0, 0.25)',
+                  transform: status.allowTailscale ? 'translateX(20px)' : 'translateX(0px)',
+                  transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                }}
+              />
+            </label>
+          </div>
+        ) : null}
+      </div>
+
+      {/* 网络条目 2: 局域网 Wi-Fi */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '12px',
+          }}
+        >
+          <div style={{ flex: 1, minWidth: '220px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '16px' }}>🏠</span>
+              <span style={{ fontSize: '14px', fontWeight: '700' }}>
+                {t('lanSectionTitle', lang)}
+              </span>
+              <span
+                style={{
+                  fontSize: '11px',
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                  background: 'rgba(16,185,129,0.15)',
+                  color: '#10b981',
+                  fontWeight: '600',
+                }}
+              >
+                {lang === 'en' ? 'Ready' : '已就绪'}
+              </span>
+            </div>
+            <div
+              style={{
+                fontSize: '13px',
+                marginTop: '4px',
+                fontFamily: 'monospace',
+                color: 'var(--dsw-alias-brand-primary, #3b82f6)',
+              }}
+            >
+              {`http://${lanHost}:${port}`}
+              <button
+                type="button"
+                onClick={() => copyText(`http://${lanHost}:${port}`, t('copiedTip', lang))}
+                style={{
+                  marginLeft: '8px',
+                  padding: '2px 6px',
+                  background: 'transparent',
+                  border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.2))',
+                  borderRadius: '4px',
+                  fontSize: '11px',
+                  cursor: 'pointer',
+                  color: 'var(--dsw-alias-label-secondary, inherit)',
+                }}
+              >
+                {t('copyUrlBtn', lang)}
+              </button>
+            </div>
+          </div>
+
+          {/* 局域网免密开关 (高危醒目警告开关) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span
+              style={{
+                fontSize: '12px',
+                color: status.allowLan ? '#ef4444' : 'var(--dsw-alias-label-secondary, #888)',
+                fontWeight: status.allowLan ? '700' : '500',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              {status.allowLan
+                ? lang === 'en'
+                  ? '🚨 LAN Bypass Enabled (HIGH RISK)'
+                  : '🚨 局域网免密已开启（高危状态）'
+                : t('directBypassOff', lang)}
+            </span>
+            <label
+              style={{
+                position: 'relative',
+                display: 'inline-block',
+                width: '44px',
+                height: '24px',
+                cursor: 'pointer',
+                userSelect: 'none',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={!!status.allowLan}
+                onChange={toggleLan}
+                style={{ opacity: 0, width: 0, height: 0, margin: 0 }}
+              />
+              <span
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  backgroundColor: status.allowLan
+                    ? '#ef4444'
+                    : 'var(--dsw-alias-border-l2, rgba(128,128,128,0.3))',
+                  boxShadow: status.allowLan ? '0 0 10px rgba(239, 68, 68, 0.45)' : 'none',
+                  transition: 'all 0.25s ease',
+                  borderRadius: '24px',
+                }}
+              />
+              <span
+                style={{
+                  position: 'absolute',
+                  top: '3px',
+                  left: '3px',
+                  width: '18px',
+                  height: '18px',
+                  backgroundColor: '#ffffff',
+                  borderRadius: '50%',
+                  boxShadow: '0 2px 4px rgba(0, 0, 0, 0.25)',
+                  transform: status.allowLan ? 'translateX(20px)' : 'translateX(0px)',
+                  transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                }}
+              />
+            </label>
+          </div>
+        </div>
+
+        {/* 🚨 局域网免密高危醒目警示横幅 */}
+        <div
+          style={{
+            marginTop: '4px',
+            padding: '10px 14px',
+            borderRadius: '8px',
+            background: status.allowLan ? 'rgba(239, 68, 68, 0.12)' : 'rgba(245, 158, 11, 0.08)',
+            border: status.allowLan
+              ? '1px solid rgba(239, 68, 68, 0.4)'
+              : '1px solid rgba(245, 158, 11, 0.25)',
+            borderLeft: status.allowLan ? '4px solid #ef4444' : '4px solid #f59e0b',
+            boxShadow: status.allowLan ? '0 2px 8px rgba(239, 68, 68, 0.15)' : 'none',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '12px',
+              fontWeight: '700',
+              color: status.allowLan ? '#ef4444' : '#f59e0b',
+              marginBottom: '4px',
+            }}
+          >
+            <span>{status.allowLan ? '🚨' : '⚠️'}</span>
+            <span>{t('lanBypassWarningTitle', lang)}</span>
+          </div>
+          <div
+            style={{
+              fontSize: '12px',
+              lineHeight: '1.55',
+              color: status.allowLan
+                ? 'var(--dsw-alias-label-primary, #fca5a5)'
+                : 'var(--dsw-alias-label-secondary, #cbd5e1)',
+            }}
+          >
+            {t('lanBypassDesc', lang)}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
