@@ -12,6 +12,14 @@
     "cordis-plugin",
     "auth"
   ],
+  "homepage": "https://github.com/IceApriler/dsh-remote-mobile#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/IceApriler/dsh-remote-mobile.git"
+  },
+  "bugs": {
+    "url": "https://github.com/IceApriler/dsh-remote-mobile/issues"
+  },
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",

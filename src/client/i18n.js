@@ -111,7 +111,10 @@ export var translations = {
     restoreDefaultsBtn: "🔄 恢复默认参数",
     saveConfigBtn: "💾 保存参数配置",
     savingConfigBtn: "正在保存...",
+    saveConfigConfirm: "确定要保存当前高级安全参数配置吗？保存后将立即生效并自动同步写回 ~/.dsh/settings.yaml。",
+    restoreDefaultsConfirm: "确定要将安全参数恢复为系统默认值（60次/分、5次失败、锁定15分钟）吗？确认后将直接生效并自动同步。",
     saveConfigSuccessToast: "高级安全参数已成功保存并同步到 settings.yaml！",
+    restoreDefaultsSuccessToast: "已成功恢复默认安全参数并立即生效！",
     saveConfigFailTip: "参数必须为大于 0 的有效整数",
 
     // Toast 提示
@@ -228,7 +231,10 @@ export var translations = {
     restoreDefaultsBtn: "🔄 Restore Defaults",
     saveConfigBtn: "💾 Save Configuration",
     savingConfigBtn: "Saving...",
+    saveConfigConfirm: "Are you sure you want to save the current security policy? It will take effect immediately and sync to ~/.dsh/settings.yaml.",
+    restoreDefaultsConfirm: "Are you sure you want to restore security policies to default values (60 visits/min, 5 failed attempts, 15m lockout)? It will take effect immediately.",
     saveConfigSuccessToast: "Security policy successfully saved and synced to settings.yaml!",
+    restoreDefaultsSuccessToast: "Default security policies restored and applied immediately!",
     saveConfigFailTip: "Parameters must be valid integers greater than 0",
 
     // Toast

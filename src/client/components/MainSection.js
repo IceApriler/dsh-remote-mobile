@@ -290,6 +290,10 @@ export function createTailscaleMobileSection(React, jsx) {
         return;
       }
 
+      if (!confirm(t('saveConfigConfirm', currentLang))) {
+        return;
+      }
+
       setIsSaving(true);
       updateAdvancedSecurityOptions({
         maxVisitsPerMinute: visits,
@@ -311,9 +315,32 @@ export function createTailscaleMobileSection(React, jsx) {
     };
 
     var resetAdvancedConfigDefaults = function() {
+      if (!confirm(t('restoreDefaultsConfirm', currentLang))) {
+        return;
+      }
+
       setMaxVisitsInput('60');
       setMaxFailedInput('5');
       setLockDurationMinsInput('15');
+
+      setIsSaving(true);
+      updateAdvancedSecurityOptions({
+        maxVisitsPerMinute: 60,
+        maxFailedAttempts: 5,
+        lockDurationMs: 15 * 60 * 1000
+      }).then(function(data) {
+        setIsSaving(false);
+        if (data.success) {
+          refreshStatusAndCode();
+          setToast({ message: t('restoreDefaultsSuccessToast', currentLang), type: 'success' });
+          setTimeout(function() { setToast(null); }, 3000);
+        } else {
+          alert((currentLang === 'en' ? 'Reset failed: ' : '重置失败：') + (data.reason || ''));
+        }
+      }).catch(function() {
+        setIsSaving(false);
+        alert(currentLang === 'en' ? 'Network request failed, please try again.' : '网络请求失败，请稍后重试');
+      });
     };
 
     var copyDirectLink = function() {
@@ -348,25 +375,85 @@ export function createTailscaleMobileSection(React, jsx) {
         gap: "16px"
       },
       children: [
-        // 标题头部
+        // 标题头部（左侧标题 + 右侧 GitHub 仓库链接）
         jsx.jsxs("div", {
-          style: { marginBottom: "4px" },
+          style: {
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "12px",
+            marginBottom: "4px"
+          },
           children: [
-            jsx.jsx("h3", {
-              style: {
-                fontSize: "20px",
-                fontWeight: "700",
-                margin: "0 0 6px 0",
-                color: "var(--dsw-alias-label-primary, inherit)"
-              },
-              children: t("title", currentLang)
+            jsx.jsxs("div", {
+              style: { minWidth: "220px", flex: 1 },
+              children: [
+                jsx.jsxs("div", {
+                  style: { display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", margin: "0 0 6px 0" },
+                  children: [
+                    jsx.jsx("h3", {
+                      style: {
+                        fontSize: "20px",
+                        fontWeight: "700",
+                        margin: 0,
+                        color: "var(--dsw-alias-label-primary, inherit)"
+                      },
+                      children: t("title", currentLang)
+                    }),
+                    jsx.jsx("span", {
+                      style: {
+                        fontSize: "11px",
+                        padding: "2px 7px",
+                        borderRadius: "10px",
+                        background: "rgba(59,130,246,0.15)",
+                        color: "var(--dsw-alias-brand-primary, #3b82f6)",
+                        fontWeight: "600"
+                      },
+                      children: "v1.0.0"
+                    })
+                  ]
+                }),
+                jsx.jsx("div", {
+                  style: {
+                    fontSize: "13px",
+                    color: "var(--dsw-alias-label-tertiary, #888)"
+                  },
+                  children: t("subtitle", currentLang)
+                })
+              ]
             }),
-            jsx.jsx("div", {
+
+            // 右侧 GitHub 仓库直达徽标
+            jsx.jsxs("a", {
+              href: "https://github.com/IceApriler/dsh-remote-mobile",
+              target: "_blank",
+              rel: "noopener noreferrer",
               style: {
-                fontSize: "13px",
-                color: "var(--dsw-alias-label-tertiary, #888)"
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "6px 12px",
+                background: "var(--dsw-alias-bg-layer-3, rgba(128,128,128,0.1))",
+                border: "1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.2))",
+                borderRadius: "8px",
+                color: "var(--dsw-alias-label-secondary, inherit)",
+                fontSize: "12px",
+                fontWeight: "500",
+                textDecoration: "none",
+                transition: "all 0.2s ease",
+                cursor: "pointer"
               },
-              children: t("subtitle", currentLang)
+              children: [
+                jsx.jsx("svg", {
+                  style: { width: "16px", height: "16px", fill: "currentColor" },
+                  viewBox: "0 0 24 24",
+                  children: jsx.jsx("path", {
+                    d: "M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"
+                  })
+                }),
+                jsx.jsx("span", { children: "IceApriler/dsh-remote-mobile" })
+              ]
             })
           ]
         }),

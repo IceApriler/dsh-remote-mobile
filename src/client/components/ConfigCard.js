@@ -231,6 +231,7 @@ export function renderConfigCard(jsx, props) {
           jsx.jsx("button", {
             type: "button",
             onClick: resetAdvancedConfigDefaults,
+            disabled: isSaving,
             style: {
               padding: "6px 14px",
               background: "transparent",
@@ -238,7 +239,8 @@ export function renderConfigCard(jsx, props) {
               color: "var(--dsw-alias-label-secondary, inherit)",
               borderRadius: "6px",
               fontSize: "12px",
-              cursor: "pointer",
+              cursor: isSaving ? "not-allowed" : "pointer",
+              opacity: isSaving ? 0.6 : 1,
               whiteSpace: "nowrap"
             },
             children: t("restoreDefaultsBtn", lang)

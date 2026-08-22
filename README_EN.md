@@ -50,13 +50,13 @@ Use the DSH built-in plugin manager to install from npm directly into the web pr
 dsh plugin --profile web add dsh-remote-mobile
 ```
 
-#### Option 2: Visual Install via DSH Market
+#### Option 2: Visual Install via Web Settings (Plugin Manager)
 
-If you have installed the `dshmarket` extension:
-1. Open DSH Web UI;
-2. Click **🧩 DSH Market** in the sidebar;
-3. Search for **`dsh-remote-mobile`**;
-4. Click **"Install"**.
+Open the DSH Web UI in your browser:
+1. Navigate to **Settings ⚙️ -> Plugins**;
+2. Switch to the **"Plugin Manager"** (插件管理) tab at the top;
+3. Enter the npm package name **`dsh-remote-mobile`** in the input field and click **"Install"** (安装);
+4. Restart DSH to activate the plugin.
 
 #### Option 3: Manual Installation via Package Manager in Profile Directory
 
