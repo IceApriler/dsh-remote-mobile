@@ -16,20 +16,21 @@
 English Documentation · [简体中文](./README.md)
 
 <p align="center">
-  <a href="#-about">About</a> •
-  <a href="#-quick-start">Quick Start</a> •
-  <a href="#-required-configuration">Required Config</a> •
-  <a href="#-ui-preview">UI Preview</a> •
-  <a href="#-key-advantages">Key Advantages</a> •
-  <a href="#-features">Features</a> •
-  <a href="#-all-installation-methods">Installation</a> •
-  <a href="#-faq">FAQ</a>
+  <a href="#about">About</a> •
+  <a href="#advantages">Key Advantages</a> •
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#config">Required Config</a> •
+  <a href="#preview">UI Preview</a> •
+  <a href="#features">Features</a> •
+  <a href="#install">Installation</a> •
+  <a href="#faq">FAQ</a>
 </p>
 
 ---
 
 </div>
 
+<span id="about"></span>
 ## 📖 About
 
 `dsh-remote-mobile` is a dedicated remote and mobile security governance plugin designed specifically for **DeepSeek Hub (DSH)**.
@@ -38,6 +39,7 @@ By default, DSH strictly listens only to the local loopback address (`127.0.0.1`
 
 ---
 
+<span id="advantages"></span>
 ## ⚡ Key Advantages
 
 * 🚀 **Break Network Barriers with Full Workspace Parity**: Solves the core issue of accessing DSH Web over LAN and Tailscale. When accessed on mobile devices, **creating workspaces, switching workspaces, and executing terminal commands are 100% supported** without any feature degradation!
@@ -48,6 +50,7 @@ By default, DSH strictly listens only to the local loopback address (`127.0.0.1`
 
 ---
 
+<span id="quick-start"></span>
 ## 🚀 Quick Start
 
 ### 1. One-Command Installation
@@ -60,6 +63,7 @@ dsh plugin --profile web add dsh-remote-mobile
 
 ---
 
+<span id="config"></span>
 ### 2. Required Configuration (Open External Listening)
 
 Because DSH defaults to `127.0.0.1`, ensure your `~/.dsh/profiles/web/cordis.patch.yml` includes the following configuration to allow external connectivity:
@@ -92,6 +96,7 @@ Open the DSH Web Console in your browser, navigate to **Settings ⚙️ -> Remot
 
 ---
 
+<span id="preview"></span>
 ## 🖼️ UI Preview
 
 ### Desktop DSH Plugin Control Panel
@@ -110,6 +115,7 @@ Open the DSH Web Console in your browser, navigate to **Settings ⚙️ -> Remot
 
 ---
 
+<span id="features"></span>
 ## 🌟 Features
 
 ### 1. Network Access
@@ -140,6 +146,7 @@ Open the DSH Web Console in your browser, navigate to **Settings ⚙️ -> Remot
 
 ---
 
+<span id="install"></span>
 ## 📦 All Installation Methods
 
 <details>
@@ -211,6 +218,7 @@ dsh-remote-mobile:
 
 ---
 
+<span id="faq"></span>
 ## ❓ FAQ
 
 <details>

@@ -16,20 +16,21 @@
 [English Documentation](./README_EN.md) · [简体中文](./README.md)
 
 <p align="center">
-  <a href="#-这是什么">这是什么</a> •
-  <a href="#-快速开始">快速开始</a> •
-  <a href="#-必备前置配置">必备配置</a> •
-  <a href="#-界面预览">界面预览</a> •
-  <a href="#-核心优势">核心优势</a> •
-  <a href="#-功能特性">功能特性</a> •
-  <a href="#-全部安装方式">全部安装方式</a> •
-  <a href="#-常见问题">常见问题</a>
+  <a href="#about">这是什么</a> •
+  <a href="#advantages">核心优势</a> •
+  <a href="#quick-start">快速开始</a> •
+  <a href="#config">必备配置</a> •
+  <a href="#preview">界面预览</a> •
+  <a href="#features">功能特性</a> •
+  <a href="#install">安装方式</a> •
+  <a href="#faq">常见问题</a>
 </p>
 
 ---
 
 </div>
 
+<span id="about"></span>
 ## 📖 这是什么
 
 `dsh-remote-mobile` 是专为 **DeepSeek Hub (DSH)** 深度定制的远程与移动端安全治理插件。
@@ -38,6 +39,7 @@ DSH 核心服务出于安全考虑默认仅监听本地回环地址（`127.0.0.1
 
 ---
 
+<span id="advantages"></span>
 ## ⚡ 核心优势
 
 * 🚀 **突破网络壁垒，工作区全功能无缝复用**：彻底解决局域网和 Tailscale 无法访问 DSH Web 的问题。在移动端或外部设备访问时，**完美支持新建工作区、切换工作区、执行终端命令等全部桌面端核心能力**，无任何功能阉割！
@@ -48,6 +50,7 @@ DSH 核心服务出于安全考虑默认仅监听本地回环地址（`127.0.0.1
 
 ---
 
+<span id="quick-start"></span>
 ## 🚀 快速开始
 
 ### 1. 一键安装插件
@@ -60,6 +63,7 @@ dsh plugin --profile web add dsh-remote-mobile
 
 ---
 
+<span id="config"></span>
 ### 2. 必备前置配置（开放外部监听）
 
 由于 DSH 默认仅监听 `127.0.0.1`，为了使 Tailscale 私网或局域网设备能够正常连通，请确保在 `~/.dsh/profiles/web/cordis.patch.yml` 中包含以下配置：
@@ -92,6 +96,7 @@ dsh web --no-open
 
 ---
 
+<span id="preview"></span>
 ## 🖼️ 界面预览
 
 ### PC 端 DSH 插件控制面板
@@ -110,6 +115,7 @@ dsh web --no-open
 
 ---
 
+<span id="features"></span>
 ## 🌟 功能特性
 
 ### 1. 网络接入支持
@@ -140,6 +146,7 @@ dsh web --no-open
 
 ---
 
+<span id="install"></span>
 ## 📦 全部安装方式
 
 <details>
@@ -211,6 +218,7 @@ dsh-remote-mobile:
 
 ---
 
+<span id="faq"></span>
 ## ❓ 常见问题 (FAQ)
 
 <details>
