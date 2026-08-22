@@ -151,6 +151,37 @@ export function QrPairingCard({
             }}
           />
 
+          {/* 直达链接地址预览（脱敏保护：配对码隐藏时显示 ••••••，显示配对码时显示真实 token） */}
+          <div
+            style={{
+              width: '100%',
+              padding: '6px 10px',
+              background: 'var(--dsw-alias-bg-layer-1, rgba(0,0,0,0.12))',
+              border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.15))',
+              borderRadius: '6px',
+              fontFamily: 'monospace',
+              fontSize: '11px',
+              color: isExpired
+                ? 'var(--dsw-alias-label-error, #ef4444)'
+                : 'var(--dsw-alias-label-secondary, inherit)',
+              wordBreak: 'break-all',
+              userSelect: 'all',
+              lineHeight: '1.4',
+              textAlign: 'center',
+            }}
+          >
+            {`http://${currentHost}:${port}/auth?token=`}
+            <span
+              style={{
+                fontWeight: '700',
+                color: showCode ? 'var(--dsw-alias-brand-primary, #3b82f6)' : 'inherit',
+                letterSpacing: showCode ? '1px' : '2px',
+              }}
+            >
+              {showCode ? (status.code || '') : '••••••'}
+            </span>
+          </div>
+
           {/* 二维码下方：复制当前直达链接按钮 */}
           <button
             type="button"
