@@ -94,6 +94,8 @@ dsh web --no-open
 
 启动后，在电脑浏览器打开 DSH Web 控制台，进入 **设置 ⚙️ -> 远程与移动端**，使用手机微信或系统相机扫描二维码即可立即开启移动端接入！
 
+> 设置面板按 **「接入 / 设备与安全 / 样式覆写 / 本地数据」** 四个页签分组显示，避免长页面；页签选择会被记住，切换不重置配对码等状态。
+
 ---
 
 <span id="preview"></span>
@@ -145,6 +147,15 @@ dsh web --no-open
 - **SSE 实时事件推送**：基于 Server-Sent Events 实现新设备接入、设备重连、会话撤销及安全告警的实时通知，内置连接双向关闭监听与幂等清理。
 - **全界面中英文双语自适应**：根据 DSH 全局语言偏好与浏览器环境，动态自适应中英文面板、提示及手机端界面。
 - **非 HTTPS 兼容补丁**：自动注入 `crypto.randomUUID` Polyfill，解决移动端浏览器在 HTTP 非安全上下文下缺少原生 API 的报错。
+
+### 5. 移动端样式片段（样式小插件）
+
+DSH Web 界面在手机上仍有不少沿袭桌面端的样式问题，插件内置「移动端样式片段」模块，把移动端适配拆分为可独立启停的 CSS 片段：
+
+- **按界面区域划分的三段内置预设**：`preset-sidebar` 侧边栏抽屉导航（折叠 0 宽度、可拖拽悬浮把手）、`preset-settings` 设置面板适配（弹窗居中微缩、遮罩锁滚动）、`preset-main` 对话正文**高密度排版**（小字号 12.5px + 紧凑行距 + 收紧边距 → 每行展示更多内容；基于稳定 HTML 元素与 localName 后缀，不做布局缩放，无右侧留白），默认移动端启用、PC 关闭；
+- **PC / 移动端分别启停（按视口宽度判定，与设备无关）**：每段预设和每个自定义片段都有独立的「🖥️ PC」「📱 移动端」两个开关；「移动端」= 窄视口（≤900px）生效——**PC 浏览器拉小窗口也会生效**，「PC」= 宽视口（>900px）生效，两端都开 = 全宽度生效；
+- **用户自定义（样式小插件）**：在 **设置 ⚙️ → 远程与移动端 → 🎨 移动端样式片段** 中粘贴自己的 CSS 即可新增片段，支持编辑/启停/删除，持久化于 `~/.dsh/remote-mobile/style-snippets.json`，保存后下一次页面加载即生效，无需重启；
+- **按 UA 打标记 + 按宽度生效**：样式按视口宽度档生效（见上），与设备 UA 无关；移动端 UA 请求额外给 `<html>` 打上 `data-dsh-mobile="1"` 标记作为作用域钩子，并在窄视口场景注入可拖拽的展开把手脚本。
 
 ---
 
@@ -214,6 +225,33 @@ dsh-remote-mobile:
   lockDurationMs: 900000      # number，默认 900000 (15分钟)：IP 锁定持续时间（毫秒）
 ```
 
+### 🎨 移动端样式片段（可选）
+
+自定义样式片段（样式小插件）与启停状态持久化于 `~/.dsh/remote-mobile/style-snippets.json`，可在设置面板图形化管理，也可直接编辑该文件：
+
+```json
+{
+  "version": 2,
+  "presetStates": {
+    "preset-sidebar": { "pc": false, "mobile": true },
+    "preset-settings": { "pc": false, "mobile": true },
+    "preset-main": { "pc": true, "mobile": true }
+  },
+  "custom": [
+    {
+      "id": "custom-xxx",
+      "name": "我的样式小插件",
+      "css": "html[data-dsh-mobile] .我的选择器 { ... }",
+      "pcEnabled": false,
+      "mobileEnabled": true
+    }
+  ],
+  "customOrder": ["custom-xxx"]
+}
+```
+
+> 所有启用片段会拼接为单个 `<style>` 注入主页面与 `/auth` 登录页，**生效与否由视口宽度决定**：`mobileEnabled` 的片段包在 `@media (max-width: 900px)`（≤900px 生效，PC 拉小窗口同样生效），`pcEnabled` 的片段包在 `@media (min-width: 901px)`（宽视口生效），两端都开则全宽度生效（v1 旧格式自动迁移，`presetStates` 按三个预设分组齐全落盘）。注意：PC 开启侧边栏抽屉预设会改变桌面布局，如不想用可关闭该预设的 PC 开关。
+
 ---
 
 ## 📂 本地文件存储位置
@@ -223,6 +261,7 @@ dsh-remote-mobile:
 | `~/.dsh/settings.yaml` | 全局安全策略与免密开关配置 | 用户级读写 |
 | `~/.dsh/remote-mobile/devices.json` | 已授权设备会话、IP 访问计数与安全审计数据 | 本地落盘持久化 |
 | `~/.dsh/remote-mobile/rsa-keys.json` | 服务端 RSA 密钥对文件（含公钥与私钥） | 本地落盘，权限 `0o600`（仅当前用户可读写） |
+| `~/.dsh/remote-mobile/style-snippets.json` | 移动端样式片段（内置预设启停状态 + 用户自定义 CSS 小插件） | 本地落盘持久化 |
 
 ---
 
@@ -250,6 +289,12 @@ dsh-remote-mobile:
 <summary><b>Q3: 手机端切换或新建工作区能正常使用吗？</b></summary>
 
 **答**：**支持**。本插件通过请求隔离技术，使手机端与 PC 桌面端拥有一致的工作区管理与执行能力。
+</details>
+
+<details>
+<summary><b>Q4: 手机端样式还是不满意，想完全自己定制？</b></summary>
+
+**答**：打开 **设置 ⚙️ → 远程与移动端 → 🎨 移动端样式片段**，先尝试启停三段内置预设（侧边栏 / 设置面板 / 正文，每段都有独立的 PC 与移动端开关）；还不够就在「自定义片段」里粘贴自己的 CSS（例如 `html[data-dsh-mobile] .xxx { ... }`）。保存后手机端刷新页面立即可见，改动全部落在 `~/.dsh/remote-mobile/style-snippets.json`，升级插件不会丢失。
 </details>
 
 ---

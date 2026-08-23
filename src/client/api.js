@@ -90,3 +90,48 @@ export function clearIpStatsApi() {
     return res.json();
   });
 }
+
+export function fetchStyles() {
+  return fetch('/api/remote-mobile/styles?_t=' + Date.now()).then(function(res) {
+    return res.json();
+  });
+}
+
+export function saveStyleSnippet(payload) {
+  return fetch('/api/remote-mobile/styles', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  }).then(function(res) {
+    return res.json();
+  });
+}
+
+export function toggleStyleApi(id, scope, enabled) {
+  return fetch('/api/remote-mobile/styles/toggle', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: id, scope: scope, enabled: enabled })
+  }).then(function(res) {
+    return res.json();
+  });
+}
+
+export function deleteStyleSnippetApi(id) {
+  return fetch('/api/remote-mobile/styles/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: id })
+  }).then(function(res) {
+    return res.json();
+  });
+}
+
+export function resetStylesApi() {
+  return fetch('/api/remote-mobile/styles/reset', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  }).then(function(res) {
+    return res.json();
+  });
+}

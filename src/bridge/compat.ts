@@ -15,6 +15,11 @@
  *      统一将 Host、Origin、Socket RemoteAddress 及 Sec-Fetch-Site 规范化虚拟为 127.0.0.1 回环特征；
  *    - 彻底解除底层 WebServer 的 DNS-Rebinding 阻断，以及第三方插件写死的 loopback-only 403 限制。
  *
+ * 4. 【移动端样式片段注入 (Mobile Style Snippets Injection)】：
+ *    - 在网关响应层按 User-Agent 判定移动端，向主工作区 index.html 与 /auth 登录页
+ *      注入可拼装去重的 CSS 片段（内置预设 + 用户自定义，见 styles/style-snippets.ts），
+ *      并给 <html> 打上 data-dsh-mobile 标记供样式选择器使用。
+ *
  * 3. 【Cordis 服务桥接 (remoteWebUiPairing Bridge)】：
  *    - 在用户关闭旧版 @linxin666/dsh-remote-web-ui 的情况下，以标准 Cordis Service 模式向全局暴露 remoteWebUiPairing 服务；
  *    - 实现宠物插件 (dsh-pet)、任务看板 (task-board) 等第三方生态组件与本插件授权状态的 100% 互通。
@@ -23,6 +28,12 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { SessionStore } from '../auth/token.js'
 import { getClientIp, isTailscaleIp, isLanIp } from '../auth/tailscale.js'
+import {
+  isMobileUserAgent,
+  applyDataMobileAttr,
+  buildMobileStyleTag,
+  type StyleSnippetStore,
+} from '../styles/style-snippets.js'
 
 /**
  * 注入到 index.html <head> 最前列的 Polyfill 脚本代码片段
@@ -46,6 +57,92 @@ export const CRYPTO_POLYFILL_SNIPPET = `
 `
 
 /**
+ * 注入到 index.html 的移动端悬浮入口拖拽与位置记忆脚本
+ * 允许用户在移动端上下随心拖动左上角入口把手，避免遮挡聊天内容，并自动保存位置
+ */
+export const DRAGGABLE_NAV_SNIPPET = `
+(function() {
+  if (typeof window === "undefined" || typeof document === "undefined") return;
+
+  function initDraggableNav() {
+    var logoRow = document.querySelector('[data-pane="sidebar"] [class*="_logoRow"]');
+    if (!logoRow || logoRow.__dsh_drag_init__) return;
+    logoRow.__dsh_drag_init__ = true;
+
+    var savedTop = localStorage.getItem('dsh_mobile_nav_top');
+    if (savedTop && !isNaN(Number(savedTop))) {
+      var topVal = Math.max(10, Math.min(window.innerHeight - 60, Number(savedTop)));
+      logoRow.style.setProperty('top', topVal + 'px', 'important');
+    }
+
+    var startY = 0;
+    var initialTop = 0;
+    var isDragging = false;
+    var hasMoved = false;
+
+    function onTouchStart(e) {
+      var sidebar = document.querySelector('[data-pane="sidebar"]');
+      if (sidebar && !sidebar.querySelector('[class*="_collapsed"]')) return;
+
+      var touch = e.touches ? e.touches[0] : e;
+      startY = touch.clientY;
+      var rect = logoRow.getBoundingClientRect();
+      initialTop = rect.top;
+      isDragging = true;
+      hasMoved = false;
+    }
+
+    function onTouchMove(e) {
+      if (!isDragging) return;
+      var touch = e.touches ? e.touches[0] : e;
+      var deltaY = touch.clientY - startY;
+
+      if (!hasMoved && Math.abs(deltaY) > 5) {
+        hasMoved = true;
+      }
+
+      if (hasMoved) {
+        if (e.cancelable) e.preventDefault();
+        var newTop = initialTop + deltaY;
+        var minTop = 10;
+        var maxTop = window.innerHeight - 56;
+        newTop = Math.max(minTop, Math.min(maxTop, newTop));
+        logoRow.style.setProperty('top', newTop + 'px', 'important');
+      }
+    }
+
+    function onTouchEnd(e) {
+      if (!isDragging) return;
+      isDragging = false;
+      if (hasMoved) {
+        e.preventDefault();
+        e.stopPropagation();
+        var currentRect = logoRow.getBoundingClientRect();
+        try {
+          localStorage.setItem('dsh_mobile_nav_top', String(Math.round(currentRect.top)));
+        } catch (err) {}
+      }
+    }
+
+    logoRow.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onTouchEnd, { capture: true });
+
+    logoRow.addEventListener('mousedown', onTouchStart);
+    window.addEventListener('mousemove', onTouchMove);
+    window.addEventListener('mouseup', onTouchEnd, { capture: true });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initDraggableNav);
+  } else {
+    initDraggableNav();
+  }
+  setInterval(initDraggableNav, 800);
+})();
+`
+
+/**
  * 挂载底层 http.Server 门禁劫持与回环上下文虚拟化代理
  * 
  * @param server - 底层 Node.js http.Server 实例
@@ -56,6 +153,7 @@ export function patchHttpServerWithVirtualizer(
   server: any,
   gateMiddleware: (req: IncomingMessage, res: ServerResponse, next?: () => void) => boolean,
   _store: SessionStore,
+  styleStore?: StyleSnippetStore,
 ): void {
   if (!server || server.__dsh_tailscale_gate_patched__) return
   server.__dsh_tailscale_gate_patched__ = true
@@ -65,6 +163,14 @@ export function patchHttpServerWithVirtualizer(
   server.removeAllListeners('request')
 
   server.on('request', (req: IncomingMessage, res: ServerResponse) => {
+    // 0. 移动端判定（UA）与样式片段收集。
+    // 样式注入与 UA 无关：collectCss() 产出按【视口宽度档】包装的 CSS
+    // （mobileEnabled → @media (max-width:900px) 窄屏生效；pcEnabled → @media (min-width:901px) 宽屏生效），
+    // 因此 PC 浏览器拉小窗口时移动端样式同样生效。isMobile 仍用于 data-dsh-mobile 标记与拖拽脚本注入。
+    const userAgent = req.headers['user-agent'] || ''
+    const isMobile = isMobileUserAgent(userAgent)
+    const mobileStyleCss = styleStore ? styleStore.collectCss() : ''
+
     // 0. 优先在 Socket 首道关卡记录未经虚拟化篡改的真实客户端物理 IP (防止 Keep-Alive 连接复用污染)
     if (req.socket && !(req.socket as any).__dsh_real_remote_address__) {
       (req.socket as any).__dsh_real_remote_address__ = req.socket.remoteAddress
@@ -89,15 +195,43 @@ export function patchHttpServerWithVirtualizer(
       const currentCt = this.getHeader?.('content-type') || this.getHeader?.('Content-Type') || ''
       const shouldInject = isHtml || String(currentCt).includes('text/html')
 
+      // 是否实际改写了响应体（注入会改变 body 字节长度）
+      let injected = false
+
       if (shouldInject && chunk) {
         if (typeof chunk === 'string' && chunk.includes('<head>')) {
-          chunk = chunk.replace('<head>', `<head><script id="dsh-crypto-polyfill">${CRYPTO_POLYFILL_SNIPPET}</script>`)
+          let html = chunk
+          if (isMobile) html = applyDataMobileAttr(html)
+          if (mobileStyleCss) {
+            html = html.replace('<head>', `<head>${buildMobileStyleTag(mobileStyleCss)}`)
+          }
+          // 悬浮把手拖拽脚本全端注入：脚本自带“仅折叠时工作”守卫，
+          // 预设按视口宽度生效后 PC 窄窗口同样需要可拖动的展开把手
+          html = html.replace('<head>', `<head><script id="dsh-draggable-nav">${DRAGGABLE_NAV_SNIPPET}</script>`)
+          html = html.replace('<head>', `<head><script id="dsh-crypto-polyfill">${CRYPTO_POLYFILL_SNIPPET}</script>`)
+          chunk = html
+          injected = true
         } else if (Buffer.isBuffer(chunk)) {
-          const str = chunk.toString('utf8')
+          let str = chunk.toString('utf8')
           if (str.includes('<head>')) {
-            chunk = Buffer.from(str.replace('<head>', `<head><script id="dsh-crypto-polyfill">${CRYPTO_POLYFILL_SNIPPET}</script>`), 'utf8')
+            if (isMobile) str = applyDataMobileAttr(str)
+            if (mobileStyleCss) {
+              str = str.replace('<head>', `<head>${buildMobileStyleTag(mobileStyleCss)}`)
+            }
+            str = str.replace('<head>', `<head><script id="dsh-draggable-nav">${DRAGGABLE_NAV_SNIPPET}</script>`)
+            str = str.replace('<head>', `<head><script id="dsh-crypto-polyfill">${CRYPTO_POLYFILL_SNIPPET}</script>`)
+            chunk = Buffer.from(str, 'utf8')
+            injected = true
           }
         }
+      }
+
+      // 防截断守卫：仅当头部尚未发出时移除显式的 Content-Length，
+      // 让 Node 按最终 body 重新计算长度（writeHead 已发出后 removeHeader 无效，属不可挽救场景）
+      if (injected && !(this as any).headersSent) {
+        try {
+          if (typeof this.removeHeader === 'function') this.removeHeader('content-length')
+        } catch {}
       }
       return (originalEnd as any).apply(this, [chunk, ...args])
     }

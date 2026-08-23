@@ -146,6 +146,15 @@ Open the DSH Web Console in your browser, navigate to **Settings ⚙️ -> Remot
 - **Adaptive Bilingual UI**: Automatically switches between English and Simplified Chinese based on DSH settings and browser language preferences.
 - **Non-HTTPS Compatibility Patch**: Injects `crypto.randomUUID` Polyfill into HTML templates to fix missing native Web Crypto APIs in HTTP non-secure mobile browser contexts.
 
+### 5. Mobile Style Snippets (style mini-plugins)
+
+The DSH web UI still carries many desktop-oriented styles on phones. This plugin ships a built-in **Mobile Style Snippets** module that splits mobile adaptation into toggleable CSS snippets:
+
+- **Three area-based built-in presets**: `preset-sidebar` (collapsed sidebar becomes a 0-width drawer with a draggable floating toggle), `preset-settings` (centered/scaled settings dialog with locked overlay scroll), `preset-main` (dense conversation typography with scrollable code blocks). Mobile on / PC off by default;
+- **Separate PC / Mobile toggles (viewport-width based, device-independent)**: every preset and custom snippet has independent PC and Mobile switches; "Mobile" = applies at narrow viewports (≤900px) — **a PC browser with a narrow window gets it too**; "PC" = applies at wide viewports (>900px); both on = applies at all widths;
+- **Custom snippets (your own mini-plugins)**: paste your CSS in **Settings ⚙️ → Remote & Mobile → 🎨 Mobile Style Snippets** to add a snippet, with edit/toggle/delete support. Persisted to `~/.dsh/remote-mobile/style-snippets.json`; changes apply on the next page load without restart;
+- **UA-based marker + width-based styling**: styles apply by viewport-width band (see above), independent of device UA; mobile UA requests additionally add `data-dsh-mobile="1"` to `<html>` as a scope hook and inject the draggable toggle script for narrow-viewport flows.
+
 ---
 
 <span id="install"></span>
@@ -214,6 +223,33 @@ dsh-remote-mobile:
   lockDurationMs: 900000      # number, default 900000 (15 mins): IP lockout duration in ms
 ```
 
+### 🎨 Mobile Style Snippets (optional)
+
+Custom snippets (style mini-plugins) and their enabled states are persisted in `~/.dsh/remote-mobile/style-snippets.json`. Manage them from the settings panel or edit the file directly:
+
+```json
+{
+  "version": 2,
+  "presetStates": {
+    "preset-sidebar": { "pc": false, "mobile": true },
+    "preset-settings": { "pc": false, "mobile": true },
+    "preset-main": { "pc": true, "mobile": true }
+  },
+  "custom": [
+    {
+      "id": "custom-xxx",
+      "name": "My style mini-plugin",
+      "css": "html[data-dsh-mobile] .my-selector { ... }",
+      "pcEnabled": false,
+      "mobileEnabled": true
+    }
+  ],
+  "customOrder": ["custom-xxx"]
+}
+```
+
+> Enabled snippets are merged into a single `<style>` injected into the main page and the `/auth` login page; **effectiveness is decided by viewport width**: snippets with `mobileEnabled` are wrapped in `@media (max-width: 900px)` (apply at ≤900px — a narrow PC window gets them too), `pcEnabled` in `@media (min-width: 901px)`, and both on means all widths (v1 files migrate automatically; `presetStates` always persists all three preset groups with current effective values). Note: enabling the Sidebar Drawer preset on PC changes the desktop layout — turn its PC switch off if undesired.
+
 ---
 
 ## 📂 Local File Storage Locations
@@ -223,6 +259,7 @@ dsh-remote-mobile:
 | `~/.dsh/settings.yaml` | Global security policies & bypass toggles | User R/W |
 | `~/.dsh/remote-mobile/devices.json` | Authorized devices, sessions & IP audit statistics | Local persistence |
 | `~/.dsh/remote-mobile/rsa-keys.json` | Server RSA keypair (public & private) | Local storage, `0o600` (Restricted to current user) |
+| `~/.dsh/remote-mobile/style-snippets.json` | Mobile style snippets (built-in toggles + custom CSS mini-plugins) | Local persistent storage |
 
 ---
 
@@ -244,6 +281,12 @@ dsh-remote-mobile:
 **Answer**:
 * **Tailscale Bypass**: Highly secure. Tailscale operates over an encrypted WireGuard overlay where only devices logged into your account can connect.
 * **LAN Bypass**: Inherent risks. Anyone connected to your Wi-Fi (including guests or unauthorized devices) can control your workspace. **Never enable this on untrusted networks**.
+</details>
+
+<details>
+<summary><b>Q4: Not happy with the mobile styles and want full control?</b></summary>
+
+**A**: Open **Settings ⚙️ → Remote & Mobile → 🎨 Mobile Style Snippets**. First try toggling the three area presets (sidebar / settings / conversation), each with independent PC and Mobile switches; if that is not enough, paste your own CSS into the "Custom Snippets" area (e.g. `html[data-dsh-mobile] .xxx { ... }`). Refresh the mobile page to see the effect immediately. Everything lives in `~/.dsh/remote-mobile/style-snippets.json` and survives plugin upgrades.
 </details>
 
 <details>

@@ -3,6 +3,7 @@ import { AUTH_COOKIE_NAME, readGlobalLocale, type SessionStore } from '../auth/t
 import { getLocalTailscaleIp, getLocalLanIp, getAllNetworkIps, getClientIp, isTailscaleIp, isLanIp } from '../auth/tailscale.js'
 import { getPublicKeyPem, decryptWithPrivateKey, validateSecretStrength, RSA_KEY_FILE } from '../auth/crypto.js'
 import { getLoginPageHtml } from './login-page.js'
+import type { StyleSnippetStore } from '../styles/style-snippets.js'
 
 function jsonResponse(res: ServerResponse, status: number, data: any) {
   res.writeHead(status, {
@@ -36,7 +37,7 @@ function parseJsonBody(req: IncomingMessage): Promise<any> {
   })
 }
 
-export function createRoutes(store: SessionStore) {
+export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore) {
   return [
     // 0. RSA 公钥获取接口 (RSA-OAEP-SHA256)
     {
@@ -398,6 +399,82 @@ export function createRoutes(store: SessionStore) {
 
         req.on('close', cleanup)
         res.on('close', cleanup)
+      },
+    },
+
+    // 10. 移动端样式片段（样式小插件）管理 API（合并 GET 与 POST 处理，避免 webserver.register 重复 path 冲突）
+    {
+      path: '/api/remote-mobile/styles',
+      handler: async (req: IncomingMessage, res: ServerResponse) => {
+        if (!styleStore) {
+          return jsonResponse(res, 404, { success: false, reason: 'style snippets module unavailable' })
+        }
+
+        // POST: 新增或修改自定义片段（pcEnabled/mobileEnabled 双端开关，缺省移动端开、PC 关）
+        if (req.method === 'POST') {
+          const body = await parseJsonBody(req)
+          try {
+            const snippet = styleStore.upsertCustom({
+              id: typeof body.id === 'string' ? body.id : undefined,
+              name: typeof body.name === 'string' ? body.name : '',
+              description: typeof body.description === 'string' ? body.description : undefined,
+              css: typeof body.css === 'string' ? body.css : '',
+              pcEnabled: typeof body.pcEnabled === 'boolean' ? body.pcEnabled : false,
+              mobileEnabled: typeof body.mobileEnabled === 'boolean' ? body.mobileEnabled : true,
+            })
+            return jsonResponse(res, 200, { success: true, snippet })
+          } catch (e: any) {
+            return jsonResponse(res, 400, {
+              success: false,
+              reason: e?.message || 'invalid style snippet payload',
+            })
+          }
+        }
+
+        // 默认 GET: 列出全部样式片段（内置预设名称按请求语言本地化）
+        const accept = req.headers['accept-language'] || ''
+        const lang = accept.toLowerCase().startsWith('en') ? 'en' : readGlobalLocale()
+        jsonResponse(res, 200, {
+          success: true,
+          snippets: styleStore.list(lang),
+          persistPath: styleStore.persistPath,
+        })
+      },
+    },
+    {
+      method: 'POST',
+      path: '/api/remote-mobile/styles/toggle',
+      handler: async (req: IncomingMessage, res: ServerResponse) => {
+        if (!styleStore) {
+          return jsonResponse(res, 404, { success: false, reason: 'style snippets module unavailable' })
+        }
+        const body = await parseJsonBody(req)
+        const scope = body.scope === 'pc' ? 'pc' : 'mobile'
+        const ok = styleStore.setEnabled(String(body.id || ''), scope, Boolean(body.enabled))
+        jsonResponse(res, ok ? 200 : 400, { success: ok, reason: ok ? undefined : 'style snippet not found' })
+      },
+    },
+    {
+      method: 'POST',
+      path: '/api/remote-mobile/styles/delete',
+      handler: async (req: IncomingMessage, res: ServerResponse) => {
+        if (!styleStore) {
+          return jsonResponse(res, 404, { success: false, reason: 'style snippets module unavailable' })
+        }
+        const body = await parseJsonBody(req)
+        const ok = styleStore.removeCustom(String(body.id || ''))
+        jsonResponse(res, ok ? 200 : 400, { success: ok, reason: ok ? undefined : 'custom snippet not found' })
+      },
+    },
+    {
+      method: 'POST',
+      path: '/api/remote-mobile/styles/reset',
+      handler: async (_req: IncomingMessage, res: ServerResponse) => {
+        if (!styleStore) {
+          return jsonResponse(res, 404, { success: false, reason: 'style snippets module unavailable' })
+        }
+        styleStore.resetEnabled()
+        jsonResponse(res, 200, { success: true, snippets: styleStore.list() })
       },
     },
   ]

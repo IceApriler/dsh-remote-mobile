@@ -15,6 +15,7 @@
 import { SessionStore, type SessionStoreOptions } from './auth/token.js'
 import { createGlobalAuthGate } from './auth/gate.js'
 import { createRoutes } from './routes/api.js'
+import { StyleSnippetStore } from './styles/style-snippets.js'
 import { getLocalTailscaleIp } from './auth/tailscale.js'
 import {
   patchHttpServerWithVirtualizer,
@@ -86,6 +87,7 @@ function bindDshSettings(ctx: any, store: SessionStore): void {
 export function apply(ctx: any, config: SessionStoreOptions = {}): void {
   // 1. 初始化会话与令牌持久化管理器
   const store = new SessionStore(config)
+  const styleStore = new StyleSnippetStore()
   const gateMiddleware = createGlobalAuthGate(store)
 
   // 2. 接入 DSH Settings 服务 (命名空间: dsh-remote-mobile)
@@ -94,7 +96,7 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
   // 3. 挂载底座 WebServer 相关的门禁拦截与路由注册
   if (ctx.webServer) {
     if (ctx.webServer.server) {
-      patchHttpServerWithVirtualizer(ctx.webServer.server, gateMiddleware, store)
+      patchHttpServerWithVirtualizer(ctx.webServer.server, gateMiddleware, store, styleStore)
     }
 
     // 挂载 HTML 模板层的 Crypto Polyfill 注入钩子
@@ -102,7 +104,7 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
 
     // 注册插件专属的 HTTP & SSE API 路由
     if (typeof ctx.webServer.register === 'function') {
-      const routes = createRoutes(store)
+      const routes = createRoutes(store, styleStore)
       for (const route of routes) {
         ctx.webServer.register(route)
       }
@@ -116,11 +118,11 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
   // 5. 延迟补丁与服务启动日志输出
   setTimeout(() => {
     if (ctx.webServer && ctx.webServer.server) {
-      patchHttpServerWithVirtualizer(ctx.webServer.server, gateMiddleware, store)
+      patchHttpServerWithVirtualizer(ctx.webServer.server, gateMiddleware, store, styleStore)
     }
     const tsIp = getLocalTailscaleIp()
     const opts = store.getOptions()
-    ctx.logger?.info?.(`[dsh-remote-mobile] 移动端远程控制与安全门禁已激活 (上下文虚拟化桥接就绪)`)
+    ctx.logger?.info?.(`[dsh-remote-mobile] 移动端远程控制与安全门禁已激活 (上下文虚拟化桥接就绪，样式片段: ${styleStore.list().length} 个)`)
     if (tsIp) {
       ctx.logger?.info?.(`[dsh-remote-mobile] Tailscale 地址: http://${tsIp}:3080 (免密直连: ${opts.allowTailscale ? '已开启' : '已关闭'})`)
     }
@@ -133,4 +135,5 @@ export * from './auth/token.js'
 export * from './auth/gate.js'
 export * from './routes/api.js'
 export * from './bridge/compat.js'
+export * from './styles/style-snippets.js'
 

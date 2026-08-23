@@ -5,6 +5,7 @@ import { EventEmitter } from 'node:events'
 import { SessionStore, AUTH_COOKIE_NAME } from '../lib/auth/token.js'
 import { createRoutes } from '../lib/routes/api.js'
 import { getPublicKeyPem } from '../lib/auth/crypto.js'
+import { StyleSnippetStore } from '../lib/styles/style-snippets.js'
 
 function createMockReqRes({ method = 'GET', url = '/', headers = {}, body = null, socket = {} } = {}) {
   const req = new EventEmitter()
@@ -63,10 +64,20 @@ test('API 路由处理器功能与安全集成测试 (api.ts)', async (t) => {
     secret: 'AdminPass2026',
     maxFailedAttempts: 5,
   })
-  const routes = createRoutes(store)
+  const styleStore = new StyleSnippetStore(`/tmp/dsh-routes-style-snippets-${Date.now()}.json`)
+  const routes = createRoutes(store, styleStore)
 
   function findRoute(method, path) {
-    return routes.find(r => r.method === method && r.path === path)
+    // method 为 undefined 表示合并 GET/POST 处理的路由（/api/remote-mobile/styles）
+    return routes.find(r => (r.method === undefined || r.method === method) && r.path === path)
+  }
+
+  const styleRoutes = {
+    list: routes.find(r => r.path === '/api/remote-mobile/styles'),
+    upsert: routes.find(r => r.path === '/api/remote-mobile/styles'),
+    toggle: findRoute('POST', '/api/remote-mobile/styles/toggle'),
+    del: findRoute('POST', '/api/remote-mobile/styles/delete'),
+    reset: findRoute('POST', '/api/remote-mobile/styles/reset'),
   }
 
   await t.test('GET /api/remote-mobile/public-key 返回标准 RSA 公钥', async () => {
@@ -274,6 +285,89 @@ test('API 路由处理器功能与安全集成测试 (api.ts)', async (t) => {
     // 验证监听器被正确注销并回退到初始计数
     assert.equal(store.listenerCount('device-connected'), initialConnectedListeners)
     assert.equal(store.listenerCount('ip-security-updated'), initialSecurityListeners)
+  })
+
+  await t.test('GET /api/remote-mobile/styles 列出样式片段', async () => {
+    assert.ok(styleRoutes.list)
+    const { req, res, getResponse } = createMockReqRes()
+    await styleRoutes.list.handler(req, res)
+    const result = getResponse().json()
+    assert.equal(result.success, true)
+    assert.ok(Array.isArray(result.snippets))
+  })
+
+  await t.test('POST /api/remote-mobile/styles 新增并编辑自定义片段', async () => {
+    assert.ok(styleRoutes.upsert)
+    const { req, res, getResponse } = createMockReqRes({
+      method: 'POST',
+      body: { name: '测试片段', css: '.a { color: red; }', pcEnabled: true, mobileEnabled: true },
+    })
+    await styleRoutes.upsert.handler(req, res)
+    const created = getResponse().json()
+    assert.equal(created.success, true)
+    assert.ok(created.snippet)
+    assert.ok(created.snippet.id.startsWith('custom-'))
+    assert.equal(created.snippet.pcEnabled, true)
+    assert.equal(created.snippet.mobileEnabled, true)
+
+    // 编辑同一 id
+    const { req: req2, res: res2, getResponse: get2 } = createMockReqRes({
+      method: 'POST',
+      body: { id: created.snippet.id, name: '测试片段v2', css: '.b { color: blue; }', pcEnabled: false, mobileEnabled: true },
+    })
+    await styleRoutes.upsert.handler(req2, res2)
+    const edited = get2().json()
+    assert.equal(edited.success, true)
+    assert.equal(edited.snippet.id, created.snippet.id)
+    assert.equal(edited.snippet.name, '测试片段v2')
+    assert.equal(edited.snippet.mobileEnabled, true)
+    assert.equal(edited.snippet.pcEnabled, false)
+
+    // 非法载荷返回 400
+    const { req: req3, res: res3, getResponse: get3 } = createMockReqRes({
+      method: 'POST',
+      body: { name: '', css: '' },
+    })
+    await styleRoutes.upsert.handler(req3, res3)
+    assert.equal(get3().status, 400)
+  })
+
+  await t.test('POST /api/remote-mobile/styles/toggle 启停自定义片段', async () => {
+    assert.ok(styleRoutes.toggle)
+    const created = styleStore.upsertCustom({ name: '临时片段', css: '.tmp {}' })
+    const { req, res, getResponse } = createMockReqRes({
+      method: 'POST',
+      body: { id: created.id, scope: 'mobile', enabled: false },
+    })
+    await styleRoutes.toggle.handler(req, res)
+    assert.equal(getResponse().json().success, true)
+    assert.equal(styleStore.get(created.id)?.mobileEnabled, false)
+    assert.equal(styleStore.get(created.id)?.pcEnabled, false)
+  })
+
+  await t.test('POST /api/remote-mobile/styles/delete 删除自定义片段、reset 恢复启用', async () => {
+    assert.ok(styleRoutes.del)
+    const created = styleStore.upsertCustom({ name: '待删除', css: '.d {}', pcEnabled: false, mobileEnabled: true })
+
+    const { req, res, getResponse } = createMockReqRes({
+      method: 'POST',
+      body: { id: 'non-existent-id' },
+    })
+    await styleRoutes.del.handler(req, res)
+    assert.equal(getResponse().json().success, false)
+
+    const { req: req2, res: res2, getResponse: get2 } = createMockReqRes({
+      method: 'POST',
+      body: { id: created.id },
+    })
+    await styleRoutes.del.handler(req2, res2)
+    assert.equal(get2().json().success, true)
+
+    assert.ok(styleRoutes.reset)
+    const { req: req3, res: res3, getResponse: get3 } = createMockReqRes({ method: 'POST' })
+    await styleRoutes.reset.handler(req3, res3)
+    const afterReset = get3().json()
+    assert.equal(afterReset.success, true)
   })
 })
 

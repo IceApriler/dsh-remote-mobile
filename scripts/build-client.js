@@ -72,18 +72,20 @@ export declare function TailscaleMobileSection(props: any): any;
 `;
 writeFileSync(outClientDts, dtsContent, 'utf8');
 
-// 5. 若检测到 DSH 运行环境且非软链接，自动同步拷贝最新 lib 产物
+// 5. 若检测到 DSH 运行环境且非软链接，自动同步拷贝最新全部产物（含后端 lib 与 client）
 const dshProfileMod = resolve(process.env.HOME || '', '.dsh/profiles/web/node_modules/dsh-remote-mobile');
 try {
-  import('node:fs').then(({ existsSync, lstatSync, copyFileSync, mkdirSync }) => {
+  import('node:fs').then(({ existsSync, lstatSync, cpSync, copyFileSync }) => {
     if (existsSync(dshProfileMod)) {
       const isSymlink = lstatSync(dshProfileMod).isSymbolicLink();
       if (!isSymlink) {
-        mkdirSync(resolve(dshProfileMod, 'lib'), { recursive: true });
-        copyFileSync(outClientJs, resolve(dshProfileMod, 'lib/client.js'));
-        copyFileSync(outClientDts, resolve(dshProfileMod, 'lib/client.d.ts'));
-        console.log(`🔄 [build-client] 自动同步最新 client.js 产物到 DSH 运行目录 -> ~/.dsh/profiles/web/node_modules/dsh-remote-mobile/lib/client.js`);
+        cpSync(resolve(rootDir, 'lib'), resolve(dshProfileMod, 'lib'), { recursive: true, force: true });
+        copyFileSync(resolve(rootDir, 'package.json'), resolve(dshProfileMod, 'package.json'));
+        console.log(`🔄 [build-client] 自动同步最新全部产物 (lib + package.json) 到 DSH 运行目录 -> ~/.dsh/profiles/web/node_modules/dsh-remote-mobile`);
       }
     }
+  }).catch((err) => {
+    // 目标目录只读/沙箱受限时仅告警，绝不阻塞构建产物生成
+    console.warn(`⚠️ [build-client] 自动同步到 DSH 运行目录失败（忽略，不影响构建产物）: ${err?.message || err}`);
   });
 } catch {}

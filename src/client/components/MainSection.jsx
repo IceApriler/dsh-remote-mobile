@@ -19,6 +19,7 @@ import { DeviceListCard } from './DeviceListCard.jsx';
 import { SecurityCard } from './SecurityCard.jsx';
 import { StorageCard } from './StorageCard.jsx';
 import { ConfigCard } from './ConfigCard.jsx';
+import { StylesCard } from './StylesCard.jsx';
 import { PLUGIN_VERSION, BUILD_TIME } from '../version.js';
 import { t, resolveLocale } from '../i18n.js';
 
@@ -64,6 +65,21 @@ export function TailscaleMobileSection(props) {
   const [isSaving, setIsSaving] = useState(false);
   const [showVersionTip, setShowVersionTip] = useState(false);
   const [currentLang, setCurrentLang] = useState(resolveLocale(ctx, status));
+
+  // 设置页页签分组（接入 / 设备与安全 / 存储与样式），localStorage 记忆上次位置
+  const [activeTab, setActiveTab] = useState(() => {
+    try {
+      const saved = localStorage.getItem('dsh-rm-settings-tab');
+      if (saved === 'access' || saved === 'devices' || saved === 'style' || saved === 'storage') return saved;
+    } catch (e) {}
+    return 'access';
+  });
+  const switchTab = (tab) => {
+    setActiveTab(tab);
+    try {
+      localStorage.setItem('dsh-rm-settings-tab', tab);
+    } catch (e) {}
+  };
 
   const refreshStatusOnly = useCallback(() => {
     fetchStatus()
@@ -588,75 +604,112 @@ export function TailscaleMobileSection(props) {
         </a>
       </div>
 
-      {/* 卡片 1: 网络接入地址与免密直连管理 */}
-      <NetworkCard
-        status={status}
-        toggleTailscale={toggleTailscale}
-        toggleLan={toggleLan}
-        copyText={copyText}
-        lang={currentLang}
-      />
+      {/* 页签导航：接入 / 设备与安全 / 存储与样式 */}
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        {[
+          { id: 'access', label: t('tabAccess', currentLang) },
+          { id: 'devices', label: t('tabDevices', currentLang) },
+          { id: 'style', label: t('tabStyle', currentLang) },
+          { id: 'storage', label: t('tabStorage', currentLang) },
+        ].map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => switchTab(item.id)}
+            style={{
+              padding: '8px 14px',
+              borderRadius: '10px',
+              fontSize: '13px',
+              fontWeight: activeTab === item.id ? '700' : '500',
+              cursor: 'pointer',
+              border: activeTab === item.id
+                ? '1px solid rgba(59,130,246,0.4)'
+                : '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.2))',
+              background: activeTab === item.id
+                ? 'rgba(59,130,246,0.15)'
+                : 'var(--dsw-alias-bg-layer-3, rgba(128,128,128,0.06))',
+              color: activeTab === item.id
+                ? 'var(--dsw-alias-brand-primary, #3b82f6)'
+                : 'var(--dsw-alias-label-secondary, inherit)',
+            }}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
 
-      {/* 卡片 2: 手机配对码与二维码 */}
-      <QrPairingCard
-        status={status}
-        showCode={showCode}
-        setShowCode={setShowCode}
-        timeLeft={timeLeft}
-        showQr={showQr}
-        setShowQr={setShowQr}
-        selectedTab={selectedTab}
-        setSelectedTab={setSelectedTab}
-        generateQrSvg={generateQrSvg}
-        refreshStatusAndCode={refreshStatusAndCode}
-        copyDirectLink={copyDirectLink}
-        lang={currentLang}
-      />
+      {/* 页签组 1：接入（网络 / 配对码 / 密码）——全部保持挂载，仅按 display 切换，避免状态重置 */}
+      <div style={{ display: activeTab === 'access' ? 'flex' : 'none', flexDirection: 'column', gap: '16px' }}>
+        <NetworkCard
+          status={status}
+          toggleTailscale={toggleTailscale}
+          toggleLan={toggleLan}
+          copyText={copyText}
+          lang={currentLang}
+        />
+        <QrPairingCard
+          status={status}
+          showCode={showCode}
+          setShowCode={setShowCode}
+          timeLeft={timeLeft}
+          showQr={showQr}
+          setShowQr={setShowQr}
+          selectedTab={selectedTab}
+          setSelectedTab={setSelectedTab}
+          generateQrSvg={generateQrSvg}
+          refreshStatusAndCode={refreshStatusAndCode}
+          copyDirectLink={copyDirectLink}
+          lang={currentLang}
+        />
+        <SecretCard
+          status={status}
+          secretInput={secretInput}
+          setSecretInput={setSecretInput}
+          showSecret={showSecret}
+          setShowSecret={setShowSecret}
+          saveSecret={saveSecret}
+          clearSecret={clearSecret}
+          lang={currentLang}
+        />
+      </div>
 
-      {/* 卡片 3: 长期访问密码配置 */}
-      <SecretCard
-        status={status}
-        secretInput={secretInput}
-        setSecretInput={setSecretInput}
-        showSecret={showSecret}
-        setShowSecret={setShowSecret}
-        saveSecret={saveSecret}
-        clearSecret={clearSecret}
-        lang={currentLang}
-      />
+      {/* 页签组 2：设备与安全（设备 / 审计 / 高级配置） */}
+      <div style={{ display: activeTab === 'devices' ? 'flex' : 'none', flexDirection: 'column', gap: '16px' }}>
+        <DeviceListCard
+          status={status}
+          revokeDevice={revokeDevice}
+          revokeAll={revokeAll}
+          lang={currentLang}
+        />
+        <SecurityCard
+          status={status}
+          unlockIp={unlockIp}
+          clearIpStats={clearIpStats}
+          lang={currentLang}
+        />
+        <ConfigCard
+          maxVisitsInput={maxVisitsInput}
+          setMaxVisitsInput={setMaxVisitsInput}
+          maxFailedInput={maxFailedInput}
+          setMaxFailedInput={setMaxFailedInput}
+          lockDurationMinsInput={lockDurationMinsInput}
+          setLockDurationMinsInput={setLockDurationMinsInput}
+          saveAdvancedConfig={saveAdvancedConfig}
+          resetAdvancedConfigDefaults={resetAdvancedConfigDefaults}
+          isSaving={isSaving}
+          lang={currentLang}
+        />
+      </div>
 
-      {/* 卡片 4: 详细已授权设备列表 */}
-      <DeviceListCard
-        status={status}
-        revokeDevice={revokeDevice}
-        revokeAll={revokeAll}
-        lang={currentLang}
-      />
+      {/* 页签组 3：样式覆写（样式片段） */}
+      <div style={{ display: activeTab === 'style' ? 'flex' : 'none', flexDirection: 'column', gap: '16px' }}>
+        <StylesCard lang={currentLang} />
+      </div>
 
-      {/* 卡片 5: 防暴力破解与 IP 访问统计审计 */}
-      <SecurityCard
-        status={status}
-        unlockIp={unlockIp}
-        clearIpStats={clearIpStats}
-        lang={currentLang}
-      />
-
-      {/* 卡片 6: 本地持久化存储位置说明 */}
-      <StorageCard status={status} lang={currentLang} />
-
-      {/* 卡片 7: 全局高级安全参数配置 */}
-      <ConfigCard
-        maxVisitsInput={maxVisitsInput}
-        setMaxVisitsInput={setMaxVisitsInput}
-        maxFailedInput={maxFailedInput}
-        setMaxFailedInput={setMaxFailedInput}
-        lockDurationMinsInput={lockDurationMinsInput}
-        setLockDurationMinsInput={setLockDurationMinsInput}
-        saveAdvancedConfig={saveAdvancedConfig}
-        resetAdvancedConfigDefaults={resetAdvancedConfigDefaults}
-        isSaving={isSaving}
-        lang={currentLang}
-      />
+      {/* 页签组 4：本地数据（持久化存储与密钥说明） */}
+      <div style={{ display: activeTab === 'storage' ? 'flex' : 'none', flexDirection: 'column', gap: '16px' }}>
+        <StorageCard status={status} lang={currentLang} />
+      </div>
     </div>
   );
 }
