@@ -53,6 +53,10 @@ test('移动端样式片段模块测试 (style-snippets.ts)', async (t) => {
       assert.ok(/transform:\s*none !important/.test(sidebarCss))
       assert.ok(/filter:\s*none !important/.test(sidebarCss))
       assert.ok(/will-change:\s*auto !important/.test(sidebarCss))
+      // 回归守卫：抽屉内层必须铺满外层（官方响应式脚本会给内层写死内联 width 如 280px，
+      // 与官方外层 min(88vw,320px) 产生 ~40px 右缘空白条），用 !important 覆盖内联样式
+      assert.ok(sidebarCss.includes('[data-pane="sidebar"] > [data-slot="sidebar"] > div'))
+      assert.ok(/width:\s*100% !important/.test(sidebarCss))
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

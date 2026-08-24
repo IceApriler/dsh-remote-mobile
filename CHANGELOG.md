@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed (缺陷修复)
 - **修复：手动切换扫码页签后被强制切回 Tailscale**。设置面板每 3 秒轮询一次状态，只要本机存在 Tailscale IP 就会强制把扫码页签切回 Tailscale，用户手动选中的「局域网扫码」数秒内被覆盖。现记录用户的手动选择：自动预选仅在用户从未手动切换时生效。
 - **修复：移动端样式片段启用后设置弹窗被困在侧边栏内**。设置面板内联渲染于侧边栏 DOM 中，其全屏遮罩层为 `position:fixed`；而官方在侧边栏列上遗留的恒等 transform（`matrix(1,0,0,1,0,0)`）会把 fixed 后代的包含块困在该列内，叠加官方 `overflow:hidden` 后弹窗被裁剪成抽屉宽度（表现为「弹窗出现在侧边栏里面」）。`preset-sidebar` 现显式清除侧边栏列上全部包含块触发属性（`transform` / `filter` / `backdrop-filter` / `perspective` / `will-change`），并将 body 直挂的模态 portal 容器统一抬升层级，两类弹窗均恢复正常全屏居中。
+- **修复：移动端侧边栏抽屉内外层宽度不一致**。官方响应式脚本会给内层根节点写入固定内联宽度（如 `280px`），与外层抽屉实际宽度（官方 `min(88vw, 320px)`）不一致，在抽屉右缘留下约 40px 无法交互的空白条；现强制内层根节点铺满抽屉（`width:100% !important` 覆盖内联样式），内外对齐无死区。
 - **修复：触屏点击展开把手后官方 Tooltip 气泡永久滞留**（黑底「收起侧边栏」）。官方气泡显示依赖 `mouseenter`/`focus`、消失只认 `mouseleave`/`blur`，触屏点击后这两个事件永远不会到来；现移动端 UA 下整体隐藏官方 Tooltip 气泡（按钮均保留 `aria-label`，可访问性不受影响），PC 窄窗口悬停提示不受影响。
 
 ---

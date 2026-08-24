@@ -116,6 +116,10 @@ const PRESET_SIDEBAR_CSS = `
     left: 0 !important;
     height: 100vh !important;
     height: 100dvh !important;
+    /* 注意：展开态宽度由官方样式接管（[data-dsh-frame] [data-pane="sidebar"]
+       的 width: min(88vw, 320px) !important，特异性高于本预设），不要在此与之竞争；
+       「外层 ~320 / 内层 280」的宽度差由下方内层铺满规则消除。 */
+    min-width: 0 !important;
     z-index: 99999 !important;
     background: var(--dsw-alias-bg-layer-1, #ffffff) !important;
     box-shadow: 6px 0 30px rgba(0, 0, 0, 0.25) !important;
@@ -129,6 +133,15 @@ const PRESET_SIDEBAR_CSS = `
     backdrop-filter: none !important;
     perspective: none !important;
     will-change: auto !important;
+  }
+
+  /* 内层根节点铺满抽屉：覆盖官方响应式脚本写入的内联 width，
+     消除「外层 320 / 内层 280」的宽度差与右缘空白条 */
+  [data-pane="sidebar"] > [data-slot="sidebar"] > div {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    height: 100% !important;
   }
 
   /* 3. 折叠状态：侧边栏收起为 0px 并隐藏整体阴影和多余按钮 */
