@@ -18,11 +18,11 @@
  */
 
 import { homedir } from 'node:os'
-import { dirname } from 'node:path'
+import { dirname, join } from 'node:path'
 import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync, unlinkSync } from 'node:fs'
 
 /** 用户自定义样式片段持久化文件 */
-export const DEFAULT_STYLE_FILE = `${homedir()}/.dsh/remote-mobile/style-snippets.json`
+export const DEFAULT_STYLE_FILE = join(homedir(), '.dsh', 'remote-mobile', 'style-snippets.json')
 
 /** 移动端 User-Agent 识别正则 */
 export const MOBILE_UA_REGEX = /Android|iPhone|iPod|iPad|Mobile Safari|Opera Mini|IEMobile|Windows Phone|BlackBerry|webOS|Mobi/i

@@ -2,9 +2,43 @@ import React from 'react';
 import { t } from '../i18n.js';
 
 /**
- * 卡片 6: 本地持久化存储位置说明 (支持中英文国际化)
+ * 卡片 6: 本地持久化存储位置说明 (支持中英文国际化，统一跨平台绝对路径与无弹窗复制体验)
  */
-export function StorageCard({ status, lang }) {
+export function StorageCard({ status, lang, copyText }) {
+  const handleCopy = (path, tip) => {
+    if (!path) return;
+    if (typeof copyText === 'function') {
+      copyText(path, tip);
+    } else {
+      navigator.clipboard.writeText(path).catch(() => {});
+    }
+  };
+
+  const devicesPath = status.persistPath || '';
+  const rsaPath = status.rsaKeyPath || '';
+  const stylesPath = status.styleSnippetsPath || '';
+
+  const items = [
+    {
+      icon: '📁',
+      title: t('storageDeviceFile', lang),
+      path: devicesPath,
+      tip: lang === 'en' ? 'Devices storage path copied!' : '已成功复制设备存储文件路径！',
+    },
+    {
+      icon: '🔑',
+      title: t('storageRsaFile', lang),
+      path: rsaPath,
+      tip: lang === 'en' ? 'RSA key path copied!' : '已成功复制 RSA 密钥文件路径！',
+    },
+    {
+      icon: '🎨',
+      title: t('storageStylesFile', lang),
+      path: stylesPath,
+      tip: lang === 'en' ? 'Style snippets path copied!' : '已成功复制样式片段文件路径！',
+    },
+  ];
+
   return (
     <div
       style={{
@@ -17,177 +51,62 @@ export function StorageCard({ status, lang }) {
         gap: '10px',
       }}
     >
-      {/* 条目 1: devices.json */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '12px',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-          <span style={{ fontSize: '18px' }}>📁</span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-            <div
-              style={{
-                fontSize: '12px',
-                fontWeight: '600',
-                color: 'var(--dsw-alias-label-primary, inherit)',
-              }}
-            >
-              {t('storageDeviceFile', lang)}
-            </div>
-            <code
-              style={{
-                fontSize: '11px',
-                color: 'var(--dsw-alias-brand-primary, #3b82f6)',
-                fontFamily: 'monospace',
-                wordBreak: 'break-all',
-              }}
-            >
-              {status.persistPath || '~/.dsh/remote-mobile/devices.json'}
-            </code>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            const p = status.persistPath || '~/.dsh/remote-mobile/devices.json';
-            navigator.clipboard.writeText(p).then(() => {
-              alert((lang === 'en' ? 'Copied path:\n' : '存储文件路径已复制到剪贴板！\n') + p);
-            });
-          }}
+      {items.map((item, index) => (
+        <div
+          key={index}
           style={{
-            padding: '4px 10px',
-            background: 'var(--dsw-alias-bg-layer-3, rgba(128,128,128,0.1))',
-            border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.2))',
-            color: 'var(--dsw-alias-label-secondary, inherit)',
-            borderRadius: '6px',
-            fontSize: '11px',
-            cursor: 'pointer',
-            whiteSpace: 'nowrap',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+            paddingTop: index > 0 ? '8px' : '0',
+            borderTop: index > 0 ? '1px dashed var(--dsw-alias-border-l2, rgba(128,128,128,0.15))' : 'none',
           }}
         >
-          {t('copyUrlBtn', lang)}
-        </button>
-      </div>
-
-      {/* 条目 2: rsa-keys.json */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '12px',
-          paddingTop: '8px',
-          borderTop: '1px dashed var(--dsw-alias-border-l2, rgba(128,128,128,0.15))',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-          <span style={{ fontSize: '18px' }}>🔑</span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-            <div
-              style={{
-                fontSize: '12px',
-                fontWeight: '600',
-                color: 'var(--dsw-alias-label-primary, inherit)',
-              }}
-            >
-              {t('storageRsaFile', lang)}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+            <span style={{ fontSize: '18px', flexShrink: 0 }}>{item.icon}</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
+              <div
+                style={{
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: 'var(--dsw-alias-label-primary, inherit)',
+                }}
+              >
+                {item.title}
+              </div>
+              <code
+                style={{
+                  fontSize: '11px',
+                  color: 'var(--dsw-alias-brand-primary, #3b82f6)',
+                  fontFamily: 'monospace',
+                  wordBreak: 'break-all',
+                }}
+              >
+                {item.path || '...'}
+              </code>
             </div>
-            <code
-              style={{
-                fontSize: '11px',
-                color: 'var(--dsw-alias-brand-primary, #3b82f6)',
-                fontFamily: 'monospace',
-                wordBreak: 'break-all',
-              }}
-            >
-              {status.rsaKeyPath || '~/.dsh/remote-mobile/rsa-keys.json'}
-            </code>
           </div>
+          <button
+            type="button"
+            onClick={() => handleCopy(item.path, item.tip)}
+            style={{
+              padding: '4px 10px',
+              background: 'var(--dsw-alias-bg-layer-3, rgba(128,128,128,0.1))',
+              border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.2))',
+              color: 'var(--dsw-alias-label-secondary, inherit)',
+              borderRadius: '6px',
+              fontSize: '11px',
+              cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+            }}
+          >
+            {t('copyUrlBtn', lang)}
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            const p = status.rsaKeyPath || '~/.dsh/remote-mobile/rsa-keys.json';
-            navigator.clipboard.writeText(p).then(() => {
-              alert((lang === 'en' ? 'Copied RSA path:\n' : 'RSA 密钥文件路径已复制到剪贴板！\n') + p);
-            });
-          }}
-          style={{
-            padding: '4px 10px',
-            background: 'var(--dsw-alias-bg-layer-3, rgba(128,128,128,0.1))',
-            border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.2))',
-            color: 'var(--dsw-alias-label-secondary, inherit)',
-            borderRadius: '6px',
-            fontSize: '11px',
-            cursor: 'pointer',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {t('copyUrlBtn', lang)}
-        </button>
-      </div>
-
-      {/* 条目 3: style-snippets.json（移动端样式片段） */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '12px',
-          paddingTop: '8px',
-          borderTop: '1px dashed var(--dsw-alias-border-l2, rgba(128,128,128,0.15))',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-          <span style={{ fontSize: '18px' }}>🎨</span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
-            <div
-              style={{
-                fontSize: '12px',
-                fontWeight: '600',
-                color: 'var(--dsw-alias-label-primary, inherit)',
-              }}
-            >
-              {t('storageStylesFile', lang)}
-            </div>
-            <code
-              style={{
-                fontSize: '11px',
-                color: 'var(--dsw-alias-brand-primary, #3b82f6)',
-                fontFamily: 'monospace',
-                wordBreak: 'break-all',
-              }}
-            >
-              {'~/.dsh/remote-mobile/style-snippets.json'}
-            </code>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            const p = '~/.dsh/remote-mobile/style-snippets.json';
-            navigator.clipboard.writeText(p).then(() => {
-              alert((lang === 'en' ? 'Copied style snippets path:\n' : '样式片段文件路径已复制到剪贴板！\n') + p);
-            });
-          }}
-          style={{
-            padding: '4px 10px',
-            background: 'var(--dsw-alias-bg-layer-3, rgba(128,128,128,0.1))',
-            border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.2))',
-            color: 'var(--dsw-alias-label-secondary, inherit)',
-            borderRadius: '6px',
-            fontSize: '11px',
-            cursor: 'pointer',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {t('copyUrlBtn', lang)}
-        </button>
-      </div>
+      ))}
     </div>
   );
 }
+

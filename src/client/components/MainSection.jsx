@@ -49,6 +49,8 @@ export function TailscaleMobileSection(props) {
     copied: false,
     loading: true,
     persistPath: '',
+    rsaKeyPath: '',
+    styleSnippetsPath: '',
     locale: 'zh',
   });
 
@@ -110,6 +112,7 @@ export function TailscaleMobileSection(props) {
           ipSecurityStats: data.ipSecurityStats || [],
           persistPath: data.persistPath || '',
           rsaKeyPath: data.rsaKeyPath || '',
+          styleSnippetsPath: data.styleSnippetsPath || '',
           locale: data.locale || 'zh',
           loading: false,
         }));
@@ -720,7 +723,7 @@ export function TailscaleMobileSection(props) {
 
       {/* 页签组 4：本地数据（持久化存储与密钥说明） */}
       <div style={{ display: activeTab === 'storage' ? 'flex' : 'none', flexDirection: 'column', gap: '16px' }}>
-        <StorageCard status={status} lang={currentLang} />
+        <StorageCard status={status} lang={currentLang} copyText={copyText} />
       </div>
     </div>
   );

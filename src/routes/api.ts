@@ -3,7 +3,7 @@ import { AUTH_COOKIE_NAME, readGlobalLocale, type SessionStore } from '../auth/t
 import { getLocalTailscaleIp, getLocalLanIp, getAllNetworkIps, getClientIp, isTailscaleIp, isLanIp } from '../auth/tailscale.js'
 import { getPublicKeyPem, decryptWithPrivateKey, validateSecretStrength, RSA_KEY_FILE } from '../auth/crypto.js'
 import { getLoginPageHtml } from './login-page.js'
-import type { StyleSnippetStore } from '../styles/style-snippets.js'
+import { DEFAULT_STYLE_FILE, type StyleSnippetStore } from '../styles/style-snippets.js'
 
 function jsonResponse(res: ServerResponse, status: number, data: any) {
   res.writeHead(status, {
@@ -81,6 +81,7 @@ export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore
           ipSecurityStats,
           persistPath: store.persistPath,
           rsaKeyPath: RSA_KEY_FILE,
+          styleSnippetsPath: styleStore ? styleStore.persistPath : DEFAULT_STYLE_FILE,
           publicKey: getPublicKeyPem(),
         })
       },

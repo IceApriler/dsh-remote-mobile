@@ -1,6 +1,6 @@
 import { randomBytes, randomInt } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync, unlinkSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 import { EventEmitter } from 'node:events'
 import type { IncomingMessage } from 'node:http'
@@ -8,8 +8,8 @@ import { hashSecret, verifySecretHash } from './crypto.js'
 import { isTailscaleIp, isLanIp } from './tailscale.js'
 
 export const AUTH_COOKIE_NAME = 'dsh_mobile_token'
-export const DEFAULT_PERSIST_FILE = `${homedir()}/.dsh/remote-mobile/devices.json`
-export const GLOBAL_SETTINGS_FILE = `${homedir()}/.dsh/settings.yaml`
+export const DEFAULT_PERSIST_FILE = join(homedir(), '.dsh', 'remote-mobile', 'devices.json')
+export const GLOBAL_SETTINGS_FILE = join(homedir(), '.dsh', 'settings.yaml')
 
 /**
  * 从 ~/.dsh/settings.yaml 中安全读取 dsh-remote-mobile 命名空间的最新配置

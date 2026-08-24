@@ -1,9 +1,9 @@
 import { generateKeyPairSync, privateDecrypt, constants, randomBytes, createHash, scryptSync, timingSafeEqual } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 
-export const RSA_KEY_FILE = `${homedir()}/.dsh/remote-mobile/rsa-keys.json`
+export const RSA_KEY_FILE = join(homedir(), '.dsh', 'remote-mobile', 'rsa-keys.json')
 
 interface KeyPair {
   publicKey: string
