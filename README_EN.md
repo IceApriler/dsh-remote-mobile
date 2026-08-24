@@ -106,17 +106,19 @@ Open the DSH Web Console in your browser, navigate to **Settings ⚙️ -> Remot
 
 ### Desktop DSH Plugin Control Panel
 
-| Network Access & QR Pairing | Persistent Passwords, Device Sessions & IP Audit |
+| Network Access & QR Pairing | Devices & Security |
 | :---: | :---: |
-| ![PC Settings - Network & QR](images/pc-dsh-setting-1.png) | ![PC Settings - Passwords & Devices](images/pc-dsh-setting-2.png) |
+| ![PC Settings - Network & QR](images/pc-dsh-setting-1.png) | ![PC Settings - Devices & Security](images/pc-dsh-setting-2.png) |
+| **Style Snippets Override** | **Local Data Storage** |
+| ![PC Settings - Style Snippets](images/pc-dsh-setting-3.png) | ![PC Settings - Local Data Storage](images/pc-dsh-setting-4.png) |
 
 ---
 
 ### Mobile Live Demonstration (Same-Origin Auth & Full Workspace Control)
 
-| Mobile QR Auth & Login Page | Full DSH Workspace Control on Mobile |
-| :---: | :---: |
-| ![Mobile Auth Page](images/mobile-auth.jpg) | ![Mobile Workspace Control](images/mobile-dsh.jpg) |
+| Login & Auth | Chat Font Scaling | Mobile Sidebar Styling | Official Trajectory / Trace |
+| :---: | :---: | :---: | :---: |
+| ![Login & Auth](images/mobile-auth.jpg) | ![Chat Font Scaling](images/mobile-dsh-1.jpg) | ![Mobile Sidebar Styling](images/mobile-dsh-2.jpg) | ![Official Trajectory / Trace](images/mobile-dsh-3.jpg) |
 
 ---
 

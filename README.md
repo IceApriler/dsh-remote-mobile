@@ -107,17 +107,19 @@ dsh web --no-open
 
 ### PC 端 DSH 插件控制面板
 
-| 网络接入与扫码配对 | 长期密码、设备会话与 IP 防暴破审计 |
+| 网络接入与扫码配对 | 设备与安全 |
 | :---: | :---: |
-| ![PC 设置面板 - 网络与配对码](images/pc-dsh-setting-1.png) | ![PC 设置面板 - 密码与设备管理](images/pc-dsh-setting-2.png) |
+| ![PC 设置面板 - 网络接入与扫码配对](images/pc-dsh-setting-1.png) | ![PC 设置面板 - 设备与安全](images/pc-dsh-setting-2.png) |
+| **样式片段覆写** | **本地数据存储** |
+| ![PC 设置面板 - 样式片段覆写](images/pc-dsh-setting-3.png) | ![PC 设置面板 - 本地数据存储](images/pc-dsh-setting-4.png) |
 
 ---
 
 ### 手机端实机演示（同源免登与工作区全功能）
 
-| 手机扫码授权登录页 | 手机端完整控制 DSH 工作区与操作 |
-| :---: | :---: |
-| ![手机端授权登录页](images/mobile-auth.jpg) | ![手机端控制 DSH 工作区](images/mobile-dsh.jpg) |
+| 登录 | 对话列表字号缩放 | 侧边栏移动端样式 | 官方轨迹查看 |
+| :---: | :---: | :---: | :---: |
+| ![登录](images/mobile-auth.jpg) | ![对话列表字号缩放](images/mobile-dsh-1.jpg) | ![侧边栏移动端样式](images/mobile-dsh-2.jpg) | ![官方轨迹查看](images/mobile-dsh-3.jpg) |
 
 ---
 
