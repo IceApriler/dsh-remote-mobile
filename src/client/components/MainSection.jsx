@@ -460,15 +460,19 @@ export function TailscaleMobileSection(props) {
     });
   };
 
+  const showToast = useCallback((message, type = 'success', duration = 2500) => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), duration);
+  }, []);
+
   const copyText = (text, successTip) => {
     const triggerToast = () => {
-      setToast({
-        message:
-          successTip ||
+      showToast(
+        successTip ||
           (currentLang === 'en' ? 'Copied to clipboard!' : '已成功复制到剪贴板！'),
-        type: 'success',
-      });
-      setTimeout(() => setToast(null), 2500);
+        'success',
+        2500
+      );
     };
 
     if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
@@ -784,7 +788,7 @@ export function TailscaleMobileSection(props) {
 
       {/* 页签组 3：样式覆写（样式片段） */}
       <div style={{ display: activeTab === 'style' ? 'flex' : 'none', flexDirection: 'column', gap: '16px' }}>
-        <StylesCard lang={currentLang} />
+        <StylesCard lang={currentLang} showToast={showToast} />
       </div>
 
       {/* 页签组 4：本地数据（持久化存储与密钥说明） */}

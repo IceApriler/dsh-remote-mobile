@@ -12,7 +12,7 @@ import { t } from '../i18n.js';
  * 卡片 8: 移动端样式片段（样式小插件）管理
  * 内置预设开箱即用，自定义片段即时增删改；保存后下一次页面加载即生效，无需重启。
  */
-export function StylesCard({ lang }) {
+export function StylesCard({ lang, showToast }) {
   const [snippets, setSnippets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState(null); // null=未编辑, ''=新增, id=编辑中
@@ -24,6 +24,15 @@ export function StylesCard({ lang }) {
   const [expanded, setExpanded] = useState({});
   const [feedback, setFeedback] = useState('');
 
+  const showFeedback = useCallback((msg, type = 'success') => {
+    if (typeof showToast === 'function') {
+      showToast(msg, type);
+    } else {
+      setFeedback(msg);
+      setTimeout(() => setFeedback(''), 3500);
+    }
+  }, [showToast]);
+
   const load = useCallback(() => {
     fetchStyles()
       .then((data) => {
@@ -32,18 +41,13 @@ export function StylesCard({ lang }) {
       })
       .catch(() => {
         setLoading(false);
-        setFeedback(t('stylesLoadFail', lang));
+        showFeedback(t('stylesLoadFail', lang), 'danger');
       });
-  }, [lang]);
+  }, [lang, showFeedback]);
 
   useEffect(() => {
     load();
   }, [load]);
-
-  const showFeedback = (msg) => {
-    setFeedback(msg);
-    setTimeout(() => setFeedback(''), 3500);
-  };
 
   const toggle = (id, scope, enabled) => {
     toggleStyleApi(id, scope, enabled).then((data) => {
@@ -53,7 +57,8 @@ export function StylesCard({ lang }) {
         showFeedback(
           enabled
             ? (lang === 'en' ? scopeLabel + ' enabled!' : scopeLabel + ' 已启用！')
-            : (lang === 'en' ? scopeLabel + ' disabled!' : scopeLabel + ' 已停用！')
+            : (lang === 'en' ? scopeLabel + ' disabled!' : scopeLabel + ' 已停用！'),
+          'success'
         );
       }
     });
@@ -197,7 +202,7 @@ export function StylesCard({ lang }) {
         {t('stylesCardDesc', lang)}
       </div>
 
-      {feedback ? (
+      {feedback && typeof showToast !== 'function' ? (
         <div
           style={{
             fontSize: '12px',
