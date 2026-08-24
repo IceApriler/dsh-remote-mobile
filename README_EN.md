@@ -43,7 +43,7 @@ By default, DSH strictly listens only to the local loopback address (`127.0.0.1`
 ## ⚡ Key Advantages
 
 * 🚀 **Break Network Barriers with Full Workspace Parity**: Solves the core issue of accessing DSH Web over LAN and Tailscale. When accessed on mobile devices, **creating workspaces, switching workspaces, and executing terminal commands are supported** without feature degradation.
-* 📱 **Unified Codebase with Web**: Mobile devices share the same DSH Web core runtime and ecosystem plugins (such as `dsh-pet`, task boards, etc.). No duplicate backend maintenance is needed; future enhancements only require standard responsive styling adjustments.
+* 📱 **Dedicated Mobile Adaptations & Same-Origin Reuse**: Directly reuses the official DSH Web base and complete plugin ecosystem (such as `dsh-pet`, task boards, etc.) without maintaining a separate mobile backend. Includes out-of-the-box mobile adaptations (sidebar drawer toggle, centered settings modal, and compact chat font scaling for higher information density), alongside a built-in **Style Snippet Override system** to toggle presets or inject custom CSS snippets on demand.
 * 🛡️ **Security Gateway & Transport Encryption**: Built-in client-side RSA asymmetric public key encryption, `scrypt` salted slow-hashing password persistence, and automated IP lockout upon consecutive brute-force failures, blocking unauthorized access over public/LAN networks.
 * 📲 **Quick QR Pairing**: Auto-detects Tailscale CGNAT and LAN IP addresses to generate dedicated pairing QR codes. Scan the code to authenticate and obtain persistent credentials.
 * 🔄 **SSE Real-Time Push**: Device connection, reconnection, revocation, and security alert events are pushed in real time via Server-Sent Events without polling.
