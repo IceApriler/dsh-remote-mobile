@@ -9,7 +9,9 @@ export function StorageCard({ status, lang, copyText }) {
     if (!path) return;
     if (typeof copyText === 'function') {
       copyText(path, tip);
-    } else {
+      return;
+    }
+    if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
       navigator.clipboard.writeText(path).catch(() => {});
     }
   };

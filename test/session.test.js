@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { rmSync, existsSync } from 'node:fs'
+import { rmSync, existsSync, statSync } from 'node:fs'
 import { SessionStore, parseDeviceName } from '../lib/auth/token.js'
 
 const TEST_FILE = `/tmp/dsh-test-devices-${Date.now()}.json`
@@ -73,6 +73,10 @@ test('SessionStore 与设备会话生命周期测试', async (t) => {
     const list2 = store2.getSessionsList()
     assert.equal(list2.count, 2)
     assert.equal(list2.devices[0].deviceName.includes('Android') || list2.devices[0].deviceName.includes('iPhone'), true)
+
+    // 会话文件内含长效 Token（完整凭证），权限必须收紧为仅当前用户可读写 (0o600)
+    const mode = statSync(TEST_FILE).mode & 0o777
+    assert.equal(mode, 0o600, `devices.json 权限应为 0o600，实际为 ${mode.toString(8)}`)
   })
 
   await t.test('单设备撤销 (revokeDevice) 与一键清空 (revokeAllSessions)', () => {

@@ -12,6 +12,37 @@ export function isLoopbackRequest(req: IncomingMessage): boolean {
 
 const STATIC_ASSET_EXT_REGEX = /\.(js|mjs|cjs|css|png|jpg|jpeg|gif|svg|webp|ico|woff|woff2|ttf|eot|otf|map|json|txt|wasm)$/i
 
+/** 插件私有变更类 API 前缀（非 GET 请求需做跨站信号校验） */
+const MUTATION_API_PREFIX = '/api/remote-mobile/'
+
+/**
+ * 判断请求是否携带浏览器跨站信号（用于回环 CSRF / drive-by 防御）。
+ *
+ * Origin 与 Sec-Fetch-Site 由浏览器强制填写，页面脚本无法伪造或隐藏；
+ * 恶意网页驱使浏览器向本机回环发起的写请求必然携带这些信号。
+ * 不带这些头的客户端（curl / 本机脚本 / 旧内核 WebView）不受影响，保持向后兼容。
+ *
+ * 说明（有意取舍，非缺陷）：
+ * - 仅比较 host:port，不比较 scheme：插件主要运行于 HTTP 局域网/回环场景，
+ *   同 host:port 下出现 HTTPS 恶意来源的现实可能性极低；
+ * - 无 Origin 时仅将 Sec-Fetch-Site: cross-site 判为跨站，same-site 不拦截：
+ *   回环场景无域名层级概念，子域场景不适用；收紧为「非 same-origin 即拦截」
+ *   会误伤不发送这些头的旧内核 WebView，与向后兼容目标冲突。
+ */
+export function hasCrossSiteSignal(req: IncomingMessage): boolean {
+  const origin = req.headers.origin
+  if (typeof origin === 'string' && origin) {
+    if (origin === 'null') return true // 沙箱 iframe 等场景的不透明 Origin，一律视为跨站
+    try {
+      const originHost = new URL(origin).host
+      return originHost !== '' && originHost !== (req.headers.host || '')
+    } catch {
+      return true // 无法解析的 Origin 视为不可信
+    }
+  }
+  return req.headers['sec-fetch-site'] === 'cross-site'
+}
+
 /**
  * 判断是否为无需鉴权的公开静态/登录路径
  */
@@ -34,6 +65,27 @@ export function createGlobalAuthGate(store: SessionStore) {
     const pass = () => {
       if (typeof next === 'function') next()
       return true
+    }
+
+    // 0. 变更类插件 API 的跨站写请求防御（先于回环放行，且运行在上下文虚拟化改写之前，
+    //    保证 Origin / Sec-Fetch-Site 为浏览器原始值）：本机回环虽免认证，但恶意网页驱使
+    //    浏览器发起的跨站写请求（drive-by）必然携带跨站信号，在此直接拒绝。
+    const pathname = (req.url || '').split('?')[0]
+    if (
+      pathname.startsWith(MUTATION_API_PREFIX) &&
+      req.method !== 'GET' &&
+      req.method !== 'HEAD' &&
+      hasCrossSiteSignal(req)
+    ) {
+      res.writeHead(403, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+      })
+      res.end(JSON.stringify({
+        error: 'Forbidden',
+        message: '已拦截来自其他网站的跨站写请求。',
+      }))
+      return false
     }
 
     // 1. 本机 127.0.0.1 回环无条件放行（保证本机 PC 始终可用）

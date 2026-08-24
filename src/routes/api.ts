@@ -352,7 +352,8 @@ export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache, no-transform',
           'Connection': 'keep-alive',
-          'Access-Control-Allow-Origin': '*',
+          // 注意：不设置 Access-Control-Allow-Origin。前端 Bundle 与本接口同源加载，
+          // EventSource 同源连接无需 CORS 头；开放跨域会允许任意网页读取设备与安全事件流。
         })
         res.write(': connected\n\n')
 

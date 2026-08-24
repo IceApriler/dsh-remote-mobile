@@ -11,16 +11,18 @@
  *
  * 2. 【底层 HTTP 门禁劫持与回环上下文虚拟化 (Loopback Context Virtualizer)】：
  *    - 挂载全链路 HTTP 门禁中间件，对未授权请求实施 302 重定向到 /auth 或 401 拦截；
- *    - 对通过认证（已扫码配对 / 长期密码 / 免密直连）的合法外部请求，在进入下游各业务插件前，
- *      统一将 Host、Origin、Socket RemoteAddress 及 Sec-Fetch-Site 规范化虚拟为 127.0.0.1 回环特征；
- *    - 彻底解除底层 WebServer 的 DNS-Rebinding 阻断，以及第三方插件写死的 loopback-only 403 限制。
+ *    - 对通过认证（已扫码配对 / 长期密码 / 免密直连）的外部请求，在进入下游各业务插件前，
+ *      统一将 Host、Origin、Socket RemoteAddress 及 Sec-Fetch-Site 规范化虚拟为 127.0.0.1 回环特征，
+ *      解除底层 WebServer 的 DNS-Rebinding 阻断以及第三方插件写死的 loopback-only 403 限制；
+ *    - 本机回环 socket（127.0.0.1 / ::1）不做上述洗白：保留原始 Host / Origin / Sec-Fetch-Site，
+ *      让下游自身的同源与 DNS-Rebinding 校验继续生效，阻断恶意网页借道本机发起的跨站写攻击。
  *
- * 4. 【移动端样式片段注入 (Mobile Style Snippets Injection)】：
+ * 3. 【移动端样式片段注入 (Mobile Style Snippets Injection)】：
  *    - 在网关响应层按 User-Agent 判定移动端，向主工作区 index.html 与 /auth 登录页
  *      注入可拼装去重的 CSS 片段（内置预设 + 用户自定义，见 styles/style-snippets.ts），
  *      并给 <html> 打上 data-dsh-mobile 标记供样式选择器使用。
  *
- * 3. 【Cordis 服务桥接 (remoteWebUiPairing Bridge)】：
+ * 4. 【Cordis 服务桥接 (remoteWebUiPairing Bridge)】：
  *    - 在用户关闭旧版 @linxin666/dsh-remote-web-ui 的情况下，以标准 Cordis Service 模式向全局暴露 remoteWebUiPairing 服务；
  *    - 实现宠物插件 (dsh-pet)、任务看板 (task-board) 等第三方生态组件与本插件授权状态的 100% 互通。
  */
@@ -239,26 +241,54 @@ export function patchHttpServerWithVirtualizer(
     // 2. 请求层门禁判定与上下文虚拟化
     const allowed = gateMiddleware(req, res, () => {
       // 记录真实客户端来源信息（内部专用头，无条件覆盖避免伪造）
-      req.headers['x-dsh-real-ip'] = getClientIp(req)
-      req.headers['x-real-ip'] = req.headers['x-dsh-real-ip']
+      const realIp = getClientIp(req)
+      req.headers['x-dsh-real-ip'] = realIp
+      req.headers['x-real-ip'] = realIp
       if (!req.headers['x-forwarded-host'] && req.headers.host) {
         req.headers['x-forwarded-host'] = req.headers.host
       }
 
-      // 虚拟化 Host 与 Origin（解决 DNS-Rebinding 400 阻断与同源 host === origin 严格检查）
-      const hostHeader = req.headers.host || ''
-      const port = hostHeader.includes(':') ? hostHeader.split(':')[1] : '3080'
-      req.headers.host = `127.0.0.1:${port}`
-      if (req.headers.origin) {
-        req.headers.origin = `http://127.0.0.1:${port}`
+      // 回环 socket（本机浏览器 / 本机程序）不做 Host/Origin/sec-fetch-site 洗白：
+      // 保留浏览器原始同源信号，让下游自身的 CSRF 与 DNS-Rebinding 校验继续生效，
+      // 防御恶意网页借道本机发起的 drive-by 跨站写与 Rebinding 攻击；虚拟化仅服务于外部合法流量。
+      const isLoopbackSocket = realIp === '127.0.0.1' || realIp === '::1'
+
+      if (!isLoopbackSocket) {
+        // 虚拟化 Host 与 Origin（解决外部合法流量的 DNS-Rebinding 400 阻断与同源 host === origin 严格检查）
+        const hostHeader = req.headers.host || ''
+        const port = hostHeader.includes(':') ? hostHeader.split(':')[1] : '3080'
+        req.headers.host = `127.0.0.1:${port}`
+        if (req.headers.origin) {
+          req.headers.origin = `http://127.0.0.1:${port}`
+        }
+
+        // 补齐浏览器同源探针标记（解决 task-board 等插件对 sec-fetch-site 的检查）
+        if (!req.headers['sec-fetch-site'] || req.headers['sec-fetch-site'] === 'cross-site') {
+          req.headers['sec-fetch-site'] = 'same-origin'
+        }
+      } else {
+        // 仅归一化本地 Host 变体（localhost / [::1] → 127.0.0.1），其余原样保留供下游校验
+        const hostHeader = req.headers.host || ''
+        let bareHost = hostHeader
+        if (bareHost.startsWith('[')) {
+          bareHost = bareHost.slice(1).split(']')[0]
+        } else {
+          bareHost = bareHost.split(':')[0]
+        }
+        bareHost = bareHost.toLowerCase()
+        if (bareHost === 'localhost' || bareHost === '::1' || /^127\./.test(bareHost)) {
+          const portMatch = hostHeader.match(/:(\d+)$/)
+          req.headers.host = `127.0.0.1:${portMatch ? portMatch[1] : '3080'}`
+          if (req.headers.origin) {
+            req.headers.origin = `http://${req.headers.host}`
+          }
+        }
       }
 
-      // 补齐浏览器同源探针标记（解决 task-board 等插件对 sec-fetch-site 的检查）
-      if (!req.headers['sec-fetch-site'] || req.headers['sec-fetch-site'] === 'cross-site') {
-        req.headers['sec-fetch-site'] = 'same-origin'
-      }
-
-      // 统一虚拟化 socket.remoteAddress 为 127.0.0.1（解除 dsh-ssh / plugin-manager 等插件写死的 loopback-only 限制）
+      // 统一虚拟化 socket.remoteAddress 为 127.0.0.1（解除 dsh-ssh / plugin-manager 等插件写死的 loopback-only 限制）。
+      // 说明：该改写仅对外部来源流量产生实际效果——真实回环请求的 remoteAddress 本就是 127.0.0.1（下方守卫使其为 no-op）；
+      // drive-by 攻击者的浏览器同样真实 originating 自 127.0.0.1，socket 层无法也无需区分攻击者，
+      // 跨站防御由门禁层 Origin / Sec-Fetch-Site 校验（虚拟化改写之前执行）与上方回环 Host 保留共同承担。
       if (req.socket && req.socket.remoteAddress !== '127.0.0.1') {
         try {
           Object.defineProperty(req.socket, 'remoteAddress', {

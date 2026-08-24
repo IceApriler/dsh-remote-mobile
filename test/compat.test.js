@@ -94,6 +94,79 @@ test('上下文虚拟化与兼容性补丁测试 (compat.ts)', async (t) => {
     mockServer.emit('request', req, res)
   })
 
+  await t.test('回环 socket 不做 Host/Origin/sec-fetch-site 洗白（保留原始同源信号）', (t, done) => {
+    const mockServer = new EventEmitter()
+    const store = new SessionStore({ devicesFile: `/tmp/dsh-compat-loopback-${Date.now()}.json` })
+    const gateMiddleware = (req, res, next) => { next?.(); return true }
+
+    let checked = false
+    mockServer.on('request', (req) => {
+      if (checked) return
+      checked = true
+      // 回环请求（含 DNS-Rebinding 形态的恶意 Host）必须原样保留，供下游自身的同源与 Rebinding 校验使用
+      assert.equal(req.headers.host, 'evil.com:3080')
+      assert.equal(req.headers.origin, 'http://evil.com:3080')
+      assert.equal(req.headers['sec-fetch-site'], 'cross-site')
+      // 内部真实 IP 记录头仍然无条件写入（路由层 getRealClientIp 依赖）
+      assert.equal(req.headers['x-dsh-real-ip'], '127.0.0.1')
+      assert.equal(req.headers['x-real-ip'], '127.0.0.1')
+      done()
+    })
+
+    patchHttpServerWithVirtualizer(mockServer, gateMiddleware, store)
+
+    const req = {
+      headers: {
+        host: 'evil.com:3080',
+        origin: 'http://evil.com:3080',
+        'sec-fetch-site': 'cross-site',
+      },
+      socket: { remoteAddress: '127.0.0.1' },
+    }
+    const res = {
+      writeHead() {},
+      setHeader() {},
+      end() {},
+    }
+
+    mockServer.emit('request', req, res)
+  })
+
+  await t.test('回环下 localhost / [::1] Host 变体归一化为 127.0.0.1，sec-fetch-site 保留', (t, done) => {
+    const mockServer = new EventEmitter()
+    const store = new SessionStore({ devicesFile: `/tmp/dsh-compat-loopback2-${Date.now()}.json` })
+    const gateMiddleware = (req, res, next) => { next?.(); return true }
+
+    let checked = false
+    mockServer.on('request', (req) => {
+      if (checked) return
+      checked = true
+      assert.equal(req.headers.host, '127.0.0.1:3080')
+      assert.equal(req.headers.origin, 'http://127.0.0.1:3080')
+      // 同源信号不被洗白：浏览器原始 sec-fetch-site 原样透传
+      assert.equal(req.headers['sec-fetch-site'], 'same-origin')
+      done()
+    })
+
+    patchHttpServerWithVirtualizer(mockServer, gateMiddleware, store)
+
+    const req = {
+      headers: {
+        host: 'localhost:3080',
+        origin: 'http://localhost:3080',
+        'sec-fetch-site': 'same-origin',
+      },
+      socket: { remoteAddress: '::1' },
+    }
+    const res = {
+      writeHead() {},
+      setHeader() {},
+      end() {},
+    }
+
+    mockServer.emit('request', req, res)
+  })
+
   await t.test('移动端请求注入 data-dsh-mobile 标记与样式片段，桌面端不注入', (t, done) => {
     const mockServer = new EventEmitter()
     const store = new SessionStore({ devicesFile: `/tmp/dsh-compat-style-1787460740359.json` })

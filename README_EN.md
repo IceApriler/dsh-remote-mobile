@@ -138,8 +138,10 @@ Open the DSH Web Console in your browser, navigate to **Settings ⚙️ -> Remot
   - Audit logs and lockout states persist to disk and restore across restarts;
   - Administrators can manually unlock blocked IPs with one click in the panel.
 - **Intelligent Static Asset Whitelisting**: The authentication gate automatically allows verified frontend asset extensions (`.js`, `.css`, `.png`, `.svg`, `.woff2`, etc., 20+ types) while strictly blocking extensionless or dynamic API routes (e.g. `/plugins/xxx/admin`), ensuring smooth third-party plugin rendering without manual whitelist configuration.
-- **Resilient Atomic Persistence & Debounce**: 500ms debounce write-throttling to safeguard disk I/O, coupled with `beforeExit` process flush hooks and atomic temporary file replacement (`renameSync`) for YAML configuration.
+- **Resilient Atomic Persistence & Debounce**: Millisecond-level debounce write-throttling to safeguard disk I/O (500ms for session data, 300ms for style snippets), coupled with `beforeExit` process flush hooks and atomic temporary file replacement (`renameSync`) for `settings.yaml` and `style-snippets.json`.
 - **Real Socket IP Extraction**: Relies strictly on underlying Socket connection addresses, preventing spoofed `X-Forwarded-For` header attacks.
+- **Loopback CSRF Defense**: Mutating plugin APIs validate browser same-origin signals (`Origin` / `Sec-Fetch-Site`). Cross-site write requests to `127.0.0.1` driven by malicious webpages are rejected outright; non-browser clients (curl / local scripts) are unaffected.
+- **No Context Laundering for Loopback**: Context virtualization applies only to external traffic. Loopback requests keep their original Host / Origin, so the built-in DNS-rebinding and same-origin checks of DSH keep working against external domains. The SSE event stream accepts same-origin connections only, with no cross-origin reads.
 
 ### 4. Real-Time Sync & Internationalization
 - **SSE Real-Time Push**: Push notifications for new device pairing, reconnections, revocations, and security alerts via Server-Sent Events, with bidirectional close listeners and idempotent cleanup.
@@ -153,7 +155,7 @@ The DSH web UI still carries many desktop-oriented styles on phones. This plugin
 - **Three area-based built-in presets**: `preset-sidebar` (collapsed sidebar becomes a 0-width drawer with a draggable floating toggle), `preset-settings` (centered/scaled settings dialog with locked overlay scroll), `preset-main` (dense conversation typography with scrollable code blocks). Mobile on / PC off by default;
 - **Separate PC / Mobile toggles (viewport-width based, device-independent)**: every preset and custom snippet has independent PC and Mobile switches; "Mobile" = applies at narrow viewports (≤900px) — **a PC browser with a narrow window gets it too**; "PC" = applies at wide viewports (>900px); both on = applies at all widths;
 - **Custom snippets (your own mini-plugins)**: paste your CSS in **Settings ⚙️ → Remote & Mobile → 🎨 Mobile Style Snippets** to add a snippet, with edit/toggle/delete support. Persisted to `~/.dsh/remote-mobile/style-snippets.json`; changes apply on the next page load without restart;
-- **UA-based marker + width-based styling**: styles apply by viewport-width band (see above), independent of device UA; mobile UA requests additionally add `data-dsh-mobile="1"` to `<html>` as a scope hook and inject the draggable toggle script for narrow-viewport flows.
+- **UA-based marker + width-based styling**: styles apply by viewport-width band (see above), independent of device UA; mobile UA requests additionally add `data-dsh-mobile="1"` to `<html>` as a scope hook, and the draggable toggle script is injected for all clients (it only activates while the sidebar is collapsed).
 
 ---
 
@@ -257,7 +259,7 @@ Custom snippets (style mini-plugins) and their enabled states are persisted in `
 | Path | Description | Security Level |
 |---|---|---|
 | `~/.dsh/settings.yaml` | Global security policies & bypass toggles | User R/W |
-| `~/.dsh/remote-mobile/devices.json` | Authorized devices, sessions & IP audit statistics | Local persistence |
+| `~/.dsh/remote-mobile/devices.json` | Authorized devices, sessions & IP audit statistics (contains long-lived tokens, `0o600`) | Local storage, restricted to current user |
 | `~/.dsh/remote-mobile/rsa-keys.json` | Server RSA keypair (public & private) | Local storage, `0o600` (Restricted to current user) |
 | `~/.dsh/remote-mobile/style-snippets.json` | Mobile style snippets (built-in toggles + custom CSS mini-plugins) | Local persistent storage |
 

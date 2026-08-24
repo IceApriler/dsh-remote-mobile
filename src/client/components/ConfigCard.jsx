@@ -15,6 +15,7 @@ export function ConfigCard({
   resetAdvancedConfigDefaults,
   isSaving,
   lang,
+  copyText,
 }) {
   return (
     <div
@@ -52,13 +53,14 @@ export function ConfigCard({
         <button
           type="button"
           onClick={() => {
-            navigator.clipboard.writeText('~/.dsh/settings.yaml').then(() => {
-              alert(
+            if (typeof copyText === 'function') {
+              copyText(
+                '~/.dsh/settings.yaml',
                 lang === 'en'
-                  ? 'Copied settings path:\n~/.dsh/settings.yaml (namespace: dsh-remote-mobile)'
-                  : '已复制配置文件路径：\n~/.dsh/settings.yaml (命名空间: dsh-remote-mobile)'
+                  ? 'Settings path copied (~/.dsh/settings.yaml)'
+                  : '已复制配置文件路径（~/.dsh/settings.yaml）'
               );
-            });
+            }
           }}
           style={{
             padding: '4px 10px',

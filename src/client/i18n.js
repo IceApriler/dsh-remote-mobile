@@ -96,7 +96,6 @@ export var translations = {
     storageCardDesc: "所有敏感凭证均在本地经过加盐哈希或非对称加密保护，不依赖任何第三方云端鉴权中心。",
     storageDeviceFile: "已授权设备与会话缓存文件：",
     storageRsaFile: "服务端 RSA 私钥文件 (0o600 权限保护)：",
-    storageConfigFile: "主配置文件 (命名空间: dsh-remote-mobile)：",
     storageStylesFile: "移动端样式片段文件 (可独立启停的 CSS 小插件)：",
 
     // 卡片 7: 全局高级配置
@@ -132,7 +131,6 @@ export var translations = {
     stylesBothDevices: "PC + 移动端",
     stylesMobileOnlyBadge: "仅移动端",
     stylesPcOnlyBadge: "仅 PC",
-    stylesEnabled: "已启用",
     stylesDisabled: "已停用",
     stylesViewCss: "查看 CSS",
     stylesHideCss: "收起 CSS",
@@ -251,7 +249,6 @@ export var translations = {
     storageCardDesc: "All sensitive credentials are protected locally via slow salt hashing and asymmetric RSA cryptography, without cloud dependencies.",
     storageDeviceFile: "Authorized devices & session cache:",
     storageRsaFile: "Server RSA private key (0o600 protected):",
-    storageConfigFile: "Main configuration (namespace: dsh-remote-mobile):",
     storageStylesFile: "Mobile style snippets file (toggleable CSS mini-plugins):",
 
     // Card 7: Advanced Security Config
@@ -287,7 +284,6 @@ export var translations = {
     stylesBothDevices: "PC + Mobile",
     stylesMobileOnlyBadge: "Mobile only",
     stylesPcOnlyBadge: "PC only",
-    stylesEnabled: "Enabled",
     stylesDisabled: "Disabled",
     stylesViewCss: "View CSS",
     stylesHideCss: "Hide CSS",

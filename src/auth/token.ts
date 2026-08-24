@@ -1,5 +1,5 @@
 import { randomBytes, randomInt } from 'node:crypto'
-import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync, unlinkSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync, unlinkSync, chmodSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 import { EventEmitter } from 'node:events'
@@ -927,6 +927,8 @@ export class SessionStore extends EventEmitter {
         ipStats: Array.from(this.ipStats.values()),
       }
       writeFileSync(this.persistPath, JSON.stringify(payload, null, 2), 'utf8')
+      // 会话文件内含长效 Token（即完整凭证），权限与 rsa-keys.json 对齐收紧为仅当前用户可读写
+      try { chmodSync(this.persistPath, 0o600) } catch {}
     } catch {}
   }
 }

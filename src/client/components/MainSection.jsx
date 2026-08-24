@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   fetchStatus,
   generatePairCode,
@@ -186,8 +186,7 @@ export function TailscaleMobileSection(props) {
                 name: dev.deviceName || 'Device',
                 ip: dev.ip,
               });
-        setToast({ message: msg, type: 'info' });
-        setTimeout(() => setToast(null), 4000);
+        showToast(msg, 'info', 4000);
       }
 
       // 3. 设备注销即时移除
@@ -208,8 +207,7 @@ export function TailscaleMobileSection(props) {
       // 4. 安全告警即时弹窗
       if (detail.type === 'ip-security-alert') {
         const alertMsg = t('toastIpLocked', currentLang, { ip: detail.ip });
-        setToast({ message: alertMsg, type: 'danger' });
-        setTimeout(() => setToast(null), 5000);
+        showToast(alertMsg, 'danger', 5000);
       }
 
       // 5. 触发后台全量校准
@@ -281,14 +279,13 @@ export function TailscaleMobileSection(props) {
       if (data.success) {
         setStatus((prev) => ({ ...prev, hasSecret: true }));
         setSecretInput('');
-        setToast({
-          message:
-            currentLang === 'en'
-              ? 'Persistent password saved!'
-              : '长期访问密码已成功保存并启用！',
-          type: 'success',
-        });
-        setTimeout(() => setToast(null), 3000);
+        showToast(
+          currentLang === 'en'
+            ? 'Persistent password saved!'
+            : '长期访问密码已成功保存并启用！',
+          'success',
+          3000
+        );
       } else {
         alert((currentLang === 'en' ? 'Save failed: ' : '保存失败：') + (data.reason || ''));
       }
@@ -300,11 +297,11 @@ export function TailscaleMobileSection(props) {
       clearSecretApi().then(() => {
         setStatus((prev) => ({ ...prev, hasSecret: false }));
         setSecretInput('');
-        setToast({
-          message: currentLang === 'en' ? 'Password cleared!' : '已成功清除长期访问密码！',
-          type: 'info',
-        });
-        setTimeout(() => setToast(null), 3000);
+        showToast(
+          currentLang === 'en' ? 'Password cleared!' : '已成功清除长期访问密码！',
+          'info',
+          3000
+        );
       });
     }
   };
@@ -313,11 +310,11 @@ export function TailscaleMobileSection(props) {
     if (confirm(t('revokeDeviceConfirm', currentLang))) {
       revokeDeviceApi(token).then(() => {
         refreshStatusAndCode();
-        setToast({
-          message: currentLang === 'en' ? 'Device disconnected!' : '已成功踢出该设备！',
-          type: 'info',
-        });
-        setTimeout(() => setToast(null), 2500);
+        showToast(
+          currentLang === 'en' ? 'Device disconnected!' : '已成功踢出该设备！',
+          'info',
+          2500
+        );
       });
     }
   };
@@ -326,14 +323,13 @@ export function TailscaleMobileSection(props) {
     if (confirm(t('revokeAllConfirm', currentLang))) {
       revokeAllDevicesApi().then(() => {
         refreshStatusAndCode();
-        setToast({
-          message:
-            currentLang === 'en'
-              ? 'All devices disconnected!'
-              : '已成功注销并踢下线所有设备！',
-          type: 'info',
-        });
-        setTimeout(() => setToast(null), 2500);
+        showToast(
+          currentLang === 'en'
+            ? 'All devices disconnected!'
+            : '已成功注销并踢下线所有设备！',
+          'info',
+          2500
+        );
       });
     }
   };
@@ -343,14 +339,13 @@ export function TailscaleMobileSection(props) {
       unlockIpApi(ip)
         .then(() => {
           refreshStatusAndCode();
-          setToast({
-            message:
-              currentLang === 'en'
-                ? `IP ${ip} unlocked!`
-                : `已成功为 IP ${ip} 解除锁定！`,
-            type: 'success',
-          });
-          setTimeout(() => setToast(null), 3000);
+          showToast(
+            currentLang === 'en'
+              ? `IP ${ip} unlocked!`
+              : `已成功为 IP ${ip} 解除锁定！`,
+            'success',
+            3000
+          );
         })
         .catch(() => {});
     }
@@ -361,14 +356,13 @@ export function TailscaleMobileSection(props) {
       clearIpStatsApi()
         .then(() => {
           refreshStatusAndCode();
-          setToast({
-            message:
-              currentLang === 'en'
-                ? 'Audit logs cleared!'
-                : '已成功清空所有安全审计日志！',
-            type: 'success',
-          });
-          setTimeout(() => setToast(null), 2500);
+          showToast(
+            currentLang === 'en'
+              ? 'Audit logs cleared!'
+              : '已成功清空所有安全审计日志！',
+            'success',
+            2500
+          );
         })
         .catch(() => {});
     }
@@ -398,8 +392,7 @@ export function TailscaleMobileSection(props) {
         setIsSaving(false);
         if (data.success) {
           refreshStatusAndCode();
-          setToast({ message: t('saveConfigSuccessToast', currentLang), type: 'success' });
-          setTimeout(() => setToast(null), 3000);
+          showToast(t('saveConfigSuccessToast', currentLang), 'success', 3000);
         } else {
           alert((currentLang === 'en' ? 'Save failed: ' : '保存失败：') + (data.reason || ''));
         }
@@ -429,8 +422,7 @@ export function TailscaleMobileSection(props) {
         setIsSaving(false);
         if (data.success) {
           refreshStatusAndCode();
-          setToast({ message: t('restoreDefaultsSuccessToast', currentLang), type: 'success' });
-          setTimeout(() => setToast(null), 3000);
+          showToast(t('restoreDefaultsSuccessToast', currentLang), 'success', 3000);
         } else {
           alert((currentLang === 'en' ? 'Reset failed: ' : '重置失败：') + (data.reason || ''));
         }
@@ -452,17 +444,18 @@ export function TailscaleMobileSection(props) {
         : status.lanIp || '127.0.0.1';
     const port = (typeof window !== 'undefined' && window.location.port) || '3080';
     const directLink = `http://${effectiveQrIp}:${port}/auth?token=${status.code || ''}`;
-    navigator.clipboard.writeText(directLink).then(() => {
-      setStatus((prev) => ({ ...prev, copied: true }));
-      setTimeout(() => {
-        setStatus((prev) => ({ ...prev, copied: false }));
-      }, 2000);
-    });
+    copyText(directLink, t('copiedTip', currentLang));
+    setStatus((prev) => ({ ...prev, copied: true }));
+    setTimeout(() => {
+      setStatus((prev) => ({ ...prev, copied: false }));
+    }, 2000);
   };
 
+  const toastTimerRef = useRef(null);
   const showToast = useCallback((message, type = 'success', duration = 2500) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToast({ message, type });
-    setTimeout(() => setToast(null), duration);
+    toastTimerRef.current = setTimeout(() => setToast(null), duration);
   }, []);
 
   const copyText = (text, successTip) => {
@@ -588,11 +581,11 @@ export function TailscaleMobileSection(props) {
               onMouseEnter={() => setShowVersionTip(true)}
               onMouseLeave={() => setShowVersionTip(false)}
               onClick={() => {
-                setToast({
-                  message: `📦 dsh-remote-mobile ${PLUGIN_VERSION} (${currentLang === 'en' ? 'Build: ' : '构建时间: '}${BUILD_TIME})`,
-                  type: 'info',
-                });
-                setTimeout(() => setToast(null), 3000);
+                showToast(
+                  `📦 dsh-remote-mobile ${PLUGIN_VERSION} (${currentLang === 'en' ? 'Build: ' : '构建时间: '}${BUILD_TIME})`,
+                  'info',
+                  3000
+                );
               }}
             >
               <span
@@ -783,6 +776,7 @@ export function TailscaleMobileSection(props) {
           resetAdvancedConfigDefaults={resetAdvancedConfigDefaults}
           isSaving={isSaving}
           lang={currentLang}
+          copyText={copyText}
         />
       </div>
 

@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { SessionStore, AUTH_COOKIE_NAME } from '../lib/auth/token.js'
-import { createGlobalAuthGate, isLoopbackRequest, isPublicPath } from '../lib/auth/gate.js'
+import { createGlobalAuthGate, isLoopbackRequest, isPublicPath, hasCrossSiteSignal } from '../lib/auth/gate.js'
 
 test('全局安全门禁中间件测试', async (t) => {
   const store = new SessionStore({
@@ -273,6 +273,112 @@ test('全局安全门禁中间件测试', async (t) => {
       let passed = false
       gate(req, {}, () => { passed = true })
       assert.equal(passed, true, `${endpoint} 应公开放行`)
+    }
+  })
+
+  await t.test('跨站信号判定 hasCrossSiteSignal 基础语义', () => {
+    // Origin 与 Host 一致 → 同源
+    assert.equal(hasCrossSiteSignal({ headers: { origin: 'http://127.0.0.1:3080', host: '127.0.0.1:3080' } }), false)
+    assert.equal(hasCrossSiteSignal({ headers: { origin: 'http://192.168.1.5:3080', host: '192.168.1.5:3080' } }), false)
+    // Origin 与 Host 不一致 → 跨站
+    assert.equal(hasCrossSiteSignal({ headers: { origin: 'https://evil.com', host: '127.0.0.1:3080' } }), true)
+    // 不透明 Origin（null）与不可解析 Origin → 视为跨站
+    assert.equal(hasCrossSiteSignal({ headers: { origin: 'null', host: '127.0.0.1:3080' } }), true)
+    assert.equal(hasCrossSiteSignal({ headers: { origin: '::not-a-url::', host: '127.0.0.1:3080' } }), true)
+    // 无 Origin 时依赖 Sec-Fetch-Site
+    assert.equal(hasCrossSiteSignal({ headers: { host: '127.0.0.1:3080', 'sec-fetch-site': 'cross-site' } }), true)
+    assert.equal(hasCrossSiteSignal({ headers: { host: '127.0.0.1:3080', 'sec-fetch-site': 'same-origin' } }), false)
+    // 两者皆无（curl / 本机脚本）→ 非浏览器请求，不视为跨站
+    assert.equal(hasCrossSiteSignal({ headers: {} }), false)
+  })
+
+  await t.test('回环 drive-by 防御：恶意网页驱使的跨站写请求被 403 拦截，正常本机请求不受影响', () => {
+    const makeReq = (overrides = {}) => ({
+      method: 'POST',
+      url: '/api/remote-mobile/toggle-bypass',
+      socket: { remoteAddress: '127.0.0.1' },
+      headers: {},
+      ...overrides,
+    })
+    const collectRes = () => {
+      const state = { statusCode: null }
+      return {
+        state,
+        writeHead(code) { state.statusCode = code },
+        end() {},
+      }
+    }
+
+    // 1. 恶意页面（evil.com）驱使浏览器向回环发起写请求 → 即使免认证也必须 403
+    {
+      const res = collectRes()
+      let passed = false
+      gate(makeReq({ headers: { origin: 'https://evil.com', host: '127.0.0.1:3080' } }), res, () => { passed = true })
+      assert.equal(passed, false, '跨站 Origin 的变更类 API 应被拦截')
+      assert.equal(res.state.statusCode, 403)
+    }
+
+    // 2. sec-fetch-site=cross-site（无 Origin 头的浏览器变体）同样拦截
+    {
+      const res = collectRes()
+      let passed = false
+      gate(makeReq({ headers: { 'sec-fetch-site': 'cross-site', host: '127.0.0.1:3080' } }), res, () => { passed = true })
+      assert.equal(passed, false, 'sec-fetch-site=cross-site 应被拦截')
+      assert.equal(res.state.statusCode, 403)
+    }
+
+    // 3. Origin: null（沙箱 iframe）拦截
+    {
+      const res = collectRes()
+      let passed = false
+      gate(makeReq({ headers: { origin: 'null', host: '127.0.0.1:3080' } }), res, () => { passed = true })
+      assert.equal(passed, false, 'Origin=null 应被拦截')
+      assert.equal(res.state.statusCode, 403)
+    }
+
+    // 4. 本机面板自身的同源请求（Origin === Host）→ 正常放行
+    {
+      let passed = false
+      gate(makeReq({ headers: { origin: 'http://127.0.0.1:3080', host: '127.0.0.1:3080' } }), collectRes(), () => { passed = true })
+      assert.equal(passed, true, '同源写请求不应受影响')
+    }
+
+    // 5. curl / 本机脚本（无 Origin、无 sec-fetch 头）→ 向后兼容放行
+    {
+      let passed = false
+      gate(makeReq({ headers: { host: 'localhost:3080' } }), collectRes(), () => { passed = true })
+      assert.equal(passed, true, '无浏览器信号的本地脚本请求应保持兼容')
+    }
+
+    // 6. GET 只读接口不受此防御影响
+    {
+      let passed = false
+      gate({
+        method: 'GET',
+        url: '/api/remote-mobile/status',
+        socket: { remoteAddress: '127.0.0.1' },
+        headers: { origin: 'https://evil.com', host: '127.0.0.1:3080' },
+      }, collectRes(), () => { passed = true })
+      assert.equal(passed, true, 'GET 请求不参与跨站写防御')
+    }
+
+    // 7. 已授权手机的同源写请求（外部 IP + Cookie + Origin 与 Host 同为局域网地址）→ 放行
+    {
+      const { code } = store.generateShortCode()
+      const { token } = store.verify(code, 'iPhone', '192.168.1.77')
+      let passed = false
+      gate({
+        method: 'POST',
+        url: '/api/remote-mobile/styles/toggle',
+        socket: { remoteAddress: '192.168.1.77' },
+        headers: {
+          origin: 'http://192.168.1.5:3080',
+          host: '192.168.1.5:3080',
+          cookie: `${AUTH_COOKIE_NAME}=${token}`,
+        },
+      }, collectRes(), () => { passed = true })
+      assert.equal(passed, true, '已授权设备的同源写请求应放行')
+      store.revokeDevice(token)
     }
   })
 })
