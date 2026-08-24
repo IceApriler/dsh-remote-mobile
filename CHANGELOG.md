@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed (缺陷修复)
 - **修复：手动切换扫码页签后被强制切回 Tailscale**。设置面板每 3 秒轮询一次状态，只要本机存在 Tailscale IP 就会强制把扫码页签切回 Tailscale，用户手动选中的「局域网扫码」数秒内被覆盖。现记录用户的手动选择：自动预选仅在用户从未手动切换时生效。
+- **修复：启用样式片段后设置弹窗被侧边栏抽屉盖住**（表现为「设置弹窗出现在侧边栏里」）。官方模态弹窗经 createPortal 挂载于 body 下，其根节点官方样式 `z-index:1000` 低于侧边栏抽屉预设的 `99999`；`preset-sidebar` 现将 body 直挂且内含模态对话框的 portal 容器统一抬升至抽屉之上（`z-index:100006`）。
+- **修复：触屏点击展开把手后官方 Tooltip 气泡永久滞留**（黑底「收起侧边栏」）。官方气泡显示依赖 `mouseenter`/`focus`、消失只认 `mouseleave`/`blur`，触屏点击后这两个事件永远不会到来；现移动端 UA 下整体隐藏官方 Tooltip 气泡（按钮均保留 `aria-label`，可访问性不受影响），PC 窄窗口悬停提示不受影响。
 
 ---
 

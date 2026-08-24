@@ -158,6 +158,24 @@ const PRESET_SIDEBAR_CSS = `
     pointer-events: auto !important;
     z-index: 100000 !important;
   }
+
+  /* 4. 官方弹窗 portal 层抬到抽屉之上：设置等弹窗经 createPortal 挂在 body 下，
+     其根节点官方样式为 position:fixed + z-index:1000，会被本预设 z-index:99999 的
+     抽屉整体盖住（表现为「弹窗出现在侧边栏里」）。凡 body 直挂且内含模态对话框的
+     presentation 容器，统一抬升到抽屉与悬浮把手之上。 */
+  body > [role="presentation"]:has([role="dialog"][aria-modal="true"]) {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 100006 !important;
+  }
+
+  /* 5. 触屏设备没有 hover：官方 Tooltip 气泡（黑底，如折叠把手的「收起侧边栏」）
+     显示依赖 mouseenter/focus，而消失只认 mouseleave/blur —— 触摸点击后这两个
+     事件永远不会到来，气泡会永久滞留在屏幕上。移动端 UA 下整体隐藏官方气泡
+     （按钮均保留 aria-label，可访问性不受影响）；PC 窄窗口仍保留悬停提示。 */
+  html[data-dsh-mobile="1"] [role="tooltip"] {
+    display: none !important;
+  }
 `
 
 /** 设置面板预设：官方设置弹窗整体微缩 + 遮罩锁滚动 + 内容横向滑动 */

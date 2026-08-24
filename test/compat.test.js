@@ -217,7 +217,8 @@ test('上下文虚拟化与兼容性补丁测试 (compat.ts)', async (t) => {
     })
 
     runCase('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36', (html) => {
-      assert.ok(!html.includes('data-dsh-mobile')) // UA 标记仍仅移动端
+      // UA 标记仍仅移动端：精确检查 <html> 标签属性（预设 CSS 选择器文本中合法地包含 data-dsh-mobile 字样）
+      assert.ok(!/<html[^>]*data-dsh-mobile/.test(html))
       assert.ok(html.includes('id="dsh-remote-mobile-style-snippets"')) // 样式注入与 UA 无关
       assert.ok(html.includes('@media (max-width: 900px)')) // 窄屏块在桌面也注入 → PC 拉小窗口生效
       assert.ok(html.includes('body { background: red; }')) // 自定义片段 CSS 已进入（媒体查询块内）
