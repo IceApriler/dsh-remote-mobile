@@ -67,6 +67,12 @@ export function TailscaleMobileSection(props) {
   const [isSaving, setIsSaving] = useState(false);
   const [showVersionTip, setShowVersionTip] = useState(false);
   const [currentLang, setCurrentLang] = useState(resolveLocale(ctx, status));
+  // 用户是否手动切换过扫码页签：手动选择后，状态轮询不再自动跳回 Tailscale
+  const qrTabTouchedRef = useRef(false);
+  const updateQrTab = useCallback((tab) => {
+    qrTabTouchedRef.current = true;
+    setSelectedTab(tab);
+  }, []);
 
   // 设置页页签分组（接入 / 设备与安全 / 存储与样式），localStorage 记忆上次位置
   const [activeTab, setActiveTab] = useState(() => {
@@ -86,7 +92,9 @@ export function TailscaleMobileSection(props) {
   const refreshStatusOnly = useCallback(() => {
     fetchStatus()
       .then((data) => {
-        if (data.tailscaleIp) {
+        // 仅在用户尚未手动选择过扫码页签时，才按「有 Tailscale IP 则优先展示」自动预选；
+        // 否则 3 秒轮询会把用户手动选中的局域网页签强制切回（bug 修复）
+        if (data.tailscaleIp && !qrTabTouchedRef.current) {
           setSelectedTab('tailscale');
         }
         if (data.maxVisitsPerMinute) setMaxVisitsInput(String(data.maxVisitsPerMinute));
@@ -733,7 +741,7 @@ export function TailscaleMobileSection(props) {
           showQr={showQr}
           setShowQr={setShowQr}
           selectedTab={selectedTab}
-          setSelectedTab={setSelectedTab}
+          setSelectedTab={updateQrTab}
           generateQrSvg={generateQrSvg}
           refreshStatusAndCode={refreshStatusAndCode}
           copyDirectLink={copyDirectLink}
