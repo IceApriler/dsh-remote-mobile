@@ -120,6 +120,15 @@ const PRESET_SIDEBAR_CSS = `
     background: var(--dsw-alias-bg-layer-1, #ffffff) !important;
     box-shadow: 6px 0 30px rgba(0, 0, 0, 0.25) !important;
     border-right: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.15)) !important;
+    /* 关键守卫：官方会在侧边栏列上留下恒等 transform（matrix(1,0,0,1,0,0)），
+       任何 transform/filter 等都会把 position:fixed 后代的包含块「困」在本列内，
+       叠加官方 overflow:hidden 后，设置弹窗（内联渲染于侧边栏 DOM）会被裁剪成
+       抽屉宽度、表现为「弹窗出现在侧边栏里面」。显式清除全部包含块触发属性。 */
+    transform: none !important;
+    filter: none !important;
+    backdrop-filter: none !important;
+    perspective: none !important;
+    will-change: auto !important;
   }
 
   /* 3. 折叠状态：侧边栏收起为 0px 并隐藏整体阴影和多余按钮 */

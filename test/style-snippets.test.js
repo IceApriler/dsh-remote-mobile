@@ -48,6 +48,11 @@ test('移动端样式片段模块测试 (style-snippets.ts)', async (t) => {
       assert.ok(sidebarCss.includes('z-index: 100006'))
       // 回归守卫：移动端 UA 下隐藏官方 Tooltip 气泡（触屏点击后 mouseleave/blur 永不触发导致气泡永久滞留）
       assert.ok(sidebarCss.includes('html[data-dsh-mobile="1"] [role="tooltip"]'))
+      // 回归守卫：必须清除侧边栏列上会创建 fixed 包含块的属性，
+      // 否则内联渲染于侧边栏 DOM 的设置弹窗（position:fixed）会被困在抽屉宽度内并被 overflow:hidden 裁剪
+      assert.ok(/transform:\s*none !important/.test(sidebarCss))
+      assert.ok(/filter:\s*none !important/.test(sidebarCss))
+      assert.ok(/will-change:\s*auto !important/.test(sidebarCss))
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
