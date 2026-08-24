@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-08-24
+
+### Compatibility (通用插件共存保护)
+- **修复：与其他远程/Web 接入类插件共存时启动致命崩溃**。`remoteWebUiPairing` 是远程/Web 接入类插件的通用配对共享服务名，任何其他插件先注册同名服务后，本插件再注册必然抛错；而 loader 以 `Promise.allSettled` 并发激活全部 entry，任一失败即回滚整棵插件树并使进程退出（市场安装后直接启动即崩，此前只能手动禁用对方解决）。现改为**延迟裁决**：等待激活窗口结束后检测服务名归属——已被占用则主动让出（不注册、不抛错），无人注册才接管，保证共存时必定可正常启动。
+- **新增：共存状态可见化**。裁决结果通过 `/api/remote-mobile/status` 的 `pairingBridgeMode`（`active`/`yielded`/`pending`）、`pairingBridgeConflict` 与 `pairingBridgeConflictId` 下发（基于 Cordis 公开运行时结构尽力定位占用方包名与 entry id，无法识别时前端回退通用文案）；设置页顶部在共存时展示可关闭的警示横幅（中英文），支持一键复制「诊断与修复报告」（含精确 entry id 与可直接执行的修复步骤，可直接粘贴给 AI 助手处理）；host 日志同步输出 warn。判定逻辑完全通用，不针对任何特定第三方插件。
+- **文档：澄清 EADDRINUSE 成因**。启动报错 `listen EADDRINUSE: address already in use 0.0.0.0:3080` 是端口被其他进程占用（典型：上一个 dsh 实例未退出、桌面快捷方式隐藏实例），与安装哪个插件无关，README FAQ 新增排查步骤（Q0）。
+- **配置说明调整**：「禁用其他远程接入插件」由必选改为推荐项——共存不再导致启动失败；保留其一仍是最佳实践（避免功能重复与入口混乱）。
+
+### Fixed (缺陷修复)
+- **修复：手动切换扫码页签后被强制切回 Tailscale**。设置面板每 3 秒轮询一次状态，只要本机存在 Tailscale IP 就会强制把扫码页签切回 Tailscale，用户手动选中的「局域网扫码」数秒内被覆盖。现记录用户的手动选择：自动预选仅在用户从未手动切换时生效。
+
+---
+
 ## [1.3.1] - 2026-08-24
 
 ### Security Hardening (安全加固)
