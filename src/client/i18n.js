@@ -151,7 +151,7 @@ export var translations = {
     stylesHint: "💡 提示：每段预设与自定义片段都支持 PC / 移动端分别启用。移动端请求会给 <html> 打上 data-dsh-mobile 标记；内置预设面向移动端优化（默认 PC 关闭），在 PC 上启用时请确保片段不依赖 data-dsh-mobile 作用域。",
 
     // 插件共存警示横幅
-    conflictBannerTitle: "⚠️ 检测到其他远程接入插件",
+    conflictBannerTitle: "检测到其他远程接入插件",
     conflictUnknownPlugin: "另一款远程接入类插件",
     conflictBannerBody: "检测到 {plugin} 已占用配对共享服务（remoteWebUiPairing），本插件已自动让出以保证正常启动。两套远程接入功能并存可能出现重复入口与状态不一致，建议只保留其一。可复制下方诊断信息，粘贴给 AI 助手按步骤处理。",
     conflictCopyBtn: "📋 复制诊断与修复信息",
@@ -314,7 +314,7 @@ export var translations = {
     stylesHint: "💡 Tip: every preset and custom snippet has separate PC / Mobile toggles. Mobile requests add a data-dsh-mobile attribute to <html>. Built-ins target mobile (PC off by default); when enabling them on PC, make sure they do not depend on the data-dsh-mobile scope.",
 
     // Plugin coexistence banner
-    conflictBannerTitle: "⚠️ Another remote-access plugin detected",
+    conflictBannerTitle: "Another remote-access plugin detected",
     conflictUnknownPlugin: "another remote-access plugin",
     conflictBannerBody: "{plugin} has already registered the shared pairing service (remoteWebUiPairing); this plugin has automatically yielded it to keep startup safe. Running two remote-access features side by side may cause duplicated entries and inconsistent state — keeping only one is recommended. Copy the diagnosis below and paste it to an AI assistant for step-by-step help.",
     conflictCopyBtn: "📋 Copy diagnosis & fix",
