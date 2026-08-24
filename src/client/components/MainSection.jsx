@@ -461,7 +461,7 @@ export function TailscaleMobileSection(props) {
   };
 
   const copyText = (text, successTip) => {
-    navigator.clipboard.writeText(text).then(() => {
+    const triggerToast = () => {
       setToast({
         message:
           successTip ||
@@ -469,7 +469,35 @@ export function TailscaleMobileSection(props) {
         type: 'success',
       });
       setTimeout(() => setToast(null), 2500);
-    });
+    };
+
+    if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      navigator.clipboard.writeText(text).then(triggerToast).catch(() => {
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          triggerToast();
+        } catch (e) {}
+      });
+    } else {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        triggerToast();
+      } catch (e) {}
+    }
   };
 
   return (
@@ -480,8 +508,46 @@ export function TailscaleMobileSection(props) {
         display: 'flex',
         flexDirection: 'column',
         gap: '16px',
+        position: 'relative',
       }}
     >
+      {/* 浮动 Toast 提示 */}
+      {toast ? (
+        <div
+          style={{
+            position: 'fixed',
+            top: '24px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 100010,
+            background:
+              toast.type === 'danger'
+                ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.95), rgba(185, 28, 28, 0.95))'
+                : toast.type === 'success'
+                ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.95), rgba(5, 150, 105, 0.95))'
+                : 'linear-gradient(135deg, rgba(59, 130, 246, 0.95), rgba(37, 99, 235, 0.95))',
+            color: '#ffffff',
+            borderRadius: '10px',
+            padding: '10px 18px',
+            fontSize: '13px',
+            fontWeight: '600',
+            boxShadow: '0 12px 30px rgba(0, 0, 0, 0.35)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255, 255, 255, 0.25)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            pointerEvents: 'none',
+          }}
+        >
+          <span>
+            {toast.type === 'danger' ? '🚨' : toast.type === 'success' ? '✅' : 'ℹ️'}
+          </span>
+          <span>{toast.message}</span>
+        </div>
+      ) : null}
+
       {/* 标题头部（左侧标题 + 右侧 GitHub 仓库链接） */}
       <div
         style={{
