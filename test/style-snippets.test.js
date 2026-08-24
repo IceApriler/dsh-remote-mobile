@@ -42,10 +42,12 @@ test('移动端样式片段模块测试 (style-snippets.ts)', async (t) => {
       assert.ok(allCss.includes('@media (max-width: 900px)'))
       assert.ok(!allCss.includes('@media (min-width: 901px)'))
 
-      // 回归守卫：官方弹窗 portal 层必须抬到抽屉 z-index 之上（否则设置弹窗被侧边栏盖住）
+      // 回归守卫：抽屉层级必须低于官方弹层体系（模态 1000 / 菜单 1100），
+      // 否则设置面板的操作菜单（portal 到 body、z=1100）会被抽屉盖住无法交互
       const sidebarCss = store.get('preset-sidebar').css
-      assert.ok(sidebarCss.includes('body > [role="presentation"]:has([role="dialog"][aria-modal="true"])'))
-      assert.ok(sidebarCss.includes('z-index: 100006'))
+      assert.ok(sidebarCss.includes('z-index: 900 !important'))
+      assert.ok(sidebarCss.includes('z-index: 901 !important'))
+      assert.ok(!sidebarCss.includes('99999'))
       // 回归守卫：移动端 UA 下隐藏官方 Tooltip 气泡（触屏点击后 mouseleave/blur 永不触发导致气泡永久滞留）
       assert.ok(sidebarCss.includes('html[data-dsh-mobile="1"] [role="tooltip"]'))
       // 回归守卫：必须清除侧边栏列上会创建 fixed 包含块的属性，

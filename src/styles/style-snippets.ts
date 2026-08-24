@@ -116,11 +116,13 @@ const PRESET_SIDEBAR_CSS = `
     left: 0 !important;
     height: 100vh !important;
     height: 100dvh !important;
-    /* 注意：展开态宽度由官方样式接管（[data-dsh-frame] [data-pane="sidebar"]
-       的 width: min(88vw, 320px) !important，特异性高于本预设），不要在此与之竞争；
-       「外层 ~320 / 内层 280」的宽度差由下方内层铺满规则消除。 */
+    /* 层级守卫：抽屉必须低于官方弹层体系（模态弹窗 z=1000、下拉/弹出菜单 z=1100），
+       否则设置面板的操作菜单（portal 到 body）会被抽屉盖住无法交互。
+       官方内容区元素均在 100 层级以下，900 足以保证抽屉覆盖正文。
+       注意：展开态宽度由官方样式接管（width: min(88vw,320px) !important，特异性
+       更高），「外层 ~320 / 内层内联 280」的差值由下方内层铺满规则消除。 */
     min-width: 0 !important;
-    z-index: 99999 !important;
+    z-index: 900 !important;
     background: var(--dsw-alias-bg-layer-1, #ffffff) !important;
     box-shadow: 6px 0 30px rgba(0, 0, 0, 0.25) !important;
     border-right: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.15)) !important;
@@ -178,20 +180,11 @@ const PRESET_SIDEBAR_CSS = `
     align-items: center !important;
     justify-content: center !important;
     pointer-events: auto !important;
-    z-index: 100000 !important;
+    /* 与抽屉(900)同层体系：高于正文内容，低于官方弹窗(1000)/菜单(1100) */
+    z-index: 901 !important;
   }
 
-  /* 4. 官方弹窗 portal 层抬到抽屉之上：设置等弹窗经 createPortal 挂在 body 下，
-     其根节点官方样式为 position:fixed + z-index:1000，会被本预设 z-index:99999 的
-     抽屉整体盖住（表现为「弹窗出现在侧边栏里」）。凡 body 直挂且内含模态对话框的
-     presentation 容器，统一抬升到抽屉与悬浮把手之上。 */
-  body > [role="presentation"]:has([role="dialog"][aria-modal="true"]) {
-    position: fixed !important;
-    inset: 0 !important;
-    z-index: 100006 !important;
-  }
-
-  /* 5. 触屏设备没有 hover：官方 Tooltip 气泡（黑底，如折叠把手的「收起侧边栏」）
+  /* 4. 触屏设备没有 hover：官方 Tooltip 气泡（黑底，如折叠把手的「收起侧边栏」）
      显示依赖 mouseenter/focus，而消失只认 mouseleave/blur —— 触摸点击后这两个
      事件永远不会到来，气泡会永久滞留在屏幕上。移动端 UA 下整体隐藏官方气泡
      （按钮均保留 aria-label，可访问性不受影响）；PC 窄窗口仍保留悬停提示。 */
