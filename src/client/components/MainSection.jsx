@@ -604,38 +604,50 @@ export function TailscaleMobileSection(props) {
         </a>
       </div>
 
-      {/* 页签导航：接入 / 设备与安全 / 存储与样式 */}
-      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+      {/* 页签导航：接入 / 设备与安全 / 存储与样式（下划线风格） */}
+      <div
+        style={{
+          display: 'flex',
+          gap: '24px',
+          borderBottom: '1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.2))',
+          paddingBottom: '0',
+          marginBottom: '6px',
+        }}
+      >
         {[
           { id: 'access', label: t('tabAccess', currentLang) },
           { id: 'devices', label: t('tabDevices', currentLang) },
           { id: 'style', label: t('tabStyle', currentLang) },
           { id: 'storage', label: t('tabStorage', currentLang) },
-        ].map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => switchTab(item.id)}
-            style={{
-              padding: '8px 14px',
-              borderRadius: '10px',
-              fontSize: '13px',
-              fontWeight: activeTab === item.id ? '700' : '500',
-              cursor: 'pointer',
-              border: activeTab === item.id
-                ? '1px solid rgba(59,130,246,0.4)'
-                : '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.2))',
-              background: activeTab === item.id
-                ? 'rgba(59,130,246,0.15)'
-                : 'var(--dsw-alias-bg-layer-3, rgba(128,128,128,0.06))',
-              color: activeTab === item.id
-                ? 'var(--dsw-alias-brand-primary, #3b82f6)'
-                : 'var(--dsw-alias-label-secondary, inherit)',
-            }}
-          >
-            {item.label}
-          </button>
-        ))}
+        ].map((item) => {
+          const isActive = activeTab === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => switchTab(item.id)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                outline: 'none',
+                padding: '8px 2px 10px 2px',
+                fontSize: '14px',
+                fontWeight: isActive ? '600' : '400',
+                cursor: 'pointer',
+                color: isActive
+                  ? 'var(--dsw-alias-label-primary, #111827)'
+                  : 'var(--dsw-alias-label-tertiary, #8c8c8c)',
+                borderBottom: isActive
+                  ? '2px solid var(--dsw-alias-label-primary, #111827)'
+                  : '2px solid transparent',
+                marginBottom: '-1px',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              {item.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* 页签组 1：接入（网络 / 配对码 / 密码）——全部保持挂载，仅按 display 切换，避免状态重置 */}
