@@ -70,6 +70,46 @@ export const DRAGGABLE_NAV_SNIPPET = `
 (function() {
   if (typeof window === "undefined" || typeof document === "undefined") return;
 
+  /* ===== 防误收起守卫 =====
+   * 第三方生态插件（如 @linxin666/dsh-web-ui-all 的移动端抽屉增强）会在用户点击
+   * 侧边栏条目（role=treeitem）后，于下一帧程序化点击「收起侧边栏」按钮自动收回抽屉。
+   * 该判定无法区分「选中条目回主区」与「点击条目内的次级操作图标」（更多操作 ⋯ /
+   * 展开箭头等），导致后者抽屉被误关。
+   * 这里记录最近一次对条目内次级控件（按钮 / 箭头图标）的触摸时间，并包装
+   * HTMLButtonElement.prototype.click：短时间窗口内的程序化收起调用直接忽略；
+   * 用户真实点击收起按钮（浏览器合成事件不走 prototype.click）与点击条目主体
+   * （非按钮/箭头）的官方行为均不受影响。 */
+  if (!window.__dshRmAntiCollapseInstalled__) {
+    window.__dshRmAntiCollapseInstalled__ = true;
+    var lastSecondaryTapAt = 0;
+    document.addEventListener('pointerdown', function (e) {
+      try {
+        var t = e.target;
+        if (!t || !t.closest) return;
+        if (!t.closest('[data-pane="sidebar"]')) return;
+        var entry = t.closest('[role="treeitem"], [data-dsh-part="sidebar-entry"]');
+        if (!entry) return;
+        var isSecondaryControl =
+          !!t.closest('button, [role="button"]') ||
+          !!t.closest('[class*="_arrow"]');
+        if (isSecondaryControl) lastSecondaryTapAt = Date.now();
+      } catch (err) {}
+    }, { capture: true, passive: true });
+
+    var protoClick = HTMLButtonElement.prototype.click;
+    HTMLButtonElement.prototype.click = function () {
+      try {
+        var isSidebarToggle =
+          this.matches('[data-dsh-responsive-part="sidebar-toggle"]') ||
+          /收起侧边栏|Collapse sidebar|Open sidebar/i.test(this.getAttribute('aria-label') || '');
+        if (isSidebarToggle && Date.now() - lastSecondaryTapAt < 900) {
+          return; // 吞掉紧随次级操作图标点击之后的程序化收起
+        }
+      } catch (err) {}
+      return protoClick.apply(this, arguments);
+    };
+  }
+
   function initDraggableNav() {
     var logoRow = document.querySelector('[data-pane="sidebar"] [class*="_logoRow"]');
     if (!logoRow || logoRow.__dsh_drag_init__) return;
