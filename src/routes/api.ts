@@ -4,6 +4,7 @@ import { getLocalTailscaleIp, getLocalLanIp, getAllNetworkIps, getClientIp, isTa
 import { getPublicKeyPem, decryptWithPrivateKey, validateSecretStrength, RSA_KEY_FILE } from '../auth/crypto.js'
 import { getLoginPageHtml } from './login-page.js'
 import { DEFAULT_STYLE_FILE, type StyleSnippetStore } from '../styles/style-snippets.js'
+import { getPairingBridgeState } from '../bridge/compat.js'
 
 function jsonResponse(res: ServerResponse, status: number, data: any) {
   res.writeHead(status, {
@@ -63,6 +64,7 @@ export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore
         const ips = getAllNetworkIps()
         const sessionStats = store.getSessionsList()
         const ipSecurityStats = store.getIpSecurityStats()
+        const bridgeState = getPairingBridgeState()
 
         jsonResponse(res, 200, {
           success: true,
@@ -83,6 +85,10 @@ export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore
           rsaKeyPath: RSA_KEY_FILE,
           styleSnippetsPath: styleStore ? styleStore.persistPath : DEFAULT_STYLE_FILE,
           publicKey: getPublicKeyPem(),
+          // 与其他远程接入类插件共存的裁决结果（设置页据此展示警示横幅与修复信息）
+          pairingBridgeMode: bridgeState.mode,
+          pairingBridgeConflict: bridgeState.conflictWith || '',
+          pairingBridgeConflictId: bridgeState.conflictEntryId || '',
         })
       },
     },

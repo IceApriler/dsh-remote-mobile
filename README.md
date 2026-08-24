@@ -77,7 +77,10 @@ dsh plugin --profile web add dsh-remote-mobile
     host: '0.0.0.0'
     port: 3080
 
-# 2. 禁用 @linxin666/dsh-web-ui-all 内置的远程插件（必选：防止功能冲突）
+# 2. （推荐）只保留一款远程/Web 接入类插件，避免功能重复与入口混乱
+#    本插件与其他远程接入类插件共存时也能正常启动：检测到配对共享服务被占用
+#    会自动让出，并在设置页顶部展示警示横幅说明详情。
+#    示例：禁用 @linxin666/dsh-web-ui-all 内置的远程插件
 - id: web-ui-remote-web-ui
   disabled: true
 ```
@@ -269,6 +272,18 @@ dsh-remote-mobile:
 
 <span id="faq"></span>
 ## ❓ 常见问题 (FAQ)
+
+<details>
+<summary><b>Q0: 启动报错 <code>listen EADDRINUSE: address already in use 0.0.0.0:3080</code>？</b></summary>
+
+**答**：这是 **3080 端口被其他进程占用**（绝大多数是上一个 `dsh web` 实例尚未完全退出，例如桌面快捷方式拉起的隐藏实例、或重启时新旧进程交叠），**与安装了哪个插件无关**。排查步骤：
+
+1. 查找占用端口的进程：`lsof -nP -iTCP:3080`（Windows 用 `netstat -ano | findstr 3080`）；
+2. 结束旧实例（`kill <PID>` / 任务管理器），再重新启动 `dsh web`；
+3. 注意：桌面快捷方式（dsh-desktop-launcher 生成的实例）与终端手动启动的实例不能同时运行。
+
+另：若日志显示的是 `service "remoteWebUiPairing" has been registered` 类错误，请升级本插件至最新版本——新版已内置通用共存保护，与其他远程接入类插件并存时可正常启动并自动让出服务，并在设置面板顶部提示冲突详情。
+</details>
 
 <details>
 <summary><b>Q1: 手机扫码后提示「连接被拒绝」或无法打开页面？</b></summary>

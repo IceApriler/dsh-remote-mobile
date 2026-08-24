@@ -52,6 +52,9 @@ export function TailscaleMobileSection(props) {
     rsaKeyPath: '',
     styleSnippetsPath: '',
     locale: 'zh',
+    pairingBridgeMode: 'pending',
+    pairingBridgeConflict: '',
+    pairingBridgeConflictId: '',
   });
 
   const [secretInput, setSecretInput] = useState('');
@@ -67,6 +70,8 @@ export function TailscaleMobileSection(props) {
   const [isSaving, setIsSaving] = useState(false);
   const [showVersionTip, setShowVersionTip] = useState(false);
   const [currentLang, setCurrentLang] = useState(resolveLocale(ctx, status));
+  // 共存警示横幅的本会话关闭状态（不持久化，刷新后若冲突仍存在会再次提示）
+  const [conflictBannerDismissed, setConflictBannerDismissed] = useState(false);
   // 用户是否手动切换过扫码页签：手动选择后，状态轮询不再自动跳回 Tailscale
   const qrTabTouchedRef = useRef(false);
   const updateQrTab = useCallback((tab) => {
@@ -122,6 +127,9 @@ export function TailscaleMobileSection(props) {
           rsaKeyPath: data.rsaKeyPath || '',
           styleSnippetsPath: data.styleSnippetsPath || '',
           locale: data.locale || 'zh',
+          pairingBridgeMode: data.pairingBridgeMode || 'pending',
+          pairingBridgeConflict: data.pairingBridgeConflict || '',
+          pairingBridgeConflictId: data.pairingBridgeConflictId || '',
           loading: false,
         }));
       })
@@ -677,6 +685,97 @@ export function TailscaleMobileSection(props) {
           <span>dsh-remote-mobile</span>
         </a>
       </div>
+
+      {/* 插件共存警示横幅：检测到其他远程接入类插件占用共享服务时展示（3 秒轮询会在裁决完成后自动带出） */}
+      {status.pairingBridgeConflict && !conflictBannerDismissed ? (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '10px',
+            padding: '12px 14px',
+            borderRadius: '10px',
+            border: '1px solid rgba(245, 158, 11, 0.45)',
+            background: 'rgba(245, 158, 11, 0.12)',
+          }}
+        >
+          <span style={{ fontSize: '16px', lineHeight: '20px' }}>⚠️</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                fontSize: '13px',
+                fontWeight: '700',
+                marginBottom: '4px',
+                color: 'var(--dsw-alias-label-primary, inherit)',
+              }}
+            >
+              {t('conflictBannerTitle', currentLang)}
+            </div>
+            <div
+              style={{
+                fontSize: '12px',
+                lineHeight: 1.6,
+                whiteSpace: 'pre-line',
+                color: 'var(--dsw-alias-label-secondary, inherit)',
+              }}
+            >
+              {t('conflictBannerBody', currentLang, {
+                plugin: status.pairingBridgeConflict || t('conflictUnknownPlugin', currentLang),
+              })}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const plugin = status.pairingBridgeConflict || t('conflictUnknownPlugin', currentLang)
+                const entryId = status.pairingBridgeConflictId || ''
+                const report = t(
+                  entryId ? 'conflictReportText' : 'conflictReportNoEntryIdText',
+                  currentLang,
+                  { plugin, entryId }
+                )
+                copyText(report, t('conflictCopiedTip', currentLang))
+              }}
+              style={{
+                marginTop: '8px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '5px 10px',
+                fontSize: '12px',
+                fontWeight: '600',
+                borderRadius: '7px',
+                cursor: 'pointer',
+                border: '1px solid rgba(245, 158, 11, 0.55)',
+                background: 'rgba(245, 158, 11, 0.18)',
+                color: 'var(--dsw-alias-label-primary, inherit)',
+              }}
+            >
+              {t('conflictCopyBtn', currentLang)}
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() => setConflictBannerDismissed(true)}
+            title={t('conflictBannerDismiss', currentLang)}
+            style={{
+              flexShrink: 0,
+              width: '24px',
+              height: '24px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '12px',
+              background: 'rgba(128, 128, 128, 0.15)',
+              color: 'var(--dsw-alias-label-secondary, inherit)',
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      ) : null}
 
       {/* 页签导航：接入 / 设备与安全 / 存储与样式（下划线风格） */}
       <div

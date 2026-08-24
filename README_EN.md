@@ -77,7 +77,11 @@ Because DSH defaults to `127.0.0.1`, ensure your `~/.dsh/profiles/web/cordis.pat
     host: '0.0.0.0'
     port: 3080
 
-# 2. Disable built-in remote plugin in @linxin666/dsh-web-ui-all (Required: prevent feature conflict)
+# 2. (Recommended) Keep only ONE remote/Web access plugin to avoid duplicated entries.
+#    This plugin starts normally alongside other remote-access plugins: when it
+#    detects the shared pairing service is already taken by another plugin, it
+#    yields automatically and shows a warning banner at the top of its settings panel.
+#    Example: disable the legacy remote plugin bundled in @linxin666/dsh-web-ui-all
 - id: web-ui-remote-web-ui
   disabled: true
 ```
@@ -267,6 +271,18 @@ Custom snippets (style mini-plugins) and their enabled states are persisted in `
 
 <span id="faq"></span>
 ## ❓ FAQ
+
+<details>
+<summary><b>Q0: Startup fails with <code>listen EADDRINUSE: address already in use 0.0.0.0:3080</code>?</b></summary>
+
+**Answer**: This means **port 3080 is held by another process** (in most cases a previous `dsh web` instance has not fully exited — e.g. a hidden instance launched by a desktop shortcut, or overlapping old/new processes during restart). It is **unrelated to which plugins are installed**. Troubleshooting:
+
+1. Find the process holding the port: `lsof -nP -iTCP:3080` (Windows: `netstat -ano | findstr 3080`);
+2. Terminate the old instance (`kill <PID>` / Task Manager) and start `dsh web` again;
+3. Note: an instance launched via the desktop shortcut (dsh-desktop-launcher) and one started manually in a terminal cannot run at the same time.
+
+If your log instead shows `service "remoteWebUiPairing" has been registered`, please upgrade this plugin to the latest version — newer versions ship with generic coexistence protection and can start normally alongside other remote-access plugins by yielding the service automatically, with a banner explaining the details in the settings panel.
+</details>
 
 <details>
 <summary><b>Q1: Getting "Connection Refused" or cannot open page when scanning on mobile?</b></summary>

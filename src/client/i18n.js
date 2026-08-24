@@ -150,6 +150,16 @@ export var translations = {
     stylesFieldsRequired: "请填写片段名称与 CSS 内容",
     stylesHint: "💡 提示：每段预设与自定义片段都支持 PC / 移动端分别启用。移动端请求会给 <html> 打上 data-dsh-mobile 标记；内置预设面向移动端优化（默认 PC 关闭），在 PC 上启用时请确保片段不依赖 data-dsh-mobile 作用域。",
 
+    // 插件共存警示横幅
+    conflictBannerTitle: "⚠️ 检测到其他远程接入插件",
+    conflictUnknownPlugin: "另一款远程接入类插件",
+    conflictBannerBody: "检测到 {plugin} 已占用配对共享服务（remoteWebUiPairing），本插件已自动让出以保证正常启动。两套远程接入功能并存可能出现重复入口与状态不一致，建议只保留其一。可复制下方诊断信息，粘贴给 AI 助手按步骤处理。",
+    conflictCopyBtn: "📋 复制诊断与修复信息",
+    conflictCopiedTip: "诊断信息已复制，可直接粘贴给 AI 助手协助处理",
+    conflictReportText: "[DSH 插件冲突诊断报告]\n现象：dsh-remote-mobile 设置面板提示「检测到其他远程接入插件」。\n原因：另一款远程/Web 接入类插件占用了 Cordis 共享服务 remoteWebUiPairing，dsh-remote-mobile 为保证正常启动已自动让出该服务，当前两套远程接入功能并存。\n占用方插件包名：{plugin}\n占用方 loader entry id：{entryId}\n处理方案（二选一）：\n方案 A（保留 dsh-remote-mobile，禁用占用方）：\n1. 打开配置文件 ~/.dsh/profiles/web/cordis.patch.yml\n2. 在文件末尾追加以下两行（注意 YAML 缩进，第二行前有两个空格）：\n- id: {entryId}\n  disabled: true\n3. 结束当前正在运行的 dsh web 进程，重新执行 dsh web --no-open\n方案 B（保留占用方，卸载 dsh-remote-mobile）：\n执行命令 dsh plugin --profile web remove dsh-remote-mobile 后重启 dsh web",
+    conflictReportNoEntryIdText: "[DSH 插件冲突诊断报告]\n现象：dsh-remote-mobile 设置面板提示「检测到其他远程接入插件」。\n原因：另一款远程/Web 接入类插件占用了 Cordis 共享服务 remoteWebUiPairing，dsh-remote-mobile 为保证正常启动已自动让出该服务，当前两套远程接入功能并存。\n占用方插件包名：{plugin}\n占用方 loader entry id：未能自动识别\n处理方案（二选一）：\n方案 A（保留 dsh-remote-mobile，禁用占用方）：\n1. 执行 dsh --dump-config 查看全部 loader entry，找到占用方插件对应的条目 id\n2. 打开配置文件 ~/.dsh/profiles/web/cordis.patch.yml，在文件末尾追加（注意 YAML 缩进）：\n- id: <占用方条目id>\n  disabled: true\n3. 结束当前正在运行的 dsh web 进程，重新执行 dsh web --no-open\n方案 B（保留占用方，卸载 dsh-remote-mobile）：\n执行命令 dsh plugin --profile web remove dsh-remote-mobile 后重启 dsh web",
+    conflictBannerDismiss: "知道了",
+
     // Toast 提示
     toastDeviceConnected: "🎉 新设备接入成功：{name} ({ip})",
     toastDeviceOnline: "📶 设备重新上线：{name} ({ip})",
@@ -302,6 +312,16 @@ export var translations = {
     stylesResetConfirm: "Reset all snippets to default states? (Built-ins: PC off / Mobile on. Custom: PC off / Mobile on.)",
     stylesFieldsRequired: "Please fill in both the snippet name and CSS content",
     stylesHint: "💡 Tip: every preset and custom snippet has separate PC / Mobile toggles. Mobile requests add a data-dsh-mobile attribute to <html>. Built-ins target mobile (PC off by default); when enabling them on PC, make sure they do not depend on the data-dsh-mobile scope.",
+
+    // Plugin coexistence banner
+    conflictBannerTitle: "⚠️ Another remote-access plugin detected",
+    conflictUnknownPlugin: "another remote-access plugin",
+    conflictBannerBody: "{plugin} has already registered the shared pairing service (remoteWebUiPairing); this plugin has automatically yielded it to keep startup safe. Running two remote-access features side by side may cause duplicated entries and inconsistent state — keeping only one is recommended. Copy the diagnosis below and paste it to an AI assistant for step-by-step help.",
+    conflictCopyBtn: "📋 Copy diagnosis & fix",
+    conflictCopiedTip: "Diagnosis copied! Paste it to your AI assistant",
+    conflictReportText: "[DSH plugin conflict diagnosis]\nSymptom: the dsh-remote-mobile settings panel shows \"Another remote-access plugin detected\".\nCause: another remote/Web access plugin registered the shared Cordis service remoteWebUiPairing first; dsh-remote-mobile yielded it to keep startup safe, so both remote features now run in parallel.\nConflicting plugin package: {plugin}\nConflicting loader entry id: {entryId}\nFix (choose ONE):\nOption A (keep dsh-remote-mobile, disable the other):\n1. Open ~/.dsh/profiles/web/cordis.patch.yml\n2. Append these two lines at the end (mind YAML indentation, two spaces before disabled):\n- id: {entryId}\n  disabled: true\n3. Stop the running dsh web process, then run dsh web --no-open again\nOption B (keep the other, remove dsh-remote-mobile):\nRun dsh plugin --profile web remove dsh-remote-mobile and restart dsh web",
+    conflictReportNoEntryIdText: "[DSH plugin conflict diagnosis]\nSymptom: the dsh-remote-mobile settings panel shows \"Another remote-access plugin detected\".\nCause: another remote/Web access plugin registered the shared Cordis service remoteWebUiPairing first; dsh-remote-mobile yielded it to keep startup safe, so both remote features now run in parallel.\nConflicting plugin package: {plugin}\nConflicting loader entry id: could not be detected automatically\nFix (choose ONE):\nOption A (keep dsh-remote-mobile, disable the other):\n1. Run dsh --dump-config to list all loader entries and find the entry id of the conflicting plugin\n2. Open ~/.dsh/profiles/web/cordis.patch.yml and append at the end (mind YAML indentation):\n- id: <the conflicting entry id>\n  disabled: true\n3. Stop the running dsh web process, then run dsh web --no-open again\nOption B (keep the other, remove dsh-remote-mobile):\nRun dsh plugin --profile web remove dsh-remote-mobile and restart dsh web",
+    conflictBannerDismiss: "Got it",
 
     // Toast
     toastDeviceConnected: "🎉 New device connected: {name} ({ip})",

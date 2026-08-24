@@ -23,8 +23,12 @@
  *      并给 <html> 打上 data-dsh-mobile 标记供样式选择器使用。
  *
  * 4. 【Cordis 服务桥接 (remoteWebUiPairing Bridge)】：
- *    - 在用户关闭旧版 @linxin666/dsh-remote-web-ui 的情况下，以标准 Cordis Service 模式向全局暴露 remoteWebUiPairing 服务；
- *    - 实现宠物插件 (dsh-pet)、任务看板 (task-board) 等第三方生态组件与本插件授权状态的 100% 互通。
+ *    - 以标准 Cordis Service 模式向全局暴露 remoteWebUiPairing 服务；
+ *    - 该名称是远程/Web 接入类插件的通用共享服务名，可能与其他同类插件冲突，
+ *      采用「延迟裁决」策略：等待激活窗口结束后检测服务名归属，
+ *      已被占用则主动让出并置冲突标记（设置页展示警示横幅），无人注册才接管；
+ *    - 判定基于 Cordis 公开运行时结构（服务占用 + fiber 运行态），不针对特定插件；
+ *    - 保证与其他远程接入类插件共存时必定可以正常启动（不再触发整树回滚致命错误）。
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
@@ -337,38 +341,221 @@ export function mountIndexInjections(ctx: any): void {
 }
 
 /**
- * 向 Cordis 容器桥接注册 remoteWebUiPairing 服务
- * 完美兼容 @linxin666 生态插件（如 dsh-pet 宠物、面板插件等），实现免登信任自动共享
- * 
+ * 配对桥接服务的运行时裁决状态（供 /status 接口与设置页横幅读取）
+ *
+ * - pending：激活窗口裁决尚未完成（启动后极短时间内的过渡态）
+ * - active ：本插件已成功提供 remoteWebUiPairing 服务
+ * - yielded：检测到其他插件已注册同名服务，本插件主动让出
+ */
+export type PairingBridgeMode = 'pending' | 'active' | 'yielded'
+
+export interface PairingBridgeState {
+  mode: PairingBridgeMode
+  /** 占用服务的插件包名（可识别时）；无法识别提供方时为 null，前端回退为通用文案 */
+  conflictWith: string | null
+  /** 占用方的 loader entry id（可识别时），用于生成精确的 disabled: true 修复配置 */
+  conflictEntryId: string | null
+}
+
+const pairingBridgeState: PairingBridgeState = {
+  mode: 'pending',
+  conflictWith: null,
+  conflictEntryId: null,
+}
+
+/** 读取配对桥接当前裁决状态（快照） */
+export function getPairingBridgeState(): PairingBridgeState {
+  return { ...pairingBridgeState }
+}
+
+const PAIRING_SERVICE_NAME = 'remoteWebUiPairing'
+/** 本插件在 loader 树中的模块名（从“兄弟 entry 尚未落定”判定中排除自身） */
+export const PLUGIN_MODULE_NAME = 'dsh-remote-mobile'
+/**
+ * Cordis Fiber 运行态镜像（跨包 const enum 无运行时对象）：
+ * 0=PENDING，1=LOADING，2=ACTIVE，3=FAILED
+ */
+const FIBER_STATE_PENDING = 0
+const FIBER_STATE_LOADING = 1
+/** 最短观察期：给并发创建中的兄弟 loader entry 留出出现时间 */
+const MIN_SETTLE_GRACE_MS = 600
+/** 激活窗口硬性兜底时限（超过即按“无其他注册者”处理） */
+const BRIDGE_MAX_WAIT_MS = 10000
+/** 裁决轮询间隔 */
+const BRIDGE_DECISION_POLL_MS = 200
+
+/**
+ * 向 Cordis 容器桥接注册 remoteWebUiPairing 服务（延迟裁决版，通用共存保护）
+ *
+ * 背景：remoteWebUiPairing 是远程/Web 接入类插件的通用共享服务名（生态插件经
+ * inject 消费）。任何其他插件先注册同名服务后，本插件再
+ * 注册必然抛错；而 loader 以 Promise.allSettled 并发激活全部 entry，任一失败会
+ * 回滚整棵插件树并使进程退出（致命）。
+ *
+ * 因此这里不「立即抢注」，而是轮询裁决：
+ * 1. 服务名已被占用 → 让出（mode: yielded），并尽力定位提供方包名供界面提示；
+ * 2. 兄弟 entry 全部落定且无人注册（未安装 / 被禁用 / 自身激活失败）→ 接管；
+ * 3. 最长等待 BRIDGE_MAX_WAIT_MS 兜底；极端竞速下若注册瞬间输给对方，
+ *    捕获异常同样按让出处理，绝不向外抛错。
+ *
+ * 判定完全基于 Cordis 公开运行时结构（服务名占用 + fiber 运行态），不针对
+ * 任何特定第三方插件。
+ *
  * @param ctx - Cordis 上下文对象
  * @param store - 会话管理器实例
  */
 export function registerRemoteWebUiPairingBridge(ctx: any, store: SessionStore): void {
-  try {
-    const importCordis = new Function('return import("@deepseek-ai/cordis")')
-    importCordis().then((m: any) => {
-      const ServiceClass = m?.Service || ctx?.constructor?.Service
-      if (ServiceClass) {
-        class RemoteWebUiPairingBridge extends ServiceClass {
-          constructor(c: any) {
-            super(c, 'remoteWebUiPairing')
-          }
+  const startedAt = Date.now()
+  let settled = false
+  let timer: any = null
 
-          isPairedDevice(req: any): boolean {
-            const clientIp = getClientIp(req)
-            const options = store.getOptions()
-            // 1. 免密直连设备自动放行
-            if (options.allowTailscale && isTailscaleIp(clientIp)) return true
-            if (options.allowLan && isLanIp(clientIp)) return true
-            // 2. 已通过配对码/长期密码认证的设备放行
-            const token = store.extractTokenFromRequest(req)
-            if (token && store.validateToken(token, clientIp)) return true
-            return false
-          }
+  const clearTimer = () => {
+    if (timer) {
+      clearTimeout(timer)
+      timer = null
+    }
+  }
+
+  const settleYielded = (provider: { name: string | null; id: string | null }) => {
+    if (settled) return
+    settled = true
+    clearTimer()
+    pairingBridgeState.mode = 'yielded'
+    pairingBridgeState.conflictWith = provider.name
+    pairingBridgeState.conflictEntryId = provider.id
+    ctx?.logger?.warn?.(
+      `[dsh-remote-mobile] 检测到${provider.name ? ` ${provider.name} ` : '其他插件'}已注册 "${PAIRING_SERVICE_NAME}" 配对共享服务：` +
+        '本插件已自动让出以避免启动冲突。两套远程接入功能并存可能出现重复入口，建议保留其一（禁用其中一款远程插件后重启）。详见设置页顶部提示。'
+    )
+  }
+
+  const settleActive = () => {
+    if (settled) return
+    settled = true
+    clearTimer()
+    pairingBridgeState.mode = 'active'
+    pairingBridgeState.conflictWith = null
+    ctx?.logger?.info?.(`[dsh-remote-mobile] ${PAIRING_SERVICE_NAME} 配对共享服务已由本插件提供（生态插件免登互通可用）`)
+  }
+
+  const serviceTaken = (): boolean => {
+    try {
+      // ctx.get 对未注册服务返回 undefined 而不抛错；strict 模式只认激活中的提供者
+      return Boolean(ctx?.get?.(PAIRING_SERVICE_NAME))
+    } catch {
+      return false
+    }
+  }
+
+  const getLoaderEntries = (): any[] => {
+    try {
+      const loader = typeof ctx?.get === 'function' ? ctx.get('loader') : undefined
+      if (loader && typeof loader.entries === 'function') return [...loader.entries()]
+    } catch {}
+    return []
+  }
+
+  /**
+   * 定位当前占用 PAIRING_SERVICE_NAME 的插件（包名 + loader entry id）：
+   * provide() 会把服务实现记录在提供方的 fiber.store 上（cordis 公开行为），
+   * 据此无需针对特定插件做识别。entry id 用于生成精确的 disabled: true 修复配置。
+   * 找不到则返回 { name: null, id: null }（前端回退通用文案）。
+   */
+  const findProviderEntry = (): { name: string | null; id: string | null } => {
+    for (const entry of getLoaderEntries()) {
+      try {
+        const opts = entry?.options
+        if (!opts || opts.group) continue
+        if (entry.fiber?.store?.[PAIRING_SERVICE_NAME]) {
+          const name = typeof opts.name === 'string' ? opts.name : ''
+          const id = typeof entry.id === 'string' && entry.id ? entry.id : null
+          return { name: name || null, id }
+        }
+      } catch {}
+    }
+    return { name: null, id: null }
+  }
+
+  /**
+   * 是否仍存在「尚未落定」的其他启用插件 entry（fiber 未挂上 / PENDING /
+   * LOADING）。全部落定前抢注服务有输给慢加载插件的风险，因此等待；
+   * 自身 entry 通过模块名与对象身份双通道排除。
+   */
+  const othersSettling = (): boolean => {
+    for (const entry of getLoaderEntries()) {
+      try {
+        const opts = entry?.options
+        if (!opts || opts.group) continue
+        if (opts.name === PLUGIN_MODULE_NAME) continue
+        if (ctx?.fiber && entry === ctx.fiber.entry) continue
+        if (entry.disabled) continue
+        const state = entry.fiber?.state
+        if (!entry.fiber || state === FIBER_STATE_PENDING || state === FIBER_STATE_LOADING) return true
+      } catch {}
+    }
+    return false
+  }
+
+  const tryRegisterOurs = async (): Promise<void> => {
+    if (settled) return
+    // 双重检查：对方可能刚好在我们裁决前完成同步注册
+    if (serviceTaken()) return settleYielded(findProviderEntry())
+    try {
+      // 经 new Function 动态导入，避免打包期解析内部模块说明符
+      const importCordis = new Function('return import("@deepseek-ai/cordis")')
+      const m: any = await importCordis()
+      const ServiceClass = m?.Service || ctx?.constructor?.Service
+      if (!ServiceClass) throw new Error('cordis Service unavailable')
+
+      class RemoteWebUiPairingBridge extends ServiceClass {
+        constructor(c: any) {
+          super(c, PAIRING_SERVICE_NAME)
         }
 
-        new RemoteWebUiPairingBridge(ctx)
+        isPairedDevice(req: any): boolean {
+          const clientIp = getClientIp(req)
+          const options = store.getOptions()
+          // 1. 免密直连设备自动放行
+          if (options.allowTailscale && isTailscaleIp(clientIp)) return true
+          if (options.allowLan && isLanIp(clientIp)) return true
+          // 2. 已通过配对码/长期密码认证的设备放行
+          const token = store.extractTokenFromRequest(req)
+          if (token && store.validateToken(token, clientIp)) return true
+          return false
+        }
       }
-    }).catch(() => {})
-  } catch {}
+
+      new RemoteWebUiPairingBridge(ctx)
+      settleActive()
+    } catch (error) {
+      // 输掉最后时刻的竞速 → 让出；其余错误仅降级（安全门禁不依赖该服务），绝不向外抛错
+      if (serviceTaken()) return settleYielded(findProviderEntry())
+      settled = true
+      clearTimer()
+      pairingBridgeState.mode = 'active'
+      pairingBridgeState.conflictWith = null
+      ctx?.logger?.warn?.(
+        `[dsh-remote-mobile] ${PAIRING_SERVICE_NAME} 服务注册失败（不影响本插件安全门禁与远程接入）: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      )
+    }
+  }
+
+  const decide = async (): Promise<void> => {
+    if (settled) return
+    if (serviceTaken()) return settleYielded(findProviderEntry())
+
+    const elapsed = Date.now() - startedAt
+
+    // 满足任一条件即接管：兄弟 entry 全部落定（过了最短观察期）或到达兜底时限
+    if ((elapsed >= MIN_SETTLE_GRACE_MS && !othersSettling()) || elapsed >= BRIDGE_MAX_WAIT_MS) {
+      return tryRegisterOurs()
+    }
+
+    timer = setTimeout(() => { decide().catch(() => {}) }, BRIDGE_DECISION_POLL_MS)
+    if (typeof timer.unref === 'function') timer.unref()
+  }
+
+  decide().catch(() => {})
 }

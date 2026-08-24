@@ -111,8 +111,8 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
     }
   }
 
-  // 4. 向 Cordis 容器桥接注册 remoteWebUiPairing 服务
-  // 完美兼容 @linxin666 生态插件（如 dsh-pet 宠物、任务看板等），实现免登信任自动共享
+  // 4. 向 Cordis 容器桥接注册 remoteWebUiPairing 服务（延迟裁决：与其他远程接入
+  // 类插件共存时自动让出，保证启动不冲突，详见 compat.ts）
   registerRemoteWebUiPairingBridge(ctx, store)
 
   // 5. 延迟补丁与服务启动日志输出
