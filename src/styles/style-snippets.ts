@@ -137,6 +137,14 @@ const PRESET_SIDEBAR_CSS = `
     will-change: auto !important;
   }
 
+  /* 官方窄屏抽屉的全屏点击遮罩（[data-dsh-frame]::after：fixed、rgba 黑纱、
+     z-index:1050、pointer-events:auto）必须压在抽屉(900)之下，否则抽屉内容
+     会被黑纱罩住并拦截全部点击。压到 899：低于抽屉、仍高于正文(≤100)，
+     「点抽屉外暗处自动收回」的能力保留。 */
+  [data-dsh-frame]::after {
+    z-index: 899 !important;
+  }
+
   /* 内层根节点铺满抽屉：覆盖官方响应式脚本写入的内联 width，
      消除「外层 320 / 内层 280」的宽度差与右缘空白条 */
   [data-pane="sidebar"] > [data-slot="sidebar"] > div {

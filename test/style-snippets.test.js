@@ -48,6 +48,10 @@ test('移动端样式片段模块测试 (style-snippets.ts)', async (t) => {
       assert.ok(sidebarCss.includes('z-index: 900 !important'))
       assert.ok(sidebarCss.includes('z-index: 901 !important'))
       assert.ok(!sidebarCss.includes('99999'))
+      // 回归守卫：官方 frame::after 全屏点击遮罩（z=1050）必须压到抽屉(900)之下，
+      // 否则黑纱会罩住抽屉内容并拦截点击
+      assert.ok(sidebarCss.includes('[data-dsh-frame]::after'))
+      assert.ok(/z-index:\s*899 !important/.test(sidebarCss))
       // 回归守卫：移动端 UA 下隐藏官方 Tooltip 气泡（触屏点击后 mouseleave/blur 永不触发导致气泡永久滞留）
       assert.ok(sidebarCss.includes('html[data-dsh-mobile="1"] [role="tooltip"]'))
       // 回归守卫：必须清除侧边栏列上会创建 fixed 包含块的属性，
