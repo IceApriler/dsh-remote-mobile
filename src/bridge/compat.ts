@@ -63,6 +63,55 @@ export const CRYPTO_POLYFILL_SNIPPET = `
 `
 
 /**
+ * 注入到 index.html <head> 最前列的 Clipboard API Polyfill 脚本
+ * 针对非安全上下文（HTTP + 外部 IP，如 Tailscale / 局域网）下
+ * navigator.clipboard 为 undefined 的场景：提供 execCommand('copy') 降级实现，
+ * 避免官方 bundle 直接调用 navigator.clipboard.writeText 时抛
+ * "Cannot read properties of undefined (reading 'writeText')" 崩溃。
+ * 原生可用时不做任何替换。
+ */
+export const CLIPBOARD_POLYFILL_SNIPPET = `
+(function() {
+  if (typeof navigator === "undefined") return;
+  try {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") return;
+    var writeText = function(text) {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = String(text == null ? '' : text);
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.top = '-9999px';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        var ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        return ok ? Promise.resolve() : Promise.reject(new Error('copy failed'));
+      } catch (err) {
+        return Promise.reject(err);
+      }
+    };
+    var readText = function() {
+      return Promise.reject(new Error('clipboard readText is not supported in insecure context'));
+    };
+    try {
+      if (!navigator.clipboard) navigator.clipboard = {};
+      if (typeof navigator.clipboard.writeText !== "function") navigator.clipboard.writeText = writeText;
+      if (typeof navigator.clipboard.readText !== "function") navigator.clipboard.readText = readText;
+    } catch (err) {
+      try {
+        Object.defineProperty(navigator, 'clipboard', {
+          value: { writeText: writeText, readText: readText },
+          configurable: true,
+        });
+      } catch (err2) {}
+    }
+  } catch (err) {}
+})();
+`
+
+/**
  * 注入到 index.html 的移动端悬浮入口拖拽与位置记忆脚本
  * 允许用户在移动端上下随心拖动左上角入口把手，避免遮挡聊天内容，并自动保存位置
  */
@@ -340,6 +389,8 @@ export function patchHttpServerWithVirtualizer(
           // web-ui 在场时完全交给它处理，未装时复刻等价行为
           html = html.replace('<head>', `<head><script id="dsh-mobile-dismiss">${MOBILE_DISMISS_SNIPPET}</script>`)
           html = html.replace('<head>', `<head><script id="dsh-crypto-polyfill">${CRYPTO_POLYFILL_SNIPPET}</script>`)
+          // Clipboard Polyfill 最后 replace → 位于 <head> 最前，先于官方 bundle 生效
+          html = html.replace('<head>', `<head><script id="dsh-clipboard-polyfill">${CLIPBOARD_POLYFILL_SNIPPET}</script>`)
           chunk = html
           injected = true
         } else if (Buffer.isBuffer(chunk)) {
@@ -352,6 +403,8 @@ export function patchHttpServerWithVirtualizer(
             str = str.replace('<head>', `<head><script id="dsh-draggable-nav">${DRAGGABLE_NAV_SNIPPET}</script>`)
             str = str.replace('<head>', `<head><script id="dsh-mobile-dismiss">${MOBILE_DISMISS_SNIPPET}</script>`)
             str = str.replace('<head>', `<head><script id="dsh-crypto-polyfill">${CRYPTO_POLYFILL_SNIPPET}</script>`)
+            // Clipboard Polyfill 最后 replace → 位于 <head> 最前，先于官方 bundle 生效
+            str = str.replace('<head>', `<head><script id="dsh-clipboard-polyfill">${CLIPBOARD_POLYFILL_SNIPPET}</script>`)
             chunk = Buffer.from(str, 'utf8')
             injected = true
           }
@@ -449,7 +502,10 @@ export function mountIndexInjections(ctx: any): void {
   if (ctx.webServer && typeof ctx.webServer.tapIndex === 'function') {
     ctx.webServer.tapIndex((html: string) => {
       if (html.includes('<head>')) {
-        return html.replace('<head>', `<head><script id="dsh-crypto-polyfill">${CRYPTO_POLYFILL_SNIPPET}</script>`)
+        return html
+          .replace('<head>', `<head><script id="dsh-crypto-polyfill">${CRYPTO_POLYFILL_SNIPPET}</script>`)
+          // Clipboard Polyfill 后 replace → 位于 <head> 最前，先于官方 bundle 生效
+          .replace('<head>', `<head><script id="dsh-clipboard-polyfill">${CLIPBOARD_POLYFILL_SNIPPET}</script>`)
       }
       return html
     })
@@ -461,6 +517,11 @@ export function mountIndexInjections(ctx: any): void {
         kind: 'script',
         placement: 'head',
         text: CRYPTO_POLYFILL_SNIPPET,
+      })
+      table.push({
+        kind: 'script',
+        placement: 'head',
+        text: CLIPBOARD_POLYFILL_SNIPPET,
       })
     }
   })

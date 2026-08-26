@@ -137,6 +137,25 @@ export function StylesCard({ lang, showToast }) {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
+  const copyCss = (cssText) => {
+    navigator.clipboard
+      .writeText(cssText)
+      .then(() => showFeedback(t('stylesCopyCssDone', lang)))
+      .catch(() => {
+        const ta = document.createElement('textarea');
+        ta.value = cssText;
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+          document.execCommand('copy');
+          showFeedback(t('stylesCopyCssDone', lang));
+        } catch {
+          showFeedback(lang === 'en' ? 'Copy failed, please copy manually.' : '复制失败，请手动复制。', 'danger');
+        }
+        document.body.removeChild(ta);
+      });
+  };
+
   // 双端启停状态徽标（PC / 移动端）
   const scopeBadge = (s) => {
     if (s.pcEnabled && s.mobileEnabled) return t('stylesBothDevices', lang);
@@ -292,6 +311,9 @@ export function StylesCard({ lang, showToast }) {
                           </label>
                           <button type="button" onClick={() => toggleExpand(s.id)} style={miniBtnStyle}>
                             {expanded[s.id] ? t('stylesHideCss', lang) : t('stylesViewCss', lang)}
+                          </button>
+                          <button type="button" onClick={() => copyCss(s.css)} style={miniBtnStyle}>
+                            {t('stylesCopyCss', lang)}
                           </button>
                         </div>
                       </div>
@@ -496,6 +518,9 @@ export function StylesCard({ lang, showToast }) {
                         </button>
                         <button type="button" onClick={() => toggleExpand(s.id)} style={miniBtnStyle}>
                           {expanded[s.id] ? t('stylesHideCss', lang) : t('stylesViewCss', lang)}
+                        </button>
+                        <button type="button" onClick={() => copyCss(s.css)} style={miniBtnStyle}>
+                          {t('stylesCopyCss', lang)}
                         </button>
                       </div>
                     </div>

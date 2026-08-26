@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import { SessionStore } from '../lib/auth/token.js'
-import { patchHttpServerWithVirtualizer, CRYPTO_POLYFILL_SNIPPET } from '../lib/bridge/compat.js'
+import { patchHttpServerWithVirtualizer, CRYPTO_POLYFILL_SNIPPET, CLIPBOARD_POLYFILL_SNIPPET } from '../lib/bridge/compat.js'
 import { getClientIp } from '../lib/auth/tailscale.js'
 import { StyleSnippetStore } from '../lib/styles/style-snippets.js'
 
@@ -41,6 +41,8 @@ test('上下文虚拟化与兼容性补丁测试 (compat.ts)', async (t) => {
         endCalledWith = data ? data.toString('utf8') : ''
         assert.ok(endCalledWith.includes('id="dsh-crypto-polyfill"'))
         assert.ok(endCalledWith.includes('randomUUID'))
+        assert.ok(endCalledWith.includes('id="dsh-clipboard-polyfill"'))
+        assert.ok(endCalledWith.includes('navigator.clipboard'))
         done()
       },
     }
@@ -224,6 +226,7 @@ test('上下文虚拟化与兼容性补丁测试 (compat.ts)', async (t) => {
       assert.ok(html.includes('body { background: red; }')) // 自定义片段 CSS 已进入（媒体查询块内）
       assert.ok(html.includes('id="dsh-draggable-nav"')) // 拖拽脚本全端注入（仅折叠时工作）
       assert.ok(html.includes('id="dsh-crypto-polyfill"'))
+      assert.ok(html.includes('id="dsh-clipboard-polyfill"')) // 非安全上下文 clipboard polyfill 全端注入
       desktopChecked = true
       finishBoth()
     })
@@ -255,6 +258,7 @@ test('上下文虚拟化与兼容性补丁测试 (compat.ts)', async (t) => {
       end(data) {
         const html = data ? data.toString('utf8') : ''
         assert.ok(html.includes('id="dsh-crypto-polyfill"'))
+        assert.ok(html.includes('id="dsh-clipboard-polyfill"'))
         // 注入后显式 Content-Length 应被移除，避免 ERR_CONTENT_LENGTH_MISMATCH
         assert.ok(!('content-length' in headersWritten))
         assert.ok(!('Content-Length' in headersWritten))
