@@ -80,19 +80,21 @@ const PRESET_SIDEBAR_CSS = `
 /* 0. 禁用浏览器原生橡皮筋下拉刷新与链式溢出滚动，彻底杜绝上下滑动误刷新页面 */
   html,
   body,
-  [data-dsh-frame],
+  [class*="_frame"],
   [role="dialog"],
   [class*="_dialog"],
   [class*="_modalContent"],
   [class*="_overlay"],
   [class*="_conversationArea"],
-  [data-pane="conversation"] {
+  [class*="_centerCol"] {
     overscroll-behavior-y: contain !important;
     overscroll-behavior-x: none !important;
   }
 
-  /* 1. 最外层三栏布局：在移动端主工作区占满 100% 全宽，消除 56px 强制占位 */
-  [data-dsh-frame],
+  /* 1. 最外层三栏布局：在移动端主工作区占满 100% 全宽，消除侧边栏强制占位。
+     选择器全部基于官方 CSS Modules 稳定后缀（_frame/_sidebarCol/_centerCol，
+     前缀 hash 随机、后缀稳定），不依赖 @linxin666/dsh-web-ui-all 注入的
+     data-pane / data-dsh-frame 属性，安装与否均生效。 */
   [class*="_frame"] {
     grid-template-columns: 0px minmax(0px, 1fr) 0px !important;
     width: 100vw !important;
@@ -101,14 +103,12 @@ const PRESET_SIDEBAR_CSS = `
     position: relative !important;
   }
 
-  [data-pane="conversation"],
   [class*="_centerCol"] {
     width: 100vw !important;
     max-width: 100vw !important;
   }
 
   /* 2. 侧边栏最外层容器：作为整体抽屉浮层（阴影仅加在最外层，严禁污染内部列表） */
-  [data-pane="sidebar"],
   [class*="_sidebarCol"] {
     position: fixed !important;
     top: 0 !important;
@@ -119,8 +119,8 @@ const PRESET_SIDEBAR_CSS = `
     /* 层级守卫：抽屉必须低于官方弹层体系（模态弹窗 z=1000、下拉/弹出菜单 z=1100），
        否则设置面板的操作菜单（portal 到 body）会被抽屉盖住无法交互。
        官方内容区元素均在 100 层级以下，900 足以保证抽屉覆盖正文。
-       注意：展开态宽度由官方样式接管（width: min(88vw,320px) !important，特异性
-       更高），「外层 ~320 / 内层内联 280」的差值由下方内层铺满规则消除。 */
+       展开态宽度：装了 web-ui 时由它接管（min(88vw,320px)）；未装时沿用官方
+       内联 width（280px 左右），宽度差由下方内层铺满规则消除。 */
     min-width: 0 !important;
     z-index: 900 !important;
     background: var(--dsw-alias-bg-layer-1, #ffffff) !important;
@@ -137,26 +137,39 @@ const PRESET_SIDEBAR_CSS = `
     will-change: auto !important;
   }
 
-  /* 官方窄屏抽屉的全屏点击遮罩（[data-dsh-frame]::after：fixed、rgba 黑纱、
-     z-index:1050、pointer-events:auto）必须压在抽屉(900)之下，否则抽屉内容
-     会被黑纱罩住并拦截全部点击。压到 899：低于抽屉、仍高于正文(≤100)，
-     「点抽屉外暗处自动收回」的能力保留。 */
-  [data-dsh-frame]::after {
+  /* 遮罩：抽屉外全屏黑纱必须压在抽屉(900)之下，否则抽屉内容会被黑纱罩住并
+     拦截全部点击。压到 899：低于抽屉、仍高于正文(≤100)，「点抽屉外暗处
+     自动收回」的能力保留。
+     - 装了 web-ui 时：它生成 [data-dsh-frame]:not([data-sidebar-collapsed])::after
+       （z-index:1050），由下方 [class*="_frame"]::after 的 !important 统一压到 899。
+     - 未装 web-ui 时：官方无遮罩，由下方 :not([data-sidebar-collapsed]) 规则补齐。 */
+  [class*="_frame"]::after {
     z-index: 899 !important;
   }
 
+  [class*="_frame"]:not([data-sidebar-collapsed])::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 899;
+    background: rgb(0 0 0 / 24%);
+  }
+
   /* 内层根节点铺满抽屉：覆盖官方响应式脚本写入的内联 width，
-     消除「外层 320 / 内层 280」的宽度差与右缘空白条 */
-  [data-pane="sidebar"] > [data-slot="sidebar"] > div {
+     消除「外层 ~320 / 内层内联 280」的宽度差与右缘空白条 */
+  [class*="_sidebarCol"] > [data-slot="sidebar"] > div {
     width: 100% !important;
     min-width: 0 !important;
     max-width: none !important;
     height: 100% !important;
   }
 
-  /* 3. 折叠状态：侧边栏收起为 0px 并隐藏整体阴影和多余按钮 */
-  [data-pane="sidebar"]:has([class*="_collapsed"]),
-  [data-dsh-frame][data-sidebar-collapsed="true"] [data-pane="sidebar"] {
+  /* 3. 折叠状态：侧边栏收起为 0px 并隐藏整体阴影和多余按钮。
+     data-sidebar-collapsed 属性与 _collapsed class 均由官方 sidebar 插件写入，
+     两种环境（装/不装 web-ui）行为一致，这里用无值匹配 [data-sidebar-collapsed]
+     保证属性不带值也能命中。 */
+  [class*="_sidebarCol"]:has([class*="_collapsed"]),
+  [class*="_frame"][data-sidebar-collapsed] [class*="_sidebarCol"] {
     width: 0px !important;
     min-width: 0px !important;
     border: none !important;
@@ -165,14 +178,14 @@ const PRESET_SIDEBAR_CSS = `
     pointer-events: none !important;
   }
 
-  [data-pane="sidebar"] [class*="_collapsed"] > :not([class*="_logoRow"]),
-  [data-dsh-frame][data-sidebar-collapsed="true"] [data-pane="sidebar"] > div > div > :not([class*="_logoRow"]) {
+  [class*="_sidebarCol"] [class*="_collapsed"] > :not([class*="_logoRow"]),
+  [class*="_frame"][data-sidebar-collapsed] [class*="_sidebarCol"] > div > div > :not([class*="_logoRow"]) {
     display: none !important;
   }
 
   /* 折叠状态下，Logo 按钮悬浮在屏幕左上角作为展开把手（与 dsh-draggable-nav 拖拽脚本联动） */
-  [data-pane="sidebar"] [class*="_collapsed"] [class*="_logoRow"],
-  [data-dsh-frame][data-sidebar-collapsed="true"] [data-pane="sidebar"] [class*="_logoRow"] {
+  [class*="_sidebarCol"] [class*="_collapsed"] [class*="_logoRow"],
+  [class*="_frame"][data-sidebar-collapsed] [class*="_sidebarCol"] [class*="_logoRow"] {
     position: fixed !important;
     top: 10px !important;
     left: 10px !important;
@@ -198,6 +211,30 @@ const PRESET_SIDEBAR_CSS = `
      （按钮均保留 aria-label，可访问性不受影响）；PC 窄窗口仍保留悬停提示。 */
   html[data-dsh-mobile="1"] [role="tooltip"] {
     display: none !important;
+  }
+
+  /* 5. 窄屏隐藏官方详情（details）列：官方会把未折叠的详情面板做成全屏浮层
+     盖在 conversation 顶部（web-ui 窄屏折叠态也是 display:none），这里直接隐藏，
+     彻底杜绝缩小窗口时详情面板与顶部 header 重叠。 */
+  [class*="_detailsCol"] {
+    display: none !important;
+  }
+
+  /* 6. 已装 web-ui 时，其移动端 conversation-header 为折叠 rail 预留 60px 左内边距；
+     本插件折叠为 0px + 悬浮把手，header 无需让位，覆盖为 8px。
+     用更高特异性（(0,2,1) > web-ui 的 (0,2,0)）保证无论加载顺序都压过 web-ui；
+     仅在与 web-ui 相同的 ≤768px 断点生效，避免干扰 769-900px 的官方 header。 */
+  @media (max-width: 768px) {
+    [class*="_frame"] header[data-dsh-responsive-part="conversation-header"] {
+      padding-left: 8px !important;
+    }
+
+    /* 7. 覆盖 web-ui 给 session-utilities 按钮强制的 min-height: 44px（min-width 保留）。
+       该规则特异性与 web-ui 同为 (0,3,0)，故补一个重复属性选择器抬到 (0,4,0)
+       确保无论加载顺序都压过 web-ui；仅在同断点 ≤768px 生效。 */
+    [class*="_frame"] [data-dsh-responsive-part="session-utilities"][data-dsh-responsive-part] :is(button, [role="button"]) {
+      min-height: 0 !important;
+    }
   }
 `
 
@@ -264,7 +301,7 @@ const PRESET_MAIN_CSS = `
    内容容器用 CSS Modules localName 后缀（只有前缀 hash 随机，后缀稳定）。 */
 
 /* 1. 消息内容容器：紧凑字号与行距 */
-[data-pane="conversation"],
+[class*="_centerCol"],
 [data-slot^="conversation.chat"],
 [class*="_markdown"],
 [class*="_message"],
@@ -276,7 +313,7 @@ const PRESET_MAIN_CSS = `
 }
 
 /* 2. HTML 元素级（稳定）：段落与标题层级 */
-[data-pane="conversation"] p,
+[class*="_centerCol"] p,
 [data-slot^="conversation.chat"] p,
 [class*="_markdown"] p,
 [class*="_message"] p,
@@ -286,10 +323,10 @@ const PRESET_MAIN_CSS = `
   margin: 0 0 0.4em 0 !important;
 }
 
-[data-pane="conversation"] h1,
-[data-pane="conversation"] h2,
-[data-pane="conversation"] h3,
-[data-pane="conversation"] h4,
+[class*="_centerCol"] h1,
+[class*="_centerCol"] h2,
+[class*="_centerCol"] h3,
+[class*="_centerCol"] h4,
 [data-slot^="conversation.chat"] h1,
 [data-slot^="conversation.chat"] h2,
 [data-slot^="conversation.chat"] h3,
@@ -302,14 +339,14 @@ const PRESET_MAIN_CSS = `
   line-height: 1.3 !important;
 }
 
-[data-pane="conversation"] ul,
-[data-pane="conversation"] ol,
+[class*="_centerCol"] ul,
+[class*="_centerCol"] ol,
 [class*="_markdown"] ul,
 [class*="_markdown"] ol {
   margin: 0.2em 0 0.4em 0 !important;
   padding-left: 1.2em !important;
 }
-[data-pane="conversation"] li,
+[class*="_centerCol"] li,
 [class*="_markdown"] li {
   font-size: 12.5px !important;
   line-height: 1.45 !important;
@@ -317,13 +354,13 @@ const PRESET_MAIN_CSS = `
 }
 
 /* 3. 行内代码与代码块：小等宽 + 防横向溢出 */
-[data-pane="conversation"] code,
+[class*="_centerCol"] code,
 [data-slot^="conversation.chat"] code,
 [class*="_markdown"] code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
   font-size: 11.5px !important;
 }
-[data-pane="conversation"] pre,
+[class*="_centerCol"] pre,
 [data-slot^="conversation.chat"] pre,
 [class*="_markdown"] pre {
   font-size: 11.5px !important;
@@ -334,7 +371,7 @@ const PRESET_MAIN_CSS = `
 }
 
 /* 表格：紧凑字号/内边距 + 窄屏横向滚动防撑破（display:block 让表格宽度受容器约束） */
-[data-pane="conversation"] table,
+[class*="_centerCol"] table,
 [data-slot^="conversation.chat"] table,
 [class*="_markdown"] table {
   font-size: 11.5px !important;
@@ -344,8 +381,8 @@ const PRESET_MAIN_CSS = `
   overflow-x: auto !important;
   -webkit-overflow-scrolling: touch !important;
 }
-[data-pane="conversation"] table th,
-[data-pane="conversation"] table td,
+[class*="_centerCol"] table th,
+[class*="_centerCol"] table td,
 [data-slot^="conversation.chat"] table th,
 [data-slot^="conversation.chat"] table td,
 [class*="_markdown"] table th,
@@ -356,13 +393,13 @@ const PRESET_MAIN_CSS = `
 }
 
 /* 3.5 可折叠披露行（data-disclosure-row，如“Code/思考”等行）：标题与摘要跟随紧凑字号 */
-[data-pane="conversation"] [data-disclosure-row],
+[class*="_centerCol"] [data-disclosure-row],
 [data-slot^="conversation.chat"] [data-disclosure-row] {
   font-size: 12.5px !important;
   line-height: 1.45 !important;
 }
-[data-pane="conversation"] [data-disclosure-row] [class*="_title"],
-[data-pane="conversation"] [data-disclosure-row] [class*="_summary"],
+[class*="_centerCol"] [data-disclosure-row] [class*="_title"],
+[class*="_centerCol"] [data-disclosure-row] [class*="_summary"],
 [data-slot^="conversation.chat"] [data-disclosure-row] [class*="_title"],
 [data-slot^="conversation.chat"] [data-disclosure-row] [class*="_summary"] {
   font-size: 12.5px !important;
@@ -373,32 +410,32 @@ const PRESET_MAIN_CSS = `
 /* 3.7 消息列表双层滚动容器（wSkVaW_scrollBody + Md3f7G_scroll）padding 叠加：
    官方各带 12~16px（合计每侧最多 28px），统一每层压到 8px（每侧合计 16px）。
    均排除输入区滚动容器，避免误伤 composer。 */
-[data-pane="conversation"] [class*="_scrollBody"],
-[data-pane="conversation"] [class*="_scroll"]:not([data-composer-card] [class*="_scroll"]) {
+[class*="_centerCol"] [class*="_scrollBody"],
+[class*="_centerCol"] [class*="_scroll"]:not([data-composer-card] [class*="_scroll"]) {
   padding: 8px 8px !important;
 }
 
 /* 4. 消息操作条（时间戳/复制等）与内行图标：显式收敛（SVG 不随字号缩放，需显式尺寸） */
-[data-pane="conversation"] [class*="_actions"],
+[class*="_centerCol"] [class*="_actions"],
 [data-slot^="conversation.chat"] [class*="_actions"] {
   font-size: 11px !important;
   line-height: 1.2 !important;
 }
-[data-pane="conversation"] [class*="_actions"] [class*="_timeStart"],
-[data-pane="conversation"] [class*="_actions"] [class*="_timeEnd"],
-[data-pane="conversation"] [class*="_actions"] [class*="_time"],
+[class*="_centerCol"] [class*="_actions"] [class*="_timeStart"],
+[class*="_centerCol"] [class*="_actions"] [class*="_timeEnd"],
+[class*="_centerCol"] [class*="_actions"] [class*="_time"],
 [data-slot^="conversation.chat"] [class*="_actions"] [class*="_timeStart"],
 [data-slot^="conversation.chat"] [class*="_actions"] [class*="_timeEnd"],
 [data-slot^="conversation.chat"] [class*="_actions"] [class*="_time"] {
   font-size: 11px !important;
 }
 /* 用时统计内各指标/分隔点间距收紧（margin: 0） */
-[data-pane="conversation"] [class*="_actions"] [class*="_timeEnd"] span,
+[class*="_centerCol"] [class*="_actions"] [class*="_timeEnd"] span,
 [data-slot^="conversation.chat"] [class*="_actions"] [class*="_timeEnd"] span {
   margin: 0 !important;
 }
 /* 统计行：单行优先，空间不足才折行（不再强制独占整行）；折行后与消息左缘对齐（margin-left 清零） */
-[data-pane="conversation"] [class*="_actions"] [class*="_timeEnd"],
+[class*="_centerCol"] [class*="_actions"] [class*="_timeEnd"],
 [data-slot^="conversation.chat"] [class*="_actions"] [class*="_timeEnd"] {
   flex: 0 1 auto !important;
   min-width: 0 !important;
@@ -408,15 +445,15 @@ const PRESET_MAIN_CSS = `
   text-overflow: clip !important;
   padding-left: 6px !important; /* 折行时也保留 6px 缩进，与上方内容区分 */
 }
-[data-pane="conversation"] [class*="_actions"],
+[class*="_centerCol"] [class*="_actions"],
 [data-slot^="conversation.chat"] [class*="_actions"] {
   flex-wrap: wrap !important;
   height: auto !important;
   overflow: visible !important;
 }
-[data-pane="conversation"] [class*="_actions"] svg,
+[class*="_centerCol"] [class*="_actions"] svg,
 [data-slot^="conversation.chat"] [class*="_actions"] svg,
-[data-pane="conversation"] [class*="_leading"] svg,
+[class*="_centerCol"] [class*="_leading"] svg,
 [data-slot^="conversation.chat"] [class*="_leading"] svg {
   width: 13px !important;
   height: 13px !important;

@@ -86,7 +86,7 @@ export const DRAGGABLE_NAV_SNIPPET = `
       try {
         var t = e.target;
         if (!t || !t.closest) return;
-        if (!t.closest('[data-pane="sidebar"]')) return;
+        if (!t.closest('[data-pane="sidebar"], [class*="_sidebarCol"]')) return;
         var entry = t.closest('[role="treeitem"], [data-dsh-part="sidebar-entry"]');
         if (!entry) return;
         var isSecondaryControl =
@@ -111,7 +111,7 @@ export const DRAGGABLE_NAV_SNIPPET = `
   }
 
   function initDraggableNav() {
-    var logoRow = document.querySelector('[data-pane="sidebar"] [class*="_logoRow"]');
+    var logoRow = document.querySelector('[data-pane="sidebar"] [class*="_logoRow"], [class*="_sidebarCol"] [class*="_logoRow"]');
     if (!logoRow || logoRow.__dsh_drag_init__) return;
     logoRow.__dsh_drag_init__ = true;
 
@@ -127,7 +127,7 @@ export const DRAGGABLE_NAV_SNIPPET = `
     var hasMoved = false;
 
     function onTouchStart(e) {
-      var sidebar = document.querySelector('[data-pane="sidebar"]');
+      var sidebar = document.querySelector('[data-pane="sidebar"], [class*="_sidebarCol"]');
       if (sidebar && !sidebar.querySelector('[class*="_collapsed"]')) return;
 
       var touch = e.touches ? e.touches[0] : e;
@@ -185,6 +185,88 @@ export const DRAGGABLE_NAV_SNIPPET = `
     initDraggableNav();
   }
   setInterval(initDraggableNav, 800);
+})();
+`
+
+/**
+ * 注入到 index.html 的移动端抽屉「点外部收起」脚本
+ *
+ * 【设计职责】
+ * 仅当 @linxin666/dsh-web-ui-all 未启用时生效——web-ui 已自带 installMobileSidebarDismiss，
+ * 本脚本通过检测 style[data-dsh-compat="responsive"] 动态让位，绝不与 web-ui 叠加双份收起逻辑。
+ *
+ * 定位全部基于官方 CSS Modules 稳定后缀（_frame / _sidebarCol / _toggle，前缀 hash 随机、
+ * 后缀稳定），不依赖 web-ui 注入的 data-pane / data-dsh-frame 属性，因此装/不装 web-ui
+ * 两种环境行为一致。折叠状态沿用官方写入的 data-sidebar-collapsed 属性。
+ */
+export const MOBILE_DISMISS_SNIPPET = `
+(function() {
+  if (typeof window === "undefined" || typeof document === "undefined") return;
+
+  var frameSelector = '[class*="_frame"]';
+  var sidebarSelector = '[class*="_sidebarCol"]';
+
+  function webUiOwnsDrawer() {
+    return !!document.querySelector('style[data-dsh-compat="responsive"]');
+  }
+
+  function findToggle(frame) {
+    return frame.querySelector('[class*="_toggle"]') ||
+      Array.prototype.filter.call(frame.querySelectorAll('button'), function (b) {
+        return /收起侧边栏|Collapse sidebar|Open sidebar/i.test(b.getAttribute('aria-label') || '');
+      })[0] || null;
+  }
+
+  function install(frame) {
+    if (frame.__dshRmDismissInstalled__) return;
+    frame.__dshRmDismissInstalled__ = true;
+    var raf = 0;
+
+    frame.addEventListener('click', function (event) {
+      try {
+        // web-ui 可能运行中才注入 responsive style：每次事件都复查，动态让位
+        if (webUiOwnsDrawer()) return;
+        var target = event.target;
+        if (!target || !(target instanceof Element)) return;
+        if (typeof window.matchMedia !== 'function' || !window.matchMedia('(max-width: 900px)').matches) return;
+        var sidebar = frame.querySelector(sidebarSelector);
+        var toggle = findToggle(frame);
+        if (!sidebar || !toggle) return;
+
+        // 抽屉展开时点击正文（sidebar 外）→ 触发官方收起按钮，并拦截被吞掉的点击；
+        // 找不到收起按钮时上面已 return，绝不误拦正文交互
+        if (!frame.hasAttribute('data-sidebar-collapsed') && !sidebar.contains(target)) {
+          event.preventDefault();
+          event.stopPropagation();
+          toggle.click();
+          return;
+        }
+        // 点击侧边栏条目（选中后回主区）→ 下一帧程序化收起。
+        // 既有防误收起守卫（dsh-draggable-nav 包装 HTMLButtonElement.prototype.click
+        // + 900ms 窗口）会拦截「点条目内次级操作图标」后的误收起，行为与 web-ui 一致。
+        if (target.closest('[class*="_toggle"]')) return;
+        if (!target.closest('[role="treeitem"], [data-dsh-part="sidebar-entry"]')) return;
+        if (raf !== 0) cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(function () {
+          raf = 0;
+          if (!frame.hasAttribute('data-sidebar-collapsed')) toggle.click();
+        });
+      } catch (err) {}
+    }, true);
+  }
+
+  function ensure() {
+    if (webUiOwnsDrawer()) return;
+    var frame = document.querySelector(frameSelector);
+    if (frame) install(frame);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', ensure);
+  } else {
+    ensure();
+  }
+  setInterval(ensure, 800);
 })();
 `
 
@@ -254,6 +336,9 @@ export function patchHttpServerWithVirtualizer(
           // 悬浮把手拖拽脚本全端注入：脚本自带“仅折叠时工作”守卫，
           // 预设按视口宽度生效后 PC 窄窗口同样需要可拖动的展开把手
           html = html.replace('<head>', `<head><script id="dsh-draggable-nav">${DRAGGABLE_NAV_SNIPPET}</script>`)
+          // 移动端抽屉「点外部收起」全端注入：脚本自带 web-ui 让位守卫，
+          // web-ui 在场时完全交给它处理，未装时复刻等价行为
+          html = html.replace('<head>', `<head><script id="dsh-mobile-dismiss">${MOBILE_DISMISS_SNIPPET}</script>`)
           html = html.replace('<head>', `<head><script id="dsh-crypto-polyfill">${CRYPTO_POLYFILL_SNIPPET}</script>`)
           chunk = html
           injected = true
@@ -265,6 +350,7 @@ export function patchHttpServerWithVirtualizer(
               str = str.replace('<head>', `<head>${buildMobileStyleTag(mobileStyleCss)}`)
             }
             str = str.replace('<head>', `<head><script id="dsh-draggable-nav">${DRAGGABLE_NAV_SNIPPET}</script>`)
+            str = str.replace('<head>', `<head><script id="dsh-mobile-dismiss">${MOBILE_DISMISS_SNIPPET}</script>`)
             str = str.replace('<head>', `<head><script id="dsh-crypto-polyfill">${CRYPTO_POLYFILL_SNIPPET}</script>`)
             chunk = Buffer.from(str, 'utf8')
             injected = true

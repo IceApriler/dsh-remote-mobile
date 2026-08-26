@@ -48,12 +48,25 @@ test('移动端样式片段模块测试 (style-snippets.ts)', async (t) => {
       assert.ok(sidebarCss.includes('z-index: 900 !important'))
       assert.ok(sidebarCss.includes('z-index: 901 !important'))
       assert.ok(!sidebarCss.includes('99999'))
-      // 回归守卫：官方 frame::after 全屏点击遮罩（z=1050）必须压到抽屉(900)之下，
-      // 否则黑纱会罩住抽屉内容并拦截点击
-      assert.ok(sidebarCss.includes('[data-dsh-frame]::after'))
+      // 回归守卫：官方/生态 frame::after 全屏点击遮罩（z=1050）必须压到抽屉(900)之下，
+      // 否则黑纱会罩住抽屉内容并拦截点击；未装 web-ui 时由 :not([data-sidebar-collapsed]) 规则补齐遮罩
+      assert.ok(sidebarCss.includes('[class*="_frame"]::after'))
+      assert.ok(sidebarCss.includes('[class*="_frame"]:not([data-sidebar-collapsed])::after'))
       assert.ok(/z-index:\s*899 !important/.test(sidebarCss))
       // 回归守卫：移动端 UA 下隐藏官方 Tooltip 气泡（触屏点击后 mouseleave/blur 永不触发导致气泡永久滞留）
       assert.ok(sidebarCss.includes('html[data-dsh-mobile="1"] [role="tooltip"]'))
+      // 回归守卫：窄屏隐藏官方详情（details）列，杜绝详情浮层与顶部 header 重叠
+      assert.ok(sidebarCss.includes('[class*="_detailsCol"]'))
+      assert.ok(/display:\s*none !important/.test(sidebarCss))
+      // 回归守卫：覆盖 web-ui 为折叠 rail 预留的 conversation-header 60px 左内边距
+      // （特异性 (0,2,1) > web-ui (0,2,0)，且限定同断点 ≤768px）
+      assert.ok(sidebarCss.includes('@media (max-width: 768px)'))
+      assert.ok(sidebarCss.includes('[class*="_frame"] header[data-dsh-responsive-part="conversation-header"]'))
+      assert.ok(/padding-left:\s*8px !important/.test(sidebarCss))
+      // 回归守卫：覆盖 web-ui 给 session-utilities 按钮强制的 min-height:44px
+      // （重复属性选择器抬特异性至 (0,4,0) > web-ui (0,3,0)，min-width 保留）
+      assert.ok(sidebarCss.includes('[class*="_frame"] [data-dsh-responsive-part="session-utilities"][data-dsh-responsive-part] :is(button, [role="button"])'))
+      assert.ok(/min-height:\s*0 !important/.test(sidebarCss))
       // 回归守卫：必须清除侧边栏列上会创建 fixed 包含块的属性，
       // 否则内联渲染于侧边栏 DOM 的设置弹窗（position:fixed）会被困在抽屉宽度内并被 overflow:hidden 裁剪
       assert.ok(/transform:\s*none !important/.test(sidebarCss))
@@ -61,7 +74,7 @@ test('移动端样式片段模块测试 (style-snippets.ts)', async (t) => {
       assert.ok(/will-change:\s*auto !important/.test(sidebarCss))
       // 回归守卫：抽屉内层必须铺满外层（官方响应式脚本会给内层写死内联 width 如 280px，
       // 与官方外层 min(88vw,320px) 产生 ~40px 右缘空白条），用 !important 覆盖内联样式
-      assert.ok(sidebarCss.includes('[data-pane="sidebar"] > [data-slot="sidebar"] > div'))
+      assert.ok(sidebarCss.includes('[class*="_sidebarCol"] > [data-slot="sidebar"] > div'))
       assert.ok(/width:\s*100% !important/.test(sidebarCss))
     } finally {
       rmSync(dir, { recursive: true, force: true })

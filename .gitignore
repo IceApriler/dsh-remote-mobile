@@ -22,6 +22,7 @@ pnpm-debug.log*
 .env
 .env.local
 .env.*.local
+.npmrc
 
 # 操作系统与编辑器缓存
 .DS_Store
