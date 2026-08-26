@@ -37,6 +37,8 @@ English Documentation · [简体中文](./README.md)
 
 By default, DSH strictly listens only to the local loopback address (`127.0.0.1`), preventing mobile devices, tablets, or external computers from accessing the Web console. This plugin uses **access control middleware** and **request isolation** to securely open up **Tailscale Private Network** and **Local Area Network (LAN / Wi-Fi)** access, complete with RSA transmission encryption, QR code pairing, persistent password auth, and automated brute-force defense.
 
+When accessed from a phone, the plugin also adapts the DSH interface for **mobile styles**: a collapsible sidebar drawer with a draggable floating toggle, a centered/scaled settings dialog, and dense conversation typography — so the mobile experience feels closer to the desktop.
+
 ---
 
 <span id="advantages"></span>
