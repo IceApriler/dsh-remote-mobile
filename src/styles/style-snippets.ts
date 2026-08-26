@@ -257,10 +257,18 @@ const PRESET_SETTINGS_CSS = `
     overscroll-behavior: contain !important;
   }
 
-  /* 弹窗卡片：居中显示，占据 94vw 视口，内部开启弹性横向滚动 */
-  [role="dialog"],
-  [class*="_dialog"],
-  [class*="_modalContent"],
+  /* 弹窗卡片：仅命中设置弹窗——外层 overlay 容器内含 role=dialog（设置弹窗由
+     data-slot overlay / overlay 类包裹）。内测声明等通用 Modal 直接挂在 body、
+     无 data-slot overlay，天然排除，不会被 94vw / 530px 覆写。 */
+  [data-slot*="overlay"]:has([role="dialog"]) [role="dialog"],
+  [data-slot*="overlay"]:has([role="dialog"]) [class*="_dialog"],
+  [data-slot*="overlay"]:has([role="dialog"]) [class*="_modalContent"],
+  [class*="_overlay"]:has([role="dialog"]) [role="dialog"],
+  [class*="_overlay"]:has([role="dialog"]) [class*="_dialog"],
+  [class*="_overlay"]:has([role="dialog"]) [class*="_modalContent"],
+  [class*="_modalWrapper"]:has([role="dialog"]) [role="dialog"],
+  [class*="_modalWrapper"]:has([role="dialog"]) [class*="_dialog"],
+  [class*="_modalWrapper"]:has([role="dialog"]) [class*="_modalContent"],
   [class*="_settingsModal"] {
     position: relative !important;
     width: 94vw !important;
@@ -280,10 +288,18 @@ const PRESET_SETTINGS_CSS = `
     font-size: 13.5px !important;
   }
 
-  /* 弹窗内部主体容器：固定最小宽度并等比微缩，单屏显示更多内容且字号更精致 */
-  [role="dialog"] > div,
-  [class*="_dialog"] > div,
-  [class*="_modalContent"] > div {
+  /* 弹窗内部主体容器：固定最小宽度并等比微缩，单屏显示更多内容且字号更精致。
+     同样限定在设置弹窗上下文内，避免波及通用 Modal。 */
+  [data-slot*="overlay"]:has([role="dialog"]) [role="dialog"] > div,
+  [data-slot*="overlay"]:has([role="dialog"]) [class*="_dialog"] > div,
+  [data-slot*="overlay"]:has([role="dialog"]) [class*="_modalContent"] > div,
+  [class*="_overlay"]:has([role="dialog"]) [role="dialog"] > div,
+  [class*="_overlay"]:has([role="dialog"]) [class*="_dialog"] > div,
+  [class*="_overlay"]:has([role="dialog"]) [class*="_modalContent"] > div,
+  [class*="_modalWrapper"]:has([role="dialog"]) [role="dialog"] > div,
+  [class*="_modalWrapper"]:has([role="dialog"]) [class*="_dialog"] > div,
+  [class*="_modalWrapper"]:has([role="dialog"]) [class*="_modalContent"] > div,
+  [class*="_settingsModal"] > div {
     min-width: 530px !important;
     width: 530px !important;
     height: 100% !important;
@@ -502,7 +518,47 @@ const PRESET_MAIN_CSS = `
   max-height: 13px !important;
   flex: none !important;
 }
-
+/* composer 工具栏紧凑：保持两行布局不变，仅缩小控件尺寸。
+   以工具栏行（_row，即 uV2eYG_row）为锚点，避免误伤输入文本区内的
+   文本引用 / chip 等行内元素。特异性 (0,2,0)~ (0,3,0) 均高于官方单类 (0,1,0)。 */
+[data-composer-card="true"] [class*="_row"] {
+  gap: 6px !important;
+  padding: 2px 6px 4px !important;
+}
+[data-composer-card="true"] [class*="_row"] [class*="_tools"],
+[data-composer-card="true"] [class*="_row"] [class*="_modes"],
+[data-composer-card="true"] [class*="_row"] [class*="_trailing"] {
+  gap: 6px !important;
+}
+[data-composer-card="true"] [class*="_row"] [class*="_add"],
+[data-composer-card="true"] [class*="_row"] [class*="_trigger"] {
+  padding: 0 4px !important;
+  gap: 2px !important;
+}
+[data-composer-card="true"] [class*="_row"] [class*="_add"] {
+  width: 26px !important;
+  min-width: 26px !important;
+  height: 26px !important;
+  min-height: 26px !important;
+}
+[data-composer-card="true"] [class*="_row"] [class*="_triggerLabel"],
+[data-composer-card="true"] [class*="_row"] [class*="_triggerEffort"] {
+  font-size: 12px !important;
+  line-height: 16px !important;
+}
+[data-composer-card="true"] [class*="_row"] [class*="_primary"] {
+  width: 30px !important;
+  height: 30px !important;
+  min-width: 30px !important;
+  min-height: 30px !important;
+}
+[data-composer-card="true"] [class*="_row"] svg {
+  width: 12px !important;
+  height: 12px !important;
+  max-width: 12px !important;
+  max-height: 12px !important;
+  flex: none !important;
+}
 `
 
 /**

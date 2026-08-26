@@ -76,6 +76,15 @@ test('移动端样式片段模块测试 (style-snippets.ts)', async (t) => {
       // 与官方外层 min(88vw,320px) 产生 ~40px 右缘空白条），用 !important 覆盖内联样式
       assert.ok(sidebarCss.includes('[class*="_sidebarCol"] > [data-slot="sidebar"] > div'))
       assert.ok(/width:\s*100% !important/.test(sidebarCss))
+
+      // 回归守卫：设置弹窗覆写必须限定在 overlay 上下文内（仅命中设置弹窗），
+      // 否则内测声明等通用 Modal（直接挂 body、无 data-slot overlay）会被 94vw/530px 覆写
+      const settingsCss = store.get('preset-settings').css
+      assert.ok(settingsCss.includes('[data-slot*="overlay"]:has([role="dialog"]) [role="dialog"]'))
+      assert.ok(settingsCss.includes('[class*="_overlay"]:has([role="dialog"]) [class*="_dialog"]'))
+      assert.ok(settingsCss.includes('[class*="_settingsModal"]'))
+      // 不得再出现独立的裸 [role="dialog"] / [class*="_dialog"] 顶层选择器（会波及通用 Modal）
+      assert.ok(!/^\s*\[role="dialog"\],$/m.test(settingsCss))
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
@@ -194,6 +203,11 @@ test('移动端样式片段模块测试 (style-snippets.ts)', async (t) => {
       assert.ok(mainPart.includes('line-height: 20px')) // 三层统一基准行高，防光标错位
       assert.ok(mainPart.includes('table th')) // 表格字号/内边距收敛
       assert.ok(mainPart.includes(':has(> [data-composer-card')) // composer 外层留白收窄
+      // 回归守卫：composer 工具栏紧凑（锚定 _row，缩小按钮/图标/gap，保持两行布局）
+      assert.ok(mainPart.includes('[data-composer-card="true"] [class*="_row"]'))
+      assert.ok(mainPart.includes('[data-composer-card="true"] [class*="_row"] [class*="_primary"]'))
+      assert.ok(/width:\s*30px !important/.test(mainPart))
+      assert.ok(mainPart.includes('[data-composer-card="true"] [class*="_row"] svg'))
 
       // 双端开 → 全宽度原样；仅 PC → 宽屏块
       store.setEnabled('preset-main', 'pc', true)
