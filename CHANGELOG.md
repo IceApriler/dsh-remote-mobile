@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1] - 2026-08-26
+
+### Features (新功能)
+- **样式片段一键复制**：样式覆写页每个片段（内置预设与自定义小插件）在「查看 CSS」旁新增 **「📋 复制样式」** 按钮，点击即将该片段 CSS 完整复制到剪贴板并给出 toast 反馈，无需手动框选整段样式。
+- **非安全上下文 Clipboard Polyfill**：HTTP + 外部 IP（Tailscale / 局域网）等非安全上下文下 `navigator.clipboard` 为 `undefined`，官方 bundle 直接调用 `writeText` 会抛 `Cannot read properties of undefined` 崩溃；现全端注入 polyfill（位于 `<head>` 最前、先于官方 bundle 生效），提供 `execCommand('copy')` 降级实现，原生可用时不替换，顺带保障上一条复制按钮与非安全环境下的复制功能可用。
+
+### Fixed (缺陷修复)
+- **修复：设置弹窗整窗缩放未覆盖导航按钮列**。`preset-settings` 等比微缩由覆盖单个卡片改为覆盖 `dialog` 全部直接子元素（`> *`），左侧 nav 按钮列表不再漏缩放；右侧内容保持 530px 最小宽度。
+- **修复：插件市场弹窗窄屏隐藏左侧导航**。重置官方 `@media(max-width:560px)` 下隐藏左侧 nav 的行为（同选择器 + `!important` 稳压），导航保持可见。
+- **修复：设置弹窗覆写误伤通用 Modal**。`preset-settings` 卡片/内部容器选择器改为限定在 overlay 上下文内（`:has` 限定），内测声明等直接挂 body、无 `data-slot` overlay 的通用 Modal 不再被 530px/zoom 覆写。
+- **修复：composer 工具栏在窄屏过宽**。`preset-main` 工具栏紧凑化：gap/内边距缩小、发送按钮 30px、图标 12px、trigger 文字 12px，保持两行布局；命令按钮保持 26px 正方形、trigger 高度还原官方 28px。
+- **修复：移动端侧边栏抽屉依赖生态插件选择器**。`preset-sidebar` 选择器全部改用官方稳定 class（`_frame` / `_sidebarCol` / `_centerCol`），不再依赖 web-ui 的 `data-pane` / `data-dsh-frame`，装不装 web-ui 均生效。
+- **修复：窄屏详情列与顶部 header 重叠**。窄屏（≤900px）隐藏详情列，杜绝详情浮层与顶部 header 重叠；覆盖 web-ui 的 `conversation-header` 60px 让位与 `session-utilities` 按钮 `min-height:44px`（更高特异性 + 同断点，保留 min-width 触摸目标）。
+- **修复：未装 web-ui 时窄屏点正文不收起抽屉**。新增 `dsh-mobile-dismiss` 守卫：未装 web-ui 时窄屏点正文自动收起抽屉（class 定位 + 让位守卫，不误伤抽屉内按钮）。
+- **新增：设置弹窗顶部固定滑动浏览提示**。`overlay ::before`（absolute，不随内容滚动）提示用户可上下滑动浏览弹窗内容。
+
+### Docs (文档)
+- **新增 `screenshots.json`**：收录项目各界面截图图片 URL，便于 README 预览图管理与引用。
+
+---
+
 ## [1.4.0] - 2026-08-24
 
 ### Compatibility (通用插件共存保护)
