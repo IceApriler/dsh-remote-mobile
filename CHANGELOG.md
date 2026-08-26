@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.2] - 2026-08-26
+
+### Features (新功能)
+- **新版本更新提醒**：设置面板打开时从 npm registry 拉取 `dsh-remote-mobile` 最新版本号，与当前安装版本做语义化版本比较；**仅当检测到新版本**时，在标题版本号旁显示一个小巧的红色提醒「🚀 发现新版本 vX.Y.Z」，点击直达 npm 对应发布页。拉取失败（离线 / 网络异常）或已是最新版本时完全不显示，不干扰界面，也无需前端轮询。
+
+### Docs (文档)
+- **README「这是什么」章节补充手机端样式适配说明**：说明插件针对 DSH 界面做的移动端样式适配（侧边栏抽屉折叠与可拖拽展开把手、设置弹窗居中微缩、对话正文高密度排版等）。
+
+---
+
 ## [1.4.1] - 2026-08-26
 
 ### Features (新功能)
