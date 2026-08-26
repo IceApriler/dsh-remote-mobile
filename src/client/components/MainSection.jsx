@@ -70,6 +70,8 @@ export function TailscaleMobileSection(props) {
   const [isSaving, setIsSaving] = useState(false);
   const [showVersionTip, setShowVersionTip] = useState(false);
   const [currentLang, setCurrentLang] = useState(resolveLocale(ctx, status));
+  const [npmLatestVersion, setNpmLatestVersion] = useState('');
+  const [hasUpdate, setHasUpdate] = useState(false);
   // 共存警示横幅的本会话关闭状态（不持久化，刷新后若冲突仍存在会再次提示）
   const [conflictBannerDismissed, setConflictBannerDismissed] = useState(false);
   // 用户是否手动切换过扫码页签：手动选择后，状态轮询不再自动跳回 Tailscale
@@ -153,6 +155,41 @@ export function TailscaleMobileSection(props) {
       })
       .catch(() => {});
   }, [refreshStatusOnly]);
+
+  // 拉取 npm 最新版本号：当存在新版本时，在标题版本号旁给出更新提醒（失败静默降级，不阻塞界面）
+  useEffect(() => {
+    let cancelled = false;
+    fetch('https://registry.npmjs.org/dsh-remote-mobile/latest', { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('npm registry error'))))
+      .then((data) => {
+        if (cancelled) return;
+        const v = data && data.version ? String(data.version) : '';
+        if (!v) return;
+        setNpmLatestVersion(v);
+        const installed = String(PLUGIN_VERSION).replace(/^v/i, '');
+        setHasUpdate(compareVersions(v, installed) > 0);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setHasUpdate(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // 语义化版本比较：a > b 返回 1，a < b 返回 -1，相等返回 0（忽略预发布标识简化处理）
+  const compareVersions = (a, b) => {
+    const pa = a.split('.').map((n) => parseInt(n, 10) || 0);
+    const pb = b.split('.').map((n) => parseInt(n, 10) || 0);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+      const da = pa[i] || 0;
+      const db = pb[i] || 0;
+      if (da > db) return 1;
+      if (da < db) return -1;
+    }
+    return 0;
+  };
 
   useEffect(() => {
     refreshStatusAndCode();
@@ -647,6 +684,32 @@ export function TailscaleMobileSection(props) {
                 </div>
               ) : null}
             </div>
+
+            {/* 存在新版本时的更新提醒（点击直达 npm 发布页） */}
+            {hasUpdate && npmLatestVersion ? (
+              <a
+                href={`https://www.npmjs.com/package/dsh-remote-mobile/v/${npmLatestVersion}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '2px 8px',
+                  borderRadius: '10px',
+                  background: 'rgba(203, 36, 49, 0.12)',
+                  border: '1px solid rgba(203, 36, 49, 0.3)',
+                  color: 'var(--dsw-alias-brand-primary, #f87171)',
+                  fontSize: '11px',
+                  fontWeight: '600',
+                  textDecoration: 'none',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                🚀 {currentLang === 'en' ? `Update available: v${npmLatestVersion}` : `发现新版本 v${npmLatestVersion}`}
+              </a>
+            ) : null}
           </div>
           <div
             style={{
