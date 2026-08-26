@@ -257,6 +257,35 @@ const PRESET_SETTINGS_CSS = `
     overscroll-behavior: contain !important;
   }
 
+  /* 移动端设置弹窗顶部固定提示：内容较宽（530px 等比微缩）需左右滑动浏览。
+     挂在 overlay 容器 ::before 上（absolute 定位相对 fixed overlay），
+     不随弹窗内容滚动，也不参与 flex 居中布局。内测声明等通用 Modal
+     （_root 容器，不在本选择器集合内）不会出现此提示。 */
+  [data-slot*="overlay"]:has([role="dialog"])::before,
+  [class*="_overlay"]:has([role="dialog"])::before,
+  [class*="_modalWrapper"]:has([role="dialog"])::before {
+    content: "↔ 左右滑动浏览设置";
+    position: absolute;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100006 !important;
+    box-sizing: border-box;
+    white-space: nowrap;
+    max-width: calc(100vw - 32px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    background: rgba(0, 0, 0, 0.62);
+    color: #ffffff;
+    font-size: 12px;
+    line-height: 18px;
+    border-radius: 999px;
+    padding: 4px 14px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+    pointer-events: none;
+    text-align: center;
+  }
+
   /* 弹窗卡片：仅命中设置弹窗——外层 overlay 容器内含 role=dialog（设置弹窗由
      data-slot overlay / overlay 类包裹）。内测声明等通用 Modal 直接挂在 body、
      无 data-slot overlay，天然排除，不会被 94vw / 530px 覆写。 */
@@ -288,7 +317,23 @@ const PRESET_SETTINGS_CSS = `
     font-size: 13.5px !important;
   }
 
-  /* 弹窗内部主体容器：固定最小宽度并等比微缩，单屏显示更多内容且字号更精致。
+  /* 弹窗内部等比微缩：dialog 的全部直接子元素（如设置弹窗的 nav 左侧按钮列表 +
+     content 右侧内容）统一 zoom 0.88，保证整窗一致缩放。 */
+  [data-slot*="overlay"]:has([role="dialog"]) [role="dialog"] > *,
+  [data-slot*="overlay"]:has([role="dialog"]) [class*="_dialog"] > *,
+  [data-slot*="overlay"]:has([role="dialog"]) [class*="_modalContent"] > *,
+  [class*="_overlay"]:has([role="dialog"]) [role="dialog"] > *,
+  [class*="_overlay"]:has([role="dialog"]) [class*="_dialog"] > *,
+  [class*="_overlay"]:has([role="dialog"]) [class*="_modalContent"] > *,
+  [class*="_modalWrapper"]:has([role="dialog"]) [role="dialog"] > *,
+  [class*="_modalWrapper"]:has([role="dialog"]) [class*="_dialog"] > *,
+  [class*="_modalWrapper"]:has([role="dialog"]) [class*="_modalContent"] > *,
+  [class*="_settingsModal"] > * {
+    zoom: 0.88 !important;
+  }
+
+  /* 弹窗右侧内容主体（直接 div 子元素）：固定最小宽度并铺满高度，单屏显示更多
+     内容且字号更精致。左侧导航列表不强制宽度，保持官方窄宽。
      同样限定在设置弹窗上下文内，避免波及通用 Modal。 */
   [data-slot*="overlay"]:has([role="dialog"]) [role="dialog"] > div,
   [data-slot*="overlay"]:has([role="dialog"]) [class*="_dialog"] > div,
@@ -303,7 +348,15 @@ const PRESET_SETTINGS_CSS = `
     min-width: 530px !important;
     width: 530px !important;
     height: 100% !important;
-    zoom: 0.88 !important;
+  }
+
+  /* 重置插件市场等弹窗在窄屏隐藏左侧 nav 的行为：保持导航列表可见。
+     该插件规则（@media max-width:560px 隐藏）无 !important，
+     我们同选择器加 !important 即可稳压。 */
+  @media (max-width: 560px) {
+    [role="dialog"]:has([data-dsh-market-root]) > nav {
+      display: block !important;
+    }
   }
 `
 

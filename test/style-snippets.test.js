@@ -85,6 +85,20 @@ test('移动端样式片段模块测试 (style-snippets.ts)', async (t) => {
       assert.ok(settingsCss.includes('[class*="_settingsModal"]'))
       // 不得再出现独立的裸 [role="dialog"] / [class*="_dialog"] 顶层选择器（会波及通用 Modal）
       assert.ok(!/^\s*\[role="dialog"\],$/m.test(settingsCss))
+      // 回归守卫：弹窗等比微缩必须覆盖全部直接子元素（含左侧 nav 按钮列表），
+      // 右侧内容单独保持 530px 最小宽度；否则左侧按钮列表不随整窗缩放
+      assert.ok(settingsCss.includes('[data-slot*="overlay"]:has([role="dialog"]) [role="dialog"] > *'))
+      assert.ok(settingsCss.includes('[class*="_overlay"]:has([role="dialog"]) [role="dialog"] > *'))
+      assert.ok(settingsCss.includes('[data-slot*="overlay"]:has([role="dialog"]) [role="dialog"] > div'))
+      assert.ok(/min-width:\s*530px !important/.test(settingsCss))
+      // 回归守卫：重置插件市场弹窗窄屏隐藏左侧 nav 的行为（同选择器 + !important 稳压）
+      assert.ok(settingsCss.includes('[role="dialog"]:has([data-dsh-market-root]) > nav'))
+      assert.ok(/display:\s*block !important/.test(settingsCss))
+      // 回归守卫：移动端设置弹窗顶部固定滑动提示（挂在 overlay ::before，absolute 不随内容滚动）
+      assert.ok(settingsCss.includes('[data-slot*="overlay"]:has([role="dialog"])::before'))
+      assert.ok(settingsCss.includes('左右滑动浏览'))
+      assert.ok(/z-index:\s*100006 !important/.test(settingsCss))
+      assert.ok(settingsCss.includes('pointer-events: none'))
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
