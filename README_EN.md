@@ -69,7 +69,7 @@ dsh plugin --profile web add dsh-remote-mobile
 <span id="config"></span>
 ### 2. Configuration (Open External Listening)
 
-Because DSH defaults to `127.0.0.1`, ensure your `~/.dsh/profiles/web/cordis.patch.yml` includes the following configuration to allow external connectivity:
+Because DSH defaults to `127.0.0.1`, ensure your `~/.dsh/profiles/web/cordis.patch.yml` (on Windows: `C:\Users\<username>\.dsh\profiles\web\cordis.patch.yml` or enter `%USERPROFILE%\.dsh` in File Explorer) includes the following configuration to allow external connectivity:
 
 ```yaml
 # 1. Allow webserver to listen for external connections (Required)
@@ -89,7 +89,7 @@ Because DSH defaults to `127.0.0.1`, ensure your `~/.dsh/profiles/web/cordis.pat
   disabled: true
 ```
 
-> **💡 Note**: Plugin self-registration is automatically handled by the DSH Bundle system. You do **not** need to add `id: remote-mobile` manually.
+> **💡 Note**: Plugin self-registration is automatically handled by the DSH Bundle system. You do **not** need to add `id: remote-mobile` manually. Windows users can press `Win + R` and enter `%USERPROFILE%\.dsh\profiles\web` to quickly jump to the configuration folder.
 
 ---
 
@@ -202,6 +202,7 @@ pnpm add dsh-remote-mobile
 ```
 
 ### Method 4: Local Source Development (Instant Symlink Sync)
+
 ```bash
 # 1. Clone source code
 git clone https://github.com/IceApriler/dsh-remote-mobile.git
@@ -210,11 +211,27 @@ cd dsh-remote-mobile
 # 2. Install dependencies & build
 npm install
 npm run build
-
-# 3. Create symlink to DSH runtime (changes take effect instantly on npm run build)
-rm -rf ~/.dsh/profiles/web/node_modules/dsh-remote-mobile
-ln -s $(pwd) ~/.dsh/profiles/web/node_modules/dsh-remote-mobile
 ```
+
+**Create symlink to DSH runtime (changes take effect instantly on `npm run build`):**
+
+* **macOS / Linux**:
+  ```bash
+  rm -rf ~/.dsh/profiles/web/node_modules/dsh-remote-mobile
+  ln -s $(pwd) ~/.dsh/profiles/web/node_modules/dsh-remote-mobile
+  ```
+
+* **Windows (PowerShell)**:
+  ```powershell
+  Remove-Item -Recurse -Force "$HOME\.dsh\profiles\web\node_modules\dsh-remote-mobile"
+  New-Item -ItemType Junction -Path "$HOME\.dsh\profiles\web\node_modules\dsh-remote-mobile" -Target (Get-Location)
+  ```
+
+* **Windows (CMD)**:
+  ```cmd
+  rmdir /s /q %USERPROFILE%\.dsh\profiles\web\node_modules\dsh-remote-mobile
+  mklink /J %USERPROFILE%\.dsh\profiles\web\node_modules\dsh-remote-mobile %CD%
+  ```
 
 </details>
 
@@ -285,6 +302,8 @@ Custom snippets (style mini-plugins) and their enabled states are persisted in `
 
 ## 📂 Local File Storage Locations
 
+> **💡 Path Note**: On macOS / Linux, the base path is `~/.dsh/`; on Windows, it resolves to `C:\Users\<username>\.dsh\` (you can directly paste `%USERPROFILE%\.dsh` into the File Explorer address bar).
+
 | Path | Description | Security Level |
 |---|---|---|
 | `~/.dsh/settings.yaml` | Global security policies & bypass toggles | User R/W |
@@ -302,9 +321,14 @@ Custom snippets (style mini-plugins) and their enabled states are persisted in `
 
 **Answer**: This means **port 3080 is held by another process** (in most cases a previous `dsh web` instance has not fully exited — e.g. a hidden instance launched by a desktop shortcut, or overlapping old/new processes during restart). It is **unrelated to which plugins are installed**. Troubleshooting:
 
-1. Find the process holding the port: `lsof -nP -iTCP:3080` (Windows: `netstat -ano | findstr 3080`);
-2. Terminate the old instance (`kill <PID>` / Task Manager) and start `dsh web` again;
-3. Note: an instance launched via the desktop shortcut (dsh-desktop-launcher) and one started manually in a terminal cannot run at the same time.
+1. **Find the process holding the port**:
+   * **macOS / Linux**: `lsof -nP -iTCP:3080`
+   * **Windows**: `netstat -ano | findstr 3080` (PID is in the rightmost column)
+2. **Terminate the old instance**:
+   * **macOS / Linux**: `kill <PID>`
+   * **Windows**: `taskkill /F /PID <PID>` (or kill the Node process in Task Manager)
+3. Start `dsh web` again.
+4. **Note**: An instance launched via the desktop shortcut (dsh-desktop-launcher) and one started manually in a terminal cannot run simultaneously.
 
 If your log instead shows `service "remoteWebUiPairing" has been registered`, please upgrade this plugin to the latest version — newer versions ship with generic coexistence protection and can start normally alongside other remote-access plugins by yielding the service automatically, with a banner explaining the details in the settings panel.
 </details>
@@ -312,10 +336,17 @@ If your log instead shows `service "remoteWebUiPairing" has been registered`, pl
 <details>
 <summary><b>Q1: Getting "Connection Refused" or cannot open page when scanning on mobile?</b></summary>
 
-**Answer**: Please verify the following 3 items:
-1. Ensure `host: '0.0.0.0'` is properly configured in `cordis.patch.yml` and DSH has been restarted;
-2. For LAN access, ensure your mobile phone and computer are connected to the exact same Wi-Fi router;
-3. If OS firewall is active on the computer, ensure inbound traffic on port `3080` is allowed.
+**Answer**: Please verify the following items step by step:
+1. **Configuration**: Ensure `host: '0.0.0.0'` is properly configured in `cordis.patch.yml` and DSH has been restarted;
+2. **Same Network**: For LAN access, ensure your mobile phone and computer are connected to the exact same Wi-Fi router, and disable standalone VPN/proxy apps on your phone;
+3. **Windows Defender Firewall (Common for Windows users)**:
+   * When prompted by the Windows Firewall popup on startup, ensure both **"Private networks"** and **"Public networks"** are checked before allowing access;
+   * If you missed the prompt or still cannot connect, run the following command in **PowerShell as Administrator** to allow inbound traffic on port 3080:
+     ```powershell
+     New-NetFirewallRule -DisplayName "DSH Web 3080" -Direction Inbound -LocalPort 3080 -Protocol TCP -Action Allow
+     ```
+   * **Check Wi-Fi Network Profile**: Under Windows "Settings -> Network & Internet -> Wi-Fi", make sure your current Wi-Fi profile is set to **"Private network"** (Windows "Public network" blocks inbound LAN connections by default);
+4. **Virtual / WSL Network Adapters**: If WSL2 or Hyper-V is installed on Windows, virtual network adapters (e.g. `172.x.x.x`) may be present. Make sure you use the physical WLAN / Wi-Fi LAN IP or the Tailscale QR code shown in the plugin settings panel.
 </details>
 
 <details>

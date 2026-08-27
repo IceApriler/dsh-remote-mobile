@@ -69,7 +69,7 @@ dsh plugin --profile web add dsh-remote-mobile
 <span id="config"></span>
 ### 2. 前置配置（开放外部监听）
 
-由于 DSH 默认仅监听 `127.0.0.1`，为了使 Tailscale 私网或局域网设备能够正常连通，请确保在 `~/.dsh/profiles/web/cordis.patch.yml` 中包含以下配置：
+由于 DSH 默认仅监听 `127.0.0.1`，为了使 Tailscale 私网或局域网设备能够正常连通，请确保在 `~/.dsh/profiles/web/cordis.patch.yml`（Windows 对应 `C:\Users\<用户名>\.dsh\profiles\web\cordis.patch.yml` 或在资源管理器直接输入 `%USERPROFILE%\.dsh`）中包含以下配置：
 
 ```yaml
 # 1. 允许 webserver 监听外部网络连接（必选）
@@ -88,7 +88,7 @@ dsh plugin --profile web add dsh-remote-mobile
   disabled: true
 ```
 
-> **💡 说明**：插件自身注册已由 DSH Bundle 体系全自动处理，**无需**在 `cordis.patch.yml` 中额外添加 `id: remote-mobile`。
+> **💡 说明**：插件自身注册已由 DSH Bundle 体系全自动处理，**无需**在 `cordis.patch.yml` 中额外添加 `id: remote-mobile`。Windows 用户可按 `Win + R` 键输入 `%USERPROFILE%\.dsh\profiles\web` 快速直达配置目录。
 
 ---
 
@@ -203,6 +203,7 @@ pnpm add dsh-remote-mobile
 ```
 
 ### 方式 4：本地源码开发与调试（软链接即时生效）
+
 ```bash
 # 1. 克隆代码至本地
 git clone https://github.com/IceApriler/dsh-remote-mobile.git
@@ -211,11 +212,27 @@ cd dsh-remote-mobile
 # 2. 安装依赖并编译打包
 npm install
 npm run build
-
-# 3. 建立软链接到 DSH 运行环境（开发修改后 npm run build 即时生效）
-rm -rf ~/.dsh/profiles/web/node_modules/dsh-remote-mobile
-ln -s $(pwd) ~/.dsh/profiles/web/node_modules/dsh-remote-mobile
 ```
+
+**建立软链接到 DSH 运行环境（开发修改后 `npm run build` 即时生效）：**
+
+* **macOS / Linux**：
+  ```bash
+  rm -rf ~/.dsh/profiles/web/node_modules/dsh-remote-mobile
+  ln -s $(pwd) ~/.dsh/profiles/web/node_modules/dsh-remote-mobile
+  ```
+
+* **Windows (PowerShell)**：
+  ```powershell
+  Remove-Item -Recurse -Force "$HOME\.dsh\profiles\web\node_modules\dsh-remote-mobile"
+  New-Item -ItemType Junction -Path "$HOME\.dsh\profiles\web\node_modules\dsh-remote-mobile" -Target (Get-Location)
+  ```
+
+* **Windows (CMD)**：
+  ```cmd
+  rmdir /s /q %USERPROFILE%\.dsh\profiles\web\node_modules\dsh-remote-mobile
+  mklink /J %USERPROFILE%\.dsh\profiles\web\node_modules\dsh-remote-mobile %CD%
+  ```
 
 </details>
 
@@ -286,6 +303,8 @@ dsh-remote-mobile:
 
 ## 📂 本地文件存储位置
 
+> **💡 路径提示**：在 macOS / Linux 下根目录为 `~/.dsh/`；在 Windows 下对应为 `C:\Users\<你的用户名>\.dsh\`（可在文件资源管理器地址栏直接输入 `%USERPROFILE%\.dsh` 直达）。
+
 | 文件路径 | 说明 | 安全级别 |
 |---|---|---|
 | `~/.dsh/settings.yaml` | 全局安全策略与免密开关配置 | 用户级读写 |
@@ -303,9 +322,14 @@ dsh-remote-mobile:
 
 **答**：这是 **3080 端口被其他进程占用**（绝大多数是上一个 `dsh web` 实例尚未完全退出，例如桌面快捷方式拉起的隐藏实例、或重启时新旧进程交叠），**与安装了哪个插件无关**。排查步骤：
 
-1. 查找占用端口的进程：`lsof -nP -iTCP:3080`（Windows 用 `netstat -ano | findstr 3080`）；
-2. 结束旧实例（`kill <PID>` / 任务管理器），再重新启动 `dsh web`；
-3. 注意：桌面快捷方式（dsh-desktop-launcher 生成的实例）与终端手动启动的实例不能同时运行。
+1. **查找占用端口的进程**：
+   * **macOS / Linux**：`lsof -nP -iTCP:3080`
+   * **Windows**：`netstat -ano | findstr 3080`（最后一列为 PID）
+2. **结束旧实例**：
+   * **macOS / Linux**：`kill <PID>`
+   * **Windows**：`taskkill /F /PID <PID>`（或在任务管理器中结束对应 Node 进程）
+3. 重新启动 `dsh web` 即可。
+4. **注意**：桌面快捷方式（dsh-desktop-launcher 生成的后台实例）与终端手动启动的实例不能同时运行。
 
 另：若日志显示的是 `service "remoteWebUiPairing" has been registered` 类错误，请升级本插件至最新版本——新版已内置通用共存保护，与其他远程接入类插件并存时可正常启动并自动让出服务，并在设置面板顶部提示冲突详情。
 </details>
@@ -313,10 +337,17 @@ dsh-remote-mobile:
 <details>
 <summary><b>Q1: 手机扫码后提示「连接被拒绝」或无法打开页面？</b></summary>
 
-**答**：请检查以下三项：
-1. 确保电脑上的 `cordis.patch.yml` 中已配置 `host: '0.0.0.0'`，且 DSH 已经重启；
-2. 局域网访问时，确保手机与电脑连接在同一个 Wi-Fi / 路由器下；
-3. 如果开启了电脑操作系统自带的防火墙，请确保允许入站访问 `3080` 端口。
+**答**：请按以下步骤逐一排查：
+1. **配置检查**：确保电脑上的 `cordis.patch.yml` 中已配置 `host: '0.0.0.0'`，且 DSH 已经重启；
+2. **同一局域网**：局域网访问时，确保手机与电脑连接在同一个 Wi-Fi / 路由器下，且未开启手机端的独立代理/VPN（避免流量绕过局域网）；
+3. **Windows 防火墙排查（Windows 用户常见原因）**：
+   * 启动 DSH 时如弹出「Windows Defender 防火墙」警报，请务必勾选 **「专用网络」** 和 **「公用网络」** 并允许访问；
+   * 若错过弹窗或依然无法连通，可使用**管理员权限打开 PowerShell** 执行以下命令一键放行端口：
+     ```powershell
+     New-NetFirewallRule -DisplayName "DSH Web 3080" -Direction Inbound -LocalPort 3080 -Protocol TCP -Action Allow
+     ```
+   * **检查 Wi-Fi 网络类型**：在 Windows「设置 -> 网络和 Internet -> Wi-Fi」中，确保当前 Wi-Fi 网络配置文件类型已设为 **「专用网络」**（若为「公用网络」，Windows 防火墙会默认拦截局域网入站请求）；
+4. **多网卡环境（WSL / 虚拟机）**：Windows 如安装了 WSL2 或 Hyper-V，可能会生成虚拟网卡 IP（如 `172.x.x.x`）。请在插件设置面板中确认使用的是物理无线网卡（WLAN / Wi-Fi）对应的局域网 IP 或 Tailscale 二维码。
 </details>
 
 <details>
