@@ -22,7 +22,7 @@ English Documentation · [简体中文](./README.md)
   <a href="#config">Required Config</a> •
   <a href="#preview">UI Preview</a> •
   <a href="#features">Features</a> •
-  <a href="#install">Installation</a> •
+  <a href="#install">Installation & Update</a> •
   <a href="#faq">FAQ</a>
 </p>
 
@@ -175,7 +175,7 @@ The DSH web UI still carries many desktop-oriented styles on phones. This plugin
 ---
 
 <span id="install"></span>
-## 📦 All Installation Methods
+## 📦 Installation & Update
 
 <details>
 <summary><b>Expand to view all 4 installation methods</b></summary>
@@ -218,7 +218,21 @@ ln -s $(pwd) ~/.dsh/profiles/web/node_modules/dsh-remote-mobile
 
 </details>
 
-### Uninstalling
+### 🔄 Updating Plugin
+
+Run the update command in your terminal and restart DSH:
+
+```bash
+# Method 1: DSH CLI One-Command Update (Recommended)
+dsh plugin --profile web update dsh-remote-mobile
+
+# Method 2: Update via Package Manager in Profile Directory
+cd ~/.dsh/profiles/web && pnpm update dsh-remote-mobile
+```
+
+> **💡 Tip**: You can also click the update button in the Web console under **Settings ⚙️ -> Plugins -> Plugin Management**, or run `dsh plugin --profile web add dsh-remote-mobile@latest`.
+
+### 🗑️ Uninstalling
 
 ```bash
 dsh plugin --profile web remove dsh-remote-mobile

@@ -22,7 +22,7 @@
   <a href="#config">必备配置</a> •
   <a href="#preview">界面预览</a> •
   <a href="#features">功能特性</a> •
-  <a href="#install">安装方式</a> •
+  <a href="#install">安装与更新</a> •
   <a href="#faq">常见问题</a>
 </p>
 
@@ -176,7 +176,7 @@ DSH Web 界面在手机上仍有不少沿袭桌面端的样式问题，插件内
 ---
 
 <span id="install"></span>
-## 📦 全部安装方式
+## 📦 安装与更新
 
 <details>
 <summary><b>展开查看全部 4 种安装方式</b></summary>
@@ -219,7 +219,21 @@ ln -s $(pwd) ~/.dsh/profiles/web/node_modules/dsh-remote-mobile
 
 </details>
 
-### 卸载插件
+### 🔄 更新插件
+
+在终端执行更新指令，更新后重启 DSH 即可生效：
+
+```bash
+# 方式 1：通过 DSH 命令行一键更新（推荐）
+dsh plugin --profile web update dsh-remote-mobile
+
+# 方式 2：通过 Profile 目录包管理器更新
+cd ~/.dsh/profiles/web && pnpm update dsh-remote-mobile
+```
+
+> **💡 提示**：也可以在 Web 控制台 **设置 ⚙️ -> 插件 -> 插件管理** 中点击对应插件的更新按钮，或重新执行 `dsh plugin --profile web add dsh-remote-mobile@latest`。
+
+### 🗑️ 卸载插件
 
 ```bash
 dsh plugin --profile web remove dsh-remote-mobile
