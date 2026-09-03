@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.3] - 2026-09-03
+
+### Fixed (缺陷修复)
+- **修复：样式覆写启用后提问弹窗被全屏黑纱遮罩盖住且宽度被强制撑满**。`preset-sidebar` 的 `[class*="_frame"]` 选择器用后缀匹配，同时命中三栏布局帧（`pI_x6G_frame`）与提问卡片（`Mbwy4a_frame`，其 class 名同样含 `_frame`）。提问卡片没有 `data-sidebar-collapsed` 属性，被 `:not(...)::after` 规则叠加了 `position:fixed; inset:0; z-index:899; background:rgb(0 0 0/24%)` 的全屏黑纱（表现为弹窗上面多了一层遮罩），同时被 `width:100vw !important` 强制撑满、覆盖了自身 `max-width:var(--dsh-chat-content-width)` 导致不自适应宽度。现用 `:has([class*="_sidebarCol"])` 把 `_frame` 相关规则精确锁定到三栏布局帧，提问卡片不再被误伤。
+- **修复：提问弹窗左右边距过宽、选项字号偏大**。`preset-main` 新增提问卡片适配（以官方稳定属性 `data-question-key` 为锚点）：左右内边距收窄到 `8px`（官方为 `calc(composer-side-clearance + 16px)`），选项标题字号 14px→13px、说明 14px→12.5px，行高同步收敛，标题微调 16px→15px，与对话正文紧凑排版保持一致。
+- **修复：移动端侧边栏点击项目名称后抽屉被自动收起**。生态插件「点条目自动收回抽屉」增强会把条目内所有点击一律视为选中、下一帧程序化收起抽屉，导致选中高亮刚浮现，展开/收起箭头与新增/更多操作图标来不及操作抽屉就被关掉。现把防误收起守卫的记录范围从「条目内次级控件（按钮/箭头）」扩展到「条目任意部位（含项目名称主体）」，900ms 窗口内的程序化收起调用被吞掉，抽屉保持展开；真实点击收起按钮与点抽屉外暗处收起的官方行为不受影响。
+
+---
+
 ## [1.4.2] - 2026-08-26
 
 ### Features (新功能)

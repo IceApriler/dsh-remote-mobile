@@ -94,8 +94,11 @@ const PRESET_SIDEBAR_CSS = `
   /* 1. 最外层三栏布局：在移动端主工作区占满 100% 全宽，消除侧边栏强制占位。
      选择器全部基于官方 CSS Modules 稳定后缀（_frame/_sidebarCol/_centerCol，
      前缀 hash 随机、后缀稳定），不依赖 @linxin666/dsh-web-ui-all 注入的
-     data-pane / data-dsh-frame 属性，安装与否均生效。 */
-  [class*="_frame"] {
+     data-pane / data-dsh-frame 属性，安装与否均生效。
+     注意：_frame 后缀同样命中「提问卡片」(Mbwy4a_frame 等非三栏布局元素)，
+     故用 :has([class*="_sidebarCol"]) 把规则精确锁定到真正承载三栏布局的
+     外层 frame，避免提问弹窗被强制 100vw 撑满、被遮罩盖住。 */
+  [class*="_frame"]:has([class*="_sidebarCol"]) {
     grid-template-columns: 0px minmax(0px, 1fr) 0px !important;
     width: 100vw !important;
     max-width: 100vw !important;
@@ -103,7 +106,7 @@ const PRESET_SIDEBAR_CSS = `
     position: relative !important;
   }
 
-  [class*="_centerCol"] {
+  [class*="_frame"]:has([class*="_sidebarCol"]) [class*="_centerCol"] {
     width: 100vw !important;
     max-width: 100vw !important;
   }
@@ -141,13 +144,15 @@ const PRESET_SIDEBAR_CSS = `
      拦截全部点击。压到 899：低于抽屉、仍高于正文(≤100)，「点抽屉外暗处
      自动收回」的能力保留。
      - 装了 web-ui 时：它生成 [data-dsh-frame]:not([data-sidebar-collapsed])::after
-       （z-index:1050），由下方 [class*="_frame"]::after 的 !important 统一压到 899。
-     - 未装 web-ui 时：官方无遮罩，由下方 :not([data-sidebar-collapsed]) 规则补齐。 */
-  [class*="_frame"]::after {
+       （z-index:1050），由下方 :has 锁定布局帧的 ::after 的 !important 统一压到 899。
+     - 未装 web-ui 时：官方无遮罩，由下方 :not([data-sidebar-collapsed]) 规则补齐。
+     遮罩必须挂在三栏布局帧上（:has([class*="_sidebarCol"])），否则 _frame 后缀
+     也会命中提问卡片等内层元素，把全屏黑纱盖到弹窗上面。 */
+  [class*="_frame"]:has([class*="_sidebarCol"])::after {
     z-index: 899 !important;
   }
 
-  [class*="_frame"]:not([data-sidebar-collapsed])::after {
+  [class*="_frame"]:has([class*="_sidebarCol"]):not([data-sidebar-collapsed])::after {
     content: "";
     position: fixed;
     inset: 0;
@@ -611,6 +616,30 @@ const PRESET_MAIN_CSS = `
   max-width: 12px !important;
   max-height: 12px !important;
   flex: none !important;
+}
+
+/* 6. 提问卡片（Mbwy4a_frame，data-question-key 为官方稳定属性锚点）：
+   收窄左右外边距（官方 padding: calc(composer-side-clearance + 16px) 偏大），
+   选项文案字号跟随正文（正文 12.5px，选项标题 13px、说明 12.5px），
+   行高同步收敛，保持卡片整体与对话紧凑排版一致。 */
+[data-question-key] {
+  padding-left: 8px !important;
+  padding-right: 8px !important;
+}
+
+[data-question-key] [class*="_optionLabel"] {
+  font-size: 13px !important;
+  line-height: 20px !important;
+}
+
+[data-question-key] [class*="_description"] {
+  font-size: 12.5px !important;
+  line-height: 20px !important;
+}
+
+[data-question-key] [class*="_title"] {
+  font-size: 15px !important;
+  line-height: 21px !important;
 }
 `
 

@@ -124,13 +124,14 @@ export const DRAGGABLE_NAV_SNIPPET = `
    * 侧边栏条目（role=treeitem）后，于下一帧程序化点击「收起侧边栏」按钮自动收回抽屉。
    * 该判定无法区分「选中条目回主区」与「点击条目内的次级操作图标」（更多操作 ⋯ /
    * 展开箭头等），导致后者抽屉被误关。
-   * 这里记录最近一次对条目内次级控件（按钮 / 箭头图标）的触摸时间，并包装
-   * HTMLButtonElement.prototype.click：短时间窗口内的程序化收起调用直接忽略；
-   * 用户真实点击收起按钮（浏览器合成事件不走 prototype.click）与点击条目主体
-   * （非按钮/箭头）的官方行为均不受影响。 */
+   * 这里记录最近一次对条目内任意部位（项目名称主体 / 次级按钮 / 箭头图标）的触摸时间，
+   * 并包装 HTMLButtonElement.prototype.click：短时间窗口内的程序化收起调用直接忽略。
+   * 覆盖条目主体是为了让选中高亮后浮现的展开/收起箭头与新增/更多操作图标有足够的
+   * 停留操作时间；用户真实点击收起按钮（浏览器合成事件不走 prototype.click）与
+   * 点击抽屉外暗处收起的官方行为均不受影响。 */
   if (!window.__dshRmAntiCollapseInstalled__) {
     window.__dshRmAntiCollapseInstalled__ = true;
-    var lastSecondaryTapAt = 0;
+    var lastEntryTapAt = 0;
     document.addEventListener('pointerdown', function (e) {
       try {
         var t = e.target;
@@ -138,10 +139,7 @@ export const DRAGGABLE_NAV_SNIPPET = `
         if (!t.closest('[data-pane="sidebar"], [class*="_sidebarCol"]')) return;
         var entry = t.closest('[role="treeitem"], [data-dsh-part="sidebar-entry"]');
         if (!entry) return;
-        var isSecondaryControl =
-          !!t.closest('button, [role="button"]') ||
-          !!t.closest('[class*="_arrow"]');
-        if (isSecondaryControl) lastSecondaryTapAt = Date.now();
+        lastEntryTapAt = Date.now();
       } catch (err) {}
     }, { capture: true, passive: true });
 
@@ -151,8 +149,8 @@ export const DRAGGABLE_NAV_SNIPPET = `
         var isSidebarToggle =
           this.matches('[data-dsh-responsive-part="sidebar-toggle"]') ||
           /收起侧边栏|Collapse sidebar|Open sidebar/i.test(this.getAttribute('aria-label') || '');
-        if (isSidebarToggle && Date.now() - lastSecondaryTapAt < 900) {
-          return; // 吞掉紧随次级操作图标点击之后的程序化收起
+        if (isSidebarToggle && Date.now() - lastEntryTapAt < 900) {
+          return; // 吞掉紧随条目任意部位点击之后的程序化收起
         }
       } catch (err) {}
       return protoClick.apply(this, arguments);
@@ -292,7 +290,8 @@ export const MOBILE_DISMISS_SNIPPET = `
         }
         // 点击侧边栏条目（选中后回主区）→ 下一帧程序化收起。
         // 既有防误收起守卫（dsh-draggable-nav 包装 HTMLButtonElement.prototype.click
-        // + 900ms 窗口）会拦截「点条目内次级操作图标」后的误收起，行为与 web-ui 一致。
+        // + 900ms 窗口）会拦截「点条目任意部位（含项目名称主体）」后的误收起，
+        // 保证选中高亮后浮现的展开/收起箭头与新增/更多操作图标可操作，行为与 web-ui 一致。
         if (target.closest('[class*="_toggle"]')) return;
         if (!target.closest('[role="treeitem"], [data-dsh-part="sidebar-entry"]')) return;
         if (raf !== 0) cancelAnimationFrame(raf);

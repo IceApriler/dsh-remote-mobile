@@ -50,8 +50,10 @@ test('移动端样式片段模块测试 (style-snippets.ts)', async (t) => {
       assert.ok(!sidebarCss.includes('99999'))
       // 回归守卫：官方/生态 frame::after 全屏点击遮罩（z=1050）必须压到抽屉(900)之下，
       // 否则黑纱会罩住抽屉内容并拦截点击；未装 web-ui 时由 :not([data-sidebar-collapsed]) 规则补齐遮罩
-      assert.ok(sidebarCss.includes('[class*="_frame"]::after'))
-      assert.ok(sidebarCss.includes('[class*="_frame"]:not([data-sidebar-collapsed])::after'))
+      // （:has([class*="_sidebarCol"]) 把命中范围锁定到三栏布局帧，避免提问卡片 Mbwy4a_frame 等
+      //   也含 _frame 后缀的内层元素被强制 100vw 撑满或被 ::after 全屏黑纱盖住）
+      assert.ok(sidebarCss.includes('[class*="_frame"]:has([class*="_sidebarCol"])::after'))
+      assert.ok(sidebarCss.includes('[class*="_frame"]:has([class*="_sidebarCol"]):not([data-sidebar-collapsed])::after'))
       assert.ok(/z-index:\s*899 !important/.test(sidebarCss))
       // 回归守卫：移动端 UA 下隐藏官方 Tooltip 气泡（触屏点击后 mouseleave/blur 永不触发导致气泡永久滞留）
       assert.ok(sidebarCss.includes('html[data-dsh-mobile="1"] [role="tooltip"]'))
@@ -99,6 +101,11 @@ test('移动端样式片段模块测试 (style-snippets.ts)', async (t) => {
       assert.ok(settingsCss.includes('左右滑动浏览'))
       assert.ok(/z-index:\s*100006 !important/.test(settingsCss))
       assert.ok(settingsCss.includes('pointer-events: none'))
+      // 回归守卫：_frame 后缀必须用 :has([class*="_sidebarCol"]) 锁定到三栏布局帧，
+      // 否则提问卡片 Mbwy4a_frame 等内层元素会被强制 width:100vw 撑满、被 ::after 全屏黑纱盖住
+      assert.ok(sidebarCss.includes('[class*="_frame"]:has([class*="_sidebarCol"])'))
+      assert.ok(!sidebarCss.match(/^\s*\[class\*="_frame"\]\s*\{$/m))
+      assert.ok(!sidebarCss.match(/^\s*\[class\*="_frame"\]\[class\*="_centerCol"\]/m))
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
@@ -222,6 +229,13 @@ test('移动端样式片段模块测试 (style-snippets.ts)', async (t) => {
       assert.ok(mainPart.includes('[data-composer-card="true"] [class*="_row"] [class*="_primary"]'))
       assert.ok(/width:\s*30px !important/.test(mainPart))
       assert.ok(mainPart.includes('[data-composer-card="true"] [class*="_row"] svg'))
+      // 回归守卫：提问卡片（Mbwy4a_frame，data-question-key 锚点）收窄左右边距，
+      // 选项字号跟随正文（标签 13px / 说明 12.5px），避免弹窗撑满或字号过大
+      assert.ok(mainPart.includes('[data-question-key]'))
+      assert.ok(mainPart.includes('[data-question-key] [class*="_optionLabel"]'))
+      assert.ok(/padding-left:\s*8px !important/.test(mainPart))
+      assert.ok(/font-size:\s*13px !important/.test(mainPart))
+      assert.ok(/font-size:\s*12\.5px !important/.test(mainPart))
 
       // 双端开 → 全宽度原样；仅 PC → 宽屏块
       store.setEnabled('preset-main', 'pc', true)

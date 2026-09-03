@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import { SessionStore } from '../lib/auth/token.js'
-import { patchHttpServerWithVirtualizer, CRYPTO_POLYFILL_SNIPPET, CLIPBOARD_POLYFILL_SNIPPET } from '../lib/bridge/compat.js'
+import { patchHttpServerWithVirtualizer, CRYPTO_POLYFILL_SNIPPET, CLIPBOARD_POLYFILL_SNIPPET, DRAGGABLE_NAV_SNIPPET } from '../lib/bridge/compat.js'
 import { getClientIp } from '../lib/auth/tailscale.js'
 import { StyleSnippetStore } from '../lib/styles/style-snippets.js'
 
@@ -317,5 +317,18 @@ test('上下文虚拟化与兼容性补丁测试 (compat.ts)', async (t) => {
     }
 
     mockServer.emit('request', req, res)
+  })
+
+  await t.test('防误收起守卫：点击项目名称（条目主体）后不程序化收起抽屉', () => {
+    // 回归守卫：点击侧边栏条目任意部位（含项目名称主体，不只按钮/箭头）都应被记录，
+    // 使选中高亮后浮现的展开/收起箭头与新增/更多操作图标有停留操作时间。
+    assert.ok(DRAGGABLE_NAV_SNIPPET.includes('var lastEntryTapAt = 0'))
+    assert.ok(DRAGGABLE_NAV_SNIPPET.includes('lastEntryTapAt = Date.now()'))
+    assert.ok(!DRAGGABLE_NAV_SNIPPET.includes('lastSecondaryTapAt'))
+    assert.ok(DRAGGABLE_NAV_SNIPPET.includes('isSidebarToggle && Date.now() - lastEntryTapAt < 900'))
+    // 条目主体匹配：仍然限定在侧边栏内的 treeitem / sidebar-entry
+    assert.ok(DRAGGABLE_NAV_SNIPPET.includes('[role="treeitem"], [data-dsh-part="sidebar-entry"]'))
+    // 收起行为仍被守卫吞掉（真实用户点击收起按钮走浏览器合成事件，不受影响）
+    assert.ok(DRAGGABLE_NAV_SNIPPET.includes('收起侧边栏|Collapse sidebar|Open sidebar'))
   })
 })
