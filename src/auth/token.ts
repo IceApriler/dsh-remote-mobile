@@ -713,10 +713,10 @@ export class SessionStore extends EventEmitter {
     const authHeader = req.headers.authorization || ''
     if (authHeader.startsWith('Bearer ')) return authHeader.slice(7).trim()
 
-    if (req.url && req.url.includes('token=')) {
+    if (req.url && (req.url.includes('rm_token=') || req.url.includes('auth_token='))) {
       try {
         const u = new URL(req.url, 'http://localhost')
-        const t = u.searchParams.get('token')
+        const t = u.searchParams.get('rm_token') || u.searchParams.get('auth_token')
         if (t) return t
       } catch {}
     }

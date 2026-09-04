@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-09-04
+
+### Compatibility (适配 dsh@0.1.2-rc.1 官方 Token 鉴权)
+- **适配：透明接管官方底座临时 Token 鉴权，消除双重鉴权冗余**。DSH 0.1.2-rc.1 官方底座引入了进程级临时启动 Token（`?token=xxxx`）与全链路 RPC/WebSocket 401 阻断；装有本插件的用户在进程重启后，手机已配对的直连书签会遭遇官方 401 报错。现通过对底座 `connection` 服务（`authorizeIndex`、`requestRejection`、`browserAuth.isAuthenticated`）实施切面代理：凡通过本插件门禁（本机回环、Tailscale/LAN 免密直连、已扫码配对/长期密码认证）的请求直接放行，无需手动复制官方临时 Token，手机书签直连与局域网免密恢复丝滑体验；同时兼容保留官方原生合法 token 的换取逻辑。
+- **优化：终端就绪输出专属卡片**。服务启动后在控制台打印美观的边框横幅，明确标注「官方临时 Token 鉴权已接管，PC/移动端访问无需携带官方token」，按类型列出本机回环、局域网、Tailscale 私网等可用直连地址，并附带设置页配置指引与项目文档链接。
+- **优化：URL Token 提取解耦**。`extractTokenFromRequest` 优化参数提取，支持 `rm_token` 与 `auth_token`，避免官方 `token=` 干扰插件内部会话逻辑。
+
+---
+
 ## [1.4.3] - 2026-09-03
 
 ### Fixed (缺陷修复)

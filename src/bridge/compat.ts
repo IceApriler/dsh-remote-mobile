@@ -32,8 +32,10 @@
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { timingSafeEqual } from 'node:crypto'
 import type { SessionStore } from '../auth/token.js'
 import { getClientIp, isTailscaleIp, isLanIp } from '../auth/tailscale.js'
+import { isLoopbackRequest } from '../auth/gate.js'
 import {
   isMobileUserAgent,
   applyDataMobileAttr,
@@ -745,3 +747,110 @@ export function registerRemoteWebUiPairingBridge(ctx: any, store: SessionStore):
 
   decide().catch(() => {})
 }
+
+/**
+ * 恒定时间字符串比较，防止针对 secret token 的时序攻击
+ */
+function safeStringEqual(a: string, b: string): boolean {
+  if (typeof a !== 'string' || typeof b !== 'string') return false
+  try {
+    const bufA = Buffer.from(a, 'utf8')
+    const bufB = Buffer.from(b, 'utf8')
+    if (bufA.length !== bufB.length) return false
+    return timingSafeEqual(bufA, bufB)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 判定一个请求是否已获得 dsh-remote-mobile 门禁授权（包括回环、免密直连与已认证会话）
+ */
+export function isRequestAuthorizedByGate(req: any, store: SessionStore): boolean {
+  if (!req) return false
+  // 1. 本机 127.0.0.1 / ::1 回环无条件放行
+  if (isLoopbackRequest(req)) return true
+
+  const clientIp = getClientIp(req)
+  const options = store.getOptions()
+
+  // 2. Tailscale 私网免密直连放行
+  if (options.allowTailscale && isTailscaleIp(clientIp)) return true
+
+  // 3. 局域网 LAN 免密直连放行
+  if (options.allowLan && isLanIp(clientIp)) return true
+
+  // 4. 检查是否携带有效的授权会话 Token (Cookie / Header / URL Token)
+  const token = store.extractTokenFromRequest(req)
+  if (token && store.validateToken(token, clientIp)) return true
+
+  return false
+}
+
+/**
+ * 透明接管 DSH 官方底座的 Token 鉴权服务 (connection.browserAuth & connection.requestRejection)
+ *
+ * 【设计职责】
+ * 官方新版在底座硬编码了临时进程 Token（dsh web: http://.../?token=xxxx）以及基于签名 Cookie 的
+ * 全链路 RPC/WebSocket 401 阻断。对于已安装本插件的用户而言，两层鉴权导致体验严重割裂且使手机书签失效。
+ * 本函数对底层 connection 服务实施透明短路代理：
+ * 1. 凡通过本插件门禁（本机、Tailscale/LAN 免密直连、已扫码配对/长期密码认证）的请求，底座鉴权全链路放行；
+ * 2. 彻底消除进程重启后移动端遭遇官方 401 的痛点，对外提供唯一定制化移动端门禁体系；
+ * 3. 未授权外部请求保持官方与插件原本拦截逻辑，且保留官方原生合法 token 的交换能力。
+ *
+ * @param connection - DSH 底座提供的 connection 服务实例
+ * @param store - 会话与配置管理器实例
+ */
+export function takeOverConnectionAuth(connection: any, store: SessionStore): void {
+  if (!connection || connection.__dsh_rm_auth_takeover__) return
+  connection.__dsh_rm_auth_takeover__ = true
+
+  // 1. 接管底层统一的 browserAuth.isAuthenticated (供各类 RPC/WebSocket 与内部检查调用)
+  if (connection.browserAuth && typeof connection.browserAuth.isAuthenticated === 'function') {
+    const origIsAuthenticated = connection.browserAuth.isAuthenticated.bind(connection.browserAuth)
+    connection.browserAuth.isAuthenticated = (request: any): boolean => {
+      if (isRequestAuthorizedByGate(request, store)) {
+        return true
+      }
+      return origIsAuthenticated(request)
+    }
+  }
+
+  // 2. 接管 connection.requestRejection (底层拦截未授权的 RPC / WebSocket 请求)
+  if (typeof connection.requestRejection === 'function') {
+    const origRequestRejection = connection.requestRejection.bind(connection)
+    connection.requestRejection = (request: any): number | undefined => {
+      if (isRequestAuthorizedByGate(request, store)) {
+        return undefined // 明确放行，杜绝 401
+      }
+      return origRequestRejection(request)
+    }
+  }
+
+  // 3. 接管 connection.authorizeIndex (控制根路径 GET / 下发 index.html)
+  if (typeof connection.authorizeIndex === 'function') {
+    const origAuthorizeIndex = connection.authorizeIndex.bind(connection)
+    connection.authorizeIndex = (req: any, res: any): boolean => {
+      if (isRequestAuthorizedByGate(req, store)) {
+        // 若携带官方进程 token 且与当前 launchToken 匹配，优先走官方换取官方 Cookie 与重定向
+        if (req.url && req.url.includes('token=')) {
+          try {
+            const url = new URL(req.url, 'http://dsh.invalid')
+            const tokens = url.searchParams.getAll('token')
+            if (
+              tokens.length > 0 &&
+              connection.browserAuth?.launchToken &&
+              safeStringEqual(tokens[0], connection.browserAuth.launchToken)
+            ) {
+              return origAuthorizeIndex(req, res)
+            }
+          } catch {}
+        }
+        // 已授权设备直接放行提供 HTML，跳过官方 401 阻断
+        return true
+      }
+      return origAuthorizeIndex(req, res)
+    }
+  }
+}
+

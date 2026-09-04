@@ -255,13 +255,27 @@ test('API 路由处理器功能与安全集成测试 (api.ts)', async (t) => {
     assert.equal(store.getOptions().lockDurationMs, 1200000)
   })
 
-  await t.test('extractTokenFromRequest 能够正确从 URL ?token=xxx 参数中提取令牌', () => {
-    const mockReq = {
-      url: '/?token=myTestToken123456',
+  await t.test('extractTokenFromRequest 能够正确从 URL ?rm_token= 或 ?auth_token= 参数中提取令牌', () => {
+    // 能够从 rm_token 参数提取
+    const rmReq = {
+      url: '/?rm_token=myTestToken123456',
       headers: {},
     }
-    const token = store.extractTokenFromRequest(mockReq)
-    assert.equal(token, 'myTestToken123456')
+    assert.equal(store.extractTokenFromRequest(rmReq), 'myTestToken123456')
+
+    // 能够从 auth_token 参数提取
+    const authReq = {
+      url: '/?auth_token=myAuthToken654321',
+      headers: {},
+    }
+    assert.equal(store.extractTokenFromRequest(authReq), 'myAuthToken654321')
+
+    // 官方 token 参数已被解耦，不再被误提取为插件移动端凭据
+    const officialReq = {
+      url: '/?token=officialToken999',
+      headers: {},
+    }
+    assert.equal(store.extractTokenFromRequest(officialReq), null)
   })
 
   await t.test('GET /api/remote-mobile/events SSE 断连事件清理具有幂等性且不泄漏监听器', async () => {
