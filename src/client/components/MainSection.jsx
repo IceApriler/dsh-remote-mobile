@@ -553,11 +553,11 @@ export function TailscaleMobileSection(props) {
   return (
     <div
       style={{
-        padding: '4px 8px',
+        padding: '2px 4px',
         color: 'var(--dsw-alias-label-primary, inherit)',
         display: 'flex',
         flexDirection: 'column',
-        gap: '16px',
+        gap: '14px',
         position: 'relative',
       }}
     >
@@ -840,14 +840,18 @@ export function TailscaleMobileSection(props) {
         </div>
       ) : null}
 
-      {/* 页签导航：接入 / 设备与安全 / 存储与样式（下划线风格） */}
+      {/* 页签导航：接入 / 设备与安全 / 样式覆写 / 本地数据（下划线风格，支持移动端横滑且绝不换行） */}
       <div
         style={{
           display: 'flex',
-          gap: '24px',
+          gap: '14px',
           borderBottom: '1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.2))',
           paddingBottom: '0',
           marginBottom: '6px',
+          overflowX: 'auto',
+          overflowY: 'hidden',
+          WebkitOverflowScrolling: 'touch',
+          scrollbarWidth: 'none',
         }}
       >
         {[
@@ -866,10 +870,12 @@ export function TailscaleMobileSection(props) {
                 background: 'transparent',
                 border: 'none',
                 outline: 'none',
-                padding: '8px 2px 10px 2px',
-                fontSize: '14px',
+                padding: '6px 2px 8px 2px',
+                fontSize: '13px',
                 fontWeight: isActive ? '600' : '400',
                 cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
                 color: isActive
                   ? 'var(--dsw-alias-label-primary, #111827)'
                   : 'var(--dsw-alias-label-tertiary, #8c8c8c)',

@@ -27,39 +27,30 @@ export function DeviceListCard({ status, revokeDevice, revokeAll, lang }) {
         background: 'var(--dsw-alias-bg-layer-3, rgba(128,128,128,0.06))',
         border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.15))',
         borderRadius: '12px',
-        padding: '18px 20px',
+        padding: '14px 14px',
       }}
     >
+      {/* 头部：标题与一键注销按钮（自适应 flexWrap） */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: '12px',
-          marginBottom: '14px',
+          flexWrap: 'wrap',
+          gap: '8px 12px',
+          marginBottom: '6px',
         }}
       >
-        <div style={{ minWidth: 0 }}>
-          <div
-            style={{
-              fontSize: '15px',
-              fontWeight: '600',
-              color: 'var(--dsw-alias-label-primary, inherit)',
-            }}
-          >
-            {`📱 ${t('deviceCardTitle', lang)} (${status.devicesCount}${
-              lang === 'en' ? ' devices' : ' 台'
-            })`}
-          </div>
-          <div
-            style={{
-              fontSize: '12px',
-              color: 'var(--dsw-alias-label-tertiary, #888)',
-              marginTop: '2px',
-            }}
-          >
-            {t('deviceCardDesc', lang)}
-          </div>
+        <div
+          style={{
+            fontSize: '15px',
+            fontWeight: '600',
+            color: 'var(--dsw-alias-label-primary, inherit)',
+          }}
+        >
+          {`📱 ${t('deviceCardTitle', lang)} (${status.devicesCount}${
+            lang === 'en' ? ' devices' : ' 台'
+          })`}
         </div>
 
         {status.devicesCount > 0 ? (
@@ -70,17 +61,30 @@ export function DeviceListCard({ status, revokeDevice, revokeAll, lang }) {
               background: 'transparent',
               border: '1px solid rgba(239,68,68,0.4)',
               color: 'var(--dsw-alias-label-error, #ef4444)',
-              padding: '5px 12px',
+              padding: '4px 10px',
               borderRadius: '6px',
-              fontSize: '12px',
+              fontSize: '11px',
               cursor: 'pointer',
               whiteSpace: 'nowrap',
               flexShrink: 0,
+              marginLeft: 'auto',
             }}
           >
             {t('revokeAllBtn', lang)}
           </button>
         ) : null}
+      </div>
+
+      {/* 说明文字通栏舒展展示，不再与按钮左右挤压 */}
+      <div
+        style={{
+          fontSize: '12px',
+          color: 'var(--dsw-alias-label-tertiary, #888)',
+          lineHeight: '1.45',
+          marginBottom: '14px',
+        }}
+      >
+        {t('deviceCardDesc', lang)}
       </div>
 
       {/* 设备条目列表 */}

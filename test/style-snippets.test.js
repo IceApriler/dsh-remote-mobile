@@ -74,33 +74,44 @@ test('移动端样式片段模块测试 (style-snippets.ts)', async (t) => {
       assert.ok(/transform:\s*none !important/.test(sidebarCss))
       assert.ok(/filter:\s*none !important/.test(sidebarCss))
       assert.ok(/will-change:\s*auto !important/.test(sidebarCss))
-      // 回归守卫：抽屉内层必须铺满外层（官方响应式脚本会给内层写死内联 width 如 280px，
-      // 与官方外层 min(88vw,320px) 产生 ~40px 右缘空白条），用 !important 覆盖内联样式
+      // 回归守卫：展开态抽屉自适应宽度（min(85vw, 320px)）与内层铺满（width: 100%）
+      assert.ok(sidebarCss.includes('[class*="_sidebarCol"]:not(:has([class*="_collapsed"]))'))
+      assert.ok(sidebarCss.includes('min(85vw, 320px)'))
       assert.ok(sidebarCss.includes('[class*="_sidebarCol"] > [data-slot="sidebar"] > div'))
       assert.ok(/width:\s*100% !important/.test(sidebarCss))
+      // 回归守卫：条目 44px + 内按钮 36px 移动端触控友好尺寸
+      assert.ok(sidebarCss.includes('[role="treeitem"]'))
+      assert.ok(/min-height:\s*44px !important/.test(sidebarCss))
+      assert.ok(/min-width:\s*36px !important/.test(sidebarCss))
+      // 回归守卫：展开把手尺寸 44px 并适配顶部安全区避让
+      assert.ok(sidebarCss.includes('env(safe-area-inset-top)'))
+      assert.ok(/width:\s*44px !important/.test(sidebarCss))
+      // 回归守卫：侧边栏条目操作按钮在移动端常显（opacity: 1 !important; visibility: visible !important）
+      assert.ok(sidebarCss.includes('[class*="_sidebarCol"] [class*="_rowActions"]'))
+      assert.ok(/opacity:\s*1 !important/.test(sidebarCss))
+      assert.ok(/visibility:\s*visible !important/.test(sidebarCss))
+      // 回归守卫：屏蔽第三方生态插件注入的小鲸鱼悬浮按钮 (#dshRemoteWhale) 避免入口与手势冲突
+      assert.ok(sidebarCss.includes('#dshRemoteWhale'))
+      assert.ok(sidebarCss.includes('display: none !important'))
 
       // 回归守卫：设置弹窗覆写必须限定在 overlay 上下文内（仅命中设置弹窗），
-      // 否则内测声明等通用 Modal（直接挂 body、无 data-slot overlay）会被 94vw/530px 覆写
+      // 否则内测声明等通用 Modal（直接挂 body、无 data-slot overlay）会被覆写
       const settingsCss = store.get('preset-settings').css
       assert.ok(settingsCss.includes('[data-slot*="overlay"]:has([role="dialog"]) [role="dialog"]'))
       assert.ok(settingsCss.includes('[class*="_overlay"]:has([role="dialog"]) [class*="_dialog"]'))
       assert.ok(settingsCss.includes('[class*="_settingsModal"]'))
       // 不得再出现独立的裸 [role="dialog"] / [class*="_dialog"] 顶层选择器（会波及通用 Modal）
       assert.ok(!/^\s*\[role="dialog"\],$/m.test(settingsCss))
-      // 回归守卫：弹窗等比微缩必须覆盖全部直接子元素（含左侧 nav 按钮列表），
-      // 右侧内容单独保持 530px 最小宽度；否则左侧按钮列表不随整窗缩放
-      assert.ok(settingsCss.includes('[data-slot*="overlay"]:has([role="dialog"]) [role="dialog"] > *'))
-      assert.ok(settingsCss.includes('[class*="_overlay"]:has([role="dialog"]) [role="dialog"] > *'))
+      // 回归守卫：设置弹窗改上下堆叠（:has(nav) 精准定位带导航弹窗），取消 530px 定宽
+      assert.ok(settingsCss.includes('[role="dialog"]:has(nav)'))
+      assert.ok(/flex-direction:\s*column !important/.test(settingsCss))
+      assert.ok(settingsCss.includes('[role="dialog"] [class*="_navList"]'))
+      assert.ok(settingsCss.includes('[role="dialog"] [class*="_content"]'))
       assert.ok(settingsCss.includes('[data-slot*="overlay"]:has([role="dialog"]) [role="dialog"] > div'))
-      assert.ok(/min-width:\s*530px !important/.test(settingsCss))
-      // 回归守卫：重置插件市场弹窗窄屏隐藏左侧 nav 的行为（同选择器 + !important 稳压）
+      assert.ok(!settingsCss.includes('min-width: 530px'))
+      // 回归守卫：重置插件市场等弹窗在窄屏隐藏左侧 nav 的行为（同选择器 + !important 稳压）
       assert.ok(settingsCss.includes('[role="dialog"]:has([data-dsh-market-root]) > nav'))
       assert.ok(/display:\s*block !important/.test(settingsCss))
-      // 回归守卫：移动端设置弹窗顶部固定滑动提示（挂在 overlay ::before，absolute 不随内容滚动）
-      assert.ok(settingsCss.includes('[data-slot*="overlay"]:has([role="dialog"])::before'))
-      assert.ok(settingsCss.includes('左右滑动浏览'))
-      assert.ok(/z-index:\s*100006 !important/.test(settingsCss))
-      assert.ok(settingsCss.includes('pointer-events: none'))
       // 回归守卫：_frame 后缀必须用 :has([class*="_sidebarCol"]) 锁定到三栏布局帧，
       // 否则提问卡片 Mbwy4a_frame 等内层元素会被强制 width:100vw 撑满、被 ::after 全屏黑纱盖住
       assert.ok(sidebarCss.includes('[class*="_frame"]:has([class*="_sidebarCol"])'))

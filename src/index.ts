@@ -159,46 +159,64 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
 
   // 6. 服务就绪时输出提示横幅与接入地址
   let printed = false
+  let disposed = false
+  let timer1: ReturnType<typeof setTimeout> | null = null
+  let timer2: ReturnType<typeof setTimeout> | null = null
+
+  try {
+    ctx.on?.('dispose', () => {
+      disposed = true
+      if (timer1) clearTimeout(timer1)
+      if (timer2) clearTimeout(timer2)
+    })
+  } catch {}
+
   const printReadyBanner = () => {
-    if (printed) return
+    // 生命周期守卫：若上下文已废弃/进入 dispose，放弃回调
+    if (disposed || printed) return
     printed = true
 
-    if (ctx.webServer && ctx.webServer.server) {
-      patchHttpServerWithVirtualizer(ctx.webServer.server, gateMiddleware, store, styleStore)
-    }
     try {
-      const conn = typeof ctx.get === 'function' ? ctx.get('connection') : undefined
-      if (conn) attachConnectionAuth(conn)
+      const webServer = (typeof ctx.get === 'function' ? ctx.get('webServer') : undefined) || ctx.webServer
+      if (webServer?.server) {
+        patchHttpServerWithVirtualizer(webServer.server, gateMiddleware, store, styleStore)
+      }
+      try {
+        const conn = typeof ctx.get === 'function' ? ctx.get('connection') : undefined
+        if (conn) attachConnectionAuth(conn)
+      } catch (e) {
+        ctx.logger?.debug?.('[dsh-remote-mobile] 就绪回调获取 connection 失败:', e)
+      }
+
+      const tsIp = getLocalTailscaleIp()
+      const lanIp = getLocalLanIp()
+      const port = webServer?.port ?? 3080
+      const opts = store.getOptions()
+
+      const divider = '─'.repeat(72)
+      console.log(`\n┌${divider}`)
+      console.log(`│ [dsh-remote-mobile] 官方临时 Token 鉴权已接管，PC/移动端访问无需携带官方token`)
+      console.log(`│ 远程安全网关已就绪，支持手机浏览器访问:`)
+      console.log(`│   • 本机回环:   http://127.0.0.1:${port}`)
+      if (lanIp && lanIp !== '127.0.0.1') {
+        console.log(`│   • 局域网:     http://${lanIp}:${port} (同 Wi-Fi 局域网直连)`)
+      }
+      if (tsIp) {
+        console.log(`│   • 虚拟私网:   http://${tsIp}:${port} (Tailscale 私网异地直连)`)
+      }
+      console.log(`│ 访问与配置说明:`)
+      console.log(`│   - 手机/远程设备打开对应地址即可直接访问`)
+      console.log(`│   - 在本机打开 Web 界面 ->「设置」->「远程与移动端」进行安全管理:`)
+      console.log(`│     可开启免密直连(局域网/Tailscale)、查看 6 位临时配对码或设置长期密码`)
+      console.log(`│   - 项目文档:   https://github.com/IceApriler/dsh-remote-mobile`)
+      console.log(`└${divider}\n`)
+
+      ctx.logger?.info?.(`[dsh-remote-mobile] 移动端远程控制与安全门禁已激活 (上下文虚拟化桥接就绪，样式片段: ${styleStore.list().length} 个)`)
+      if (tsIp) {
+        ctx.logger?.info?.(`[dsh-remote-mobile] Tailscale 地址: http://${tsIp}:${port} (免密直连: ${opts.allowTailscale ? '已开启' : '已关闭'})`)
+      }
     } catch (e) {
-      ctx.logger?.debug?.('[dsh-remote-mobile] 就绪回调获取 connection 失败:', e)
-    }
-
-    const tsIp = getLocalTailscaleIp()
-    const lanIp = getLocalLanIp()
-    const port = ctx.webServer?.port ?? 3080
-    const opts = store.getOptions()
-
-    const divider = '─'.repeat(72)
-    console.log(`\n┌${divider}`)
-    console.log(`│ [dsh-remote-mobile] 官方临时 Token 鉴权已接管，PC/移动端访问无需携带官方token`)
-    console.log(`│ 远程安全网关已就绪，支持手机浏览器访问:`)
-    console.log(`│   • 本机回环:   http://127.0.0.1:${port}`)
-    if (lanIp && lanIp !== '127.0.0.1') {
-      console.log(`│   • 局域网:     http://${lanIp}:${port} (同 Wi-Fi 局域网直连)`)
-    }
-    if (tsIp) {
-      console.log(`│   • 虚拟私网:   http://${tsIp}:${port} (Tailscale 私网异地直连)`)
-    }
-    console.log(`│ 访问与配置说明:`)
-    console.log(`│   - 手机/远程设备打开对应地址即可直接访问`)
-    console.log(`│   - 在本机打开 Web 界面 ->「设置」->「远程与移动端」进行安全管理:`)
-    console.log(`│     可开启免密直连(局域网/Tailscale)、查看 6 位临时配对码或设置长期密码`)
-    console.log(`│   - 项目文档:   https://github.com/IceApriler/dsh-remote-mobile`)
-    console.log(`└${divider}\n`)
-
-    ctx.logger?.info?.(`[dsh-remote-mobile] 移动端远程控制与安全门禁已激活 (上下文虚拟化桥接就绪，样式片段: ${styleStore.list().length} 个)`)
-    if (tsIp) {
-      ctx.logger?.info?.(`[dsh-remote-mobile] Tailscale 地址: http://${tsIp}:${port} (免密直连: ${opts.allowTailscale ? '已开启' : '已关闭'})`)
+      // 上下文若在并发或极端时序下重载，静默退出，防止未捕获异常导致主进程崩溃
     }
   }
 
@@ -208,7 +226,7 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
     const settled = loader?.await?.()
     if (settled && typeof settled.then === 'function') {
       settled.then(() => {
-        setTimeout(printReadyBanner, 120)
+        timer1 = setTimeout(printReadyBanner, 120)
       }).catch((e: any) => {
         ctx.logger?.debug?.('[dsh-remote-mobile] loader await 异常:', e)
       })
@@ -218,7 +236,7 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
   }
 
   // 2) 兜底定时器（避免无 loader 环境时不输出）
-  setTimeout(printReadyBanner, 1500)
+  timer2 = setTimeout(printReadyBanner, 1500)
 }
 
 // 导出所有子模块类型与核心工具

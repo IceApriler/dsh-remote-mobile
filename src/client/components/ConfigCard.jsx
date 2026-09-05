@@ -23,7 +23,7 @@ export function ConfigCard({
         background: 'var(--dsw-alias-bg-layer-3, rgba(128,128,128,0.06))',
         border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.15))',
         borderRadius: '12px',
-        padding: '18px 20px',
+        padding: '14px 14px',
         display: 'flex',
         flexDirection: 'column',
         gap: '14px',
@@ -35,7 +35,8 @@ export function ConfigCard({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: '10px',
+          flexWrap: 'wrap',
+          gap: '8px 12px',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -72,6 +73,7 @@ export function ConfigCard({
             cursor: 'pointer',
             whiteSpace: 'nowrap',
             flexShrink: 0,
+            marginLeft: 'auto',
           }}
         >
           {t('copySettingsPathBtn', lang)}

@@ -160,6 +160,40 @@ const PRESET_SIDEBAR_CSS = `
     background: rgb(0 0 0 / 24%);
   }
 
+  /* 展开态自适应宽度：支持 360px 窄屏与大屏手机灵活伸缩，覆盖官方内联 280px */
+  [class*="_sidebarCol"]:not(:has([class*="_collapsed"])) {
+    width: min(85vw, 320px) !important;
+    max-width: 85vw !important;
+  }
+
+  /* 条目触控热区友好化：行高 44px + 次级操作按钮 36px，防误触相邻会话并易于点击更多操作 */
+  [class*="_sidebarCol"] [role="treeitem"],
+  [class*="_sidebarCol"] [data-dsh-part="sidebar-entry"] {
+    min-height: 44px !important;
+  }
+  [class*="_sidebarCol"] [role="treeitem"] button,
+  [class*="_sidebarCol"] [role="treeitem"] [role="button"] {
+    min-width: 36px !important;
+    min-height: 36px !important;
+  }
+
+  /* 触屏设备没有 hover：工作区/会话右侧操作按钮（更多操作 ⋯、新建会话 + 等）
+     在 PC 依赖鼠标悬停显现，移动端必须常显，保证触屏用户可随时直接交互 */
+  [class*="_sidebarCol"] [class*="_rowActions"] {
+    opacity: 1 !important;
+    visibility: visible !important;
+    display: flex !important;
+    align-items: center !important;
+    flex-shrink: 0 !important;
+  }
+
+  /* 标题容器弹性自适应并防文字挤出视野，超长文本自然截断不破坏按钮布局 */
+  [class*="_sidebarCol"] [class*="_projectText"],
+  [class*="_sidebarCol"] [class*="_sessionText"] {
+    min-width: 0 !important;
+    flex: 1 1 auto !important;
+  }
+
   /* 内层根节点铺满抽屉：覆盖官方响应式脚本写入的内联 width，
      消除「外层 ~320 / 内层内联 280」的宽度差与右缘空白条 */
   [class*="_sidebarCol"] > [data-slot="sidebar"] > div {
@@ -188,15 +222,16 @@ const PRESET_SIDEBAR_CSS = `
     display: none !important;
   }
 
-  /* 折叠状态下，Logo 按钮悬浮在屏幕左上角作为展开把手（与 dsh-draggable-nav 拖拽脚本联动） */
+  /* 折叠状态下，Logo 按钮悬浮在屏幕左上角作为展开把手（与 dsh-draggable-nav 拖拽脚本联动）
+     放大到 44px 触控尺寸，并避让刘海屏/灵动岛顶部安全区 */
   [class*="_sidebarCol"] [class*="_collapsed"] [class*="_logoRow"],
   [class*="_frame"][data-sidebar-collapsed] [class*="_sidebarCol"] [class*="_logoRow"] {
     position: fixed !important;
-    top: 10px !important;
-    left: 10px !important;
-    width: 40px !important;
-    height: 40px !important;
-    border-radius: 10px !important;
+    top: max(12px, env(safe-area-inset-top)) !important;
+    left: 12px !important;
+    width: 44px !important;
+    height: 44px !important;
+    border-radius: 12px !important;
     background: var(--dsw-alias-bg-layer-1, rgba(255, 255, 255, 0.95)) !important;
     backdrop-filter: blur(12px) !important;
     -webkit-backdrop-filter: blur(12px) !important;
@@ -241,9 +276,18 @@ const PRESET_SIDEBAR_CSS = `
       min-height: 0 !important;
     }
   }
+
+  /* 8. 兼容处理：隐藏生态插件中重复挂载的小鲸鱼悬浮按钮 (#dshRemoteWhale) 避免入口与手势冲突 */
+  #dshRemoteWhale,
+  button[id="dshRemoteWhale"],
+  [data-dsh-plugin="remote-web-ui"] {
+    display: none !important;
+    pointer-events: none !important;
+    visibility: hidden !important;
+  }
 `
 
-/** 设置面板预设：官方设置弹窗整体微缩 + 遮罩锁滚动 + 内容横向滑动 */
+/** 设置面板预设：官方设置弹窗上下堆叠 + 顶部导航横滑 + 内容纵向自然滚览 */
 const PRESET_SETTINGS_CSS = `
 /* ===== dsh-remote-mobile · 设置面板适配 ===== */
 /* 注：窄屏媒体查询由注入层按端包裹 */
@@ -262,38 +306,9 @@ const PRESET_SETTINGS_CSS = `
     overscroll-behavior: contain !important;
   }
 
-  /* 移动端设置弹窗顶部固定提示：内容较宽（530px 等比微缩）需左右滑动浏览。
-     挂在 overlay 容器 ::before 上（absolute 定位相对 fixed overlay），
-     不随弹窗内容滚动，也不参与 flex 居中布局。内测声明等通用 Modal
-     （_root 容器，不在本选择器集合内）不会出现此提示。 */
-  [data-slot*="overlay"]:has([role="dialog"])::before,
-  [class*="_overlay"]:has([role="dialog"])::before,
-  [class*="_modalWrapper"]:has([role="dialog"])::before {
-    content: "↔ 左右滑动浏览设置";
-    position: absolute;
-    top: 16px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 100006 !important;
-    box-sizing: border-box;
-    white-space: nowrap;
-    max-width: calc(100vw - 32px);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    background: rgba(0, 0, 0, 0.62);
-    color: #ffffff;
-    font-size: 12px;
-    line-height: 18px;
-    border-radius: 999px;
-    padding: 4px 14px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
-    pointer-events: none;
-    text-align: center;
-  }
-
   /* 弹窗卡片：仅命中设置弹窗——外层 overlay 容器内含 role=dialog（设置弹窗由
      data-slot overlay / overlay 类包裹）。内测声明等通用 Modal 直接挂在 body、
-     无 data-slot overlay，天然排除，不会被 94vw / 530px 覆写。 */
+     无 data-slot overlay，天然排除。卡片设为纵向滚动，取消横向滑动。 */
   [data-slot*="overlay"]:has([role="dialog"]) [role="dialog"],
   [data-slot*="overlay"]:has([role="dialog"]) [class*="_dialog"],
   [data-slot*="overlay"]:has([role="dialog"]) [class*="_modalContent"],
@@ -305,25 +320,22 @@ const PRESET_SETTINGS_CSS = `
   [class*="_modalWrapper"]:has([role="dialog"]) [class*="_modalContent"],
   [class*="_settingsModal"] {
     position: relative !important;
-    width: 94vw !important;
-    max-width: 94vw !important;
-    height: 86vh !important;
+    width: 96vw !important;
+    max-width: 96vw !important;
     height: 86dvh !important;
-    max-height: 88vh !important;
-    max-height: 88dvh !important;
+    max-height: 86dvh !important;
     margin: auto !important;
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4) !important;
-    border-radius: 16px !important;
+    border-radius: 14px !important;
     background: var(--dsw-alias-bg-layer-1, #ffffff) !important;
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
     -webkit-overflow-scrolling: touch !important;
     overscroll-behavior: contain !important;
-    font-size: 13.5px !important;
+    font-size: 14px !important;
   }
 
-  /* 弹窗内部等比微缩：dialog 的全部直接子元素（如设置弹窗的 nav 左侧按钮列表 +
-     content 右侧内容）统一 zoom 0.88，保证整窗一致缩放。 */
+  /* 取消 zoom 微缩，恢复正常比例 */
   [data-slot*="overlay"]:has([role="dialog"]) [role="dialog"] > *,
   [data-slot*="overlay"]:has([role="dialog"]) [class*="_dialog"] > *,
   [data-slot*="overlay"]:has([role="dialog"]) [class*="_modalContent"] > *,
@@ -334,12 +346,10 @@ const PRESET_SETTINGS_CSS = `
   [class*="_modalWrapper"]:has([role="dialog"]) [class*="_dialog"] > *,
   [class*="_modalWrapper"]:has([role="dialog"]) [class*="_modalContent"] > *,
   [class*="_settingsModal"] > * {
-    zoom: 0.88 !important;
+    zoom: 1 !important;
   }
 
-  /* 弹窗右侧内容主体（直接 div 子元素）：固定最小宽度并铺满高度，单屏显示更多
-     内容且字号更精致。左侧导航列表不强制宽度，保持官方窄宽。
-     同样限定在设置弹窗上下文内，避免波及通用 Modal。 */
+  /* 取消 530px 定宽：主体内容 div 铺满宽度，高度自然自适应 */
   [data-slot*="overlay"]:has([role="dialog"]) [role="dialog"] > div,
   [data-slot*="overlay"]:has([role="dialog"]) [class*="_dialog"] > div,
   [data-slot*="overlay"]:has([role="dialog"]) [class*="_modalContent"] > div,
@@ -350,9 +360,41 @@ const PRESET_SETTINGS_CSS = `
   [class*="_modalWrapper"]:has([role="dialog"]) [class*="_dialog"] > div,
   [class*="_modalWrapper"]:has([role="dialog"]) [class*="_modalContent"] > div,
   [class*="_settingsModal"] > div {
-    min-width: 530px !important;
-    width: 530px !important;
-    height: 100% !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+  }
+
+  /* 上下堆叠：只命中带 nav 的设置类弹窗，通用 Modal 不受影响 */
+  [role="dialog"]:has(nav) {
+    flex-direction: column !important;
+  }
+  [role="dialog"]:has(nav) > nav {
+    width: 100% !important;
+    flex: none !important;
+  }
+  [role="dialog"] [class*="_navTitle"] {
+    display: none !important;
+  }
+  [role="dialog"] [class*="_navList"] {
+    display: flex !important;
+    flex-direction: row !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    gap: 4px !important;
+    padding: 4px 2px !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  [role="dialog"] [class*="_navList"] > * {
+    flex: none !important;
+    white-space: nowrap !important;
+  }
+  /* 移动端收紧官方内容区的厚 padding（原 24px/32px），释放横向显示空间 */
+  [role="dialog"] [class*="_content"] {
+    width: 100% !important;
+    min-width: 0 !important;
+    flex: 1 1 auto !important;
+    padding: 10px 4px !important;
   }
 
   /* 重置插件市场等弹窗在窄屏隐藏左侧 nav 的行为：保持导航列表可见。
@@ -663,8 +705,8 @@ export const BUILTIN_PRESETS: BuiltinStylePreset[] = [
     id: 'preset-settings',
     name: { zh: '设置面板适配', en: 'Settings Panel' },
     description: {
-      zh: '官方设置弹窗居中微缩显示更多内容，遮罩锁死滚动，内部支持左右横滑。',
-      en: 'Centers and scales down the settings dialog, locks overlay scroll, and enables horizontal panning.',
+      zh: '官方设置弹窗上下堆叠自适应浏览：顶部导航横滑切换，内容纵向自然滚览，告别横向截断。',
+      en: 'Stacks settings dialog vertically: horizontal scrollable nav tabs at top, vertical flowing content.',
     },
     defaultPcEnabled: false,
     defaultMobileEnabled: true,

@@ -64,6 +64,9 @@ DSH 核心服务出于安全考虑默认仅监听本地回环地址（`127.0.0.1
 dsh plugin --profile web add dsh-remote-mobile
 ```
 
+> [!IMPORTANT]
+> **生态插件安装建议**：**不建议安装 `@linxin666/dsh-web-all` 全家桶**，更推荐**按需安装单体功能插件**。全家桶将多个前端模块合并打包，可能引发移动端悬浮入口重复与手势交互冲突。如需任务看板、宠物等生态功能，建议直接安装对应的单体包（详见下方说明）。
+
 ---
 
 <span id="config"></span>
@@ -89,6 +92,24 @@ dsh plugin --profile web add dsh-remote-mobile
 ```
 
 > **💡 说明**：插件自身注册已由 DSH Bundle 体系全自动处理，**无需**在 `cordis.patch.yml` 中额外添加 `id: remote-mobile`。Windows 用户可按 `Win + R` 键输入 `%USERPROFILE%\.dsh\profiles\web` 快速直达配置目录。
+
+> [!WARNING]
+> **⚠️ 插件兼容与共存说明：不建议安装聚合全家桶（`@linxin666/dsh-web-all`），更推荐「按需单独安装所需插件」**
+> 
+> * **为什么不建议安装 `@linxin666/dsh-web-all` 全家桶？**
+>   1. **避免功能冲突与重复入口**：该全家桶将多个子插件的前端逻辑编译打包在同一个 `client.js` 中，其移动端自适应逻辑在模块加载时会自执行。即使在 `cordis.patch.yml` 中配置了 `web-ui-remote-web-ui: disabled: true`，浏览器加载脚本后依然会渲染出小鲸鱼悬浮按钮（`#dshRemoteWhale`），导致两个插件的移动端入口与手势交互出现重复和冲突。
+>   2. **体积更轻量、升级更解耦**：全家桶将多个功能捆绑在一起，按需安装单体插件可以保持环境精简，也便于未来各插件独立升级与维护。
+> 
+> * **推荐的最佳实践（按需单独安装单体插件）**：
+>   建议按需安装各自独立的功能单体包，例如：
+>   ```bash
+>   # 推荐方式：需要哪个装哪个，职责清晰、互不干扰
+>   dsh plugin --profile web add @linxin666/dsh-client-ui-task-board
+>   dsh plugin --profile web add @linxin666/dsh-client-ui-web-ui-settings
+>   dsh plugin --profile web add @linxin666/dsh-pet
+>   dsh plugin --profile web add @linxin666/dsh-ssh
+>   ```
+>   *(注：自 v1.6.0 起，`dsh-remote-mobile` 已内置冲突防护机制，会自动前置注入 `dsh-remote-force-desktop` 并协同 CSS 避免小鲸鱼悬浮按钮 `#dshRemoteWhale` 重复挂载，保障已安装全家桶环境下的共存体验；若追求更清爽的环境，按需安装单体包依然是最佳实践)*。
 
 ---
 
@@ -162,7 +183,7 @@ dsh web --no-open
 
 DSH Web 界面在手机上仍有不少沿袭桌面端的样式问题，插件内置「移动端样式片段」模块，把移动端适配拆分为可独立启停的 CSS 片段：
 
-- **按界面区域划分的三段内置预设**：`preset-sidebar` 侧边栏抽屉导航（折叠 0 宽度、可拖拽悬浮把手）、`preset-settings` 设置面板适配（弹窗居中微缩、遮罩锁滚动）、`preset-main` 对话正文**高密度排版**（小字号 12.5px + 紧凑行距 + 收紧边距 → 每行展示更多内容；基于稳定 HTML 元素与 localName 后缀，不做布局缩放，无右侧留白），默认移动端启用、PC 关闭；
+- **按界面区域划分的三段内置预设**：`preset-sidebar` 侧边栏抽屉导航（折叠 0 宽度、可拖拽悬浮把手、自适应抽屉宽度与 44px 触控友好区）、`preset-settings` 设置面板适配（上下堆叠自适应、顶部导航横滑、内容纵向自然滚览）、`preset-main` 对话正文**高密度排版**（小字号 12.5px + 紧凑行距 + 收紧边距 → 每行展示更多内容；基于稳定 HTML 元素与 localName 后缀，不做布局缩放，无右侧留白），默认移动端启用、PC 关闭；
 - **PC / 移动端分别启停（按视口宽度判定，与设备无关）**：每段预设和每个自定义片段都有独立的「🖥️ PC」「📱 移动端」两个开关；「移动端」= 窄视口（≤900px）生效——**PC 浏览器拉小窗口也会生效**，「PC」= 宽视口（>900px）生效，两端都开 = 全宽度生效；
 - **用户自定义（样式小插件）**：在 **设置 ⚙️ → 远程与移动端 → 🎨 移动端样式片段** 中粘贴自己的 CSS 即可新增片段，支持编辑/启停/删除/**一键复制**（每个片段「查看 CSS」旁都有「📋 复制样式」按钮），持久化于 `~/.dsh/remote-mobile/style-snippets.json`，保存后下一次页面加载即生效，无需重启；
 - **按 UA 打标记 + 按宽度生效**：样式按视口宽度档生效（见上），与设备 UA 无关；移动端 UA 请求额外给 `<html>` 打上 `data-dsh-mobile="1"` 标记作为作用域钩子，并注入可拖拽的展开把手脚本（全端注入，运行时仅在侧边栏折叠时生效）。
@@ -378,6 +399,15 @@ dsh-remote-mobile:
 1. 点击横幅中的 **「📋 复制诊断与修复信息」**，将报告粘贴给 AI 助手按步骤处理（报告已自动识别占用方包名与条目 id，并给出精确的修复配置）；
 2. 推荐保留本插件时：按报告指引在 `~/.dsh/profiles/web/cordis.patch.yml` 末尾追加对应的 `disabled: true` 两行，然后重启 DSH；
 3. 横幅可点击 ✕ 临时关闭；冲突解除后刷新页面即不再出现。
+</details>
+
+<details>
+<summary><b>Q6: 为什么建议按需安装单体功能插件，而不建议安装聚合全家桶（如 @linxin666/dsh-web-all）？</b></summary>
+
+**答**：主要是基于**避免功能冲突**与**环境轻量解耦**的考量：
+1. **避免移动端入口重复与手势交互冲突**：全家桶插件会将十几个独立功能插件的前端代码编译打包在同一个 `client.js` 中，其内置的移动端自适应逻辑在模块加载时会自执行。即使在 `cordis.patch.yml` 中配置了 `web-ui-remote-web-ui: disabled: true`，浏览器加载脚本后仍可能渲染出小鲸鱼悬浮按钮（`#dshRemoteWhale`），导致两个插件的移动端悬浮入口重叠以及触控手势冲突。
+2. **轻量可控与独立升级**：按需单独安装所需插件（例如只需任务看板和宠物时，仅安装 `@linxin666/dsh-client-ui-task-board` 与 `@linxin666/dsh-pet`），既能保证环境轻盈，也便于各个插件独立升级、回滚与维护，避免依赖绑定。
+*(注：自 v1.6.0 起，`dsh-remote-mobile` 已内置无缝兼容处理，通过前置参数与 CSS 协同规避 `#dshRemoteWhale` 重复挂载，保障已安装全家桶环境下的正常使用；若追求更简洁稳定的开发与运行环境，按需安装单体包仍是最佳实践)*。
 </details>
 
 ---

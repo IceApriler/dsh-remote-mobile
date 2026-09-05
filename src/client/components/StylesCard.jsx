@@ -172,10 +172,13 @@ export function StylesCard({ lang, showToast }) {
     border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.12))',
     borderRadius: '8px',
     padding: '10px 12px',
+    boxSizing: 'border-box',
+    maxWidth: '100%',
+    overflow: 'hidden',
   };
 
   const miniBtnStyle = {
-    padding: '4px 10px',
+    padding: '4px 8px',
     background: 'var(--dsw-alias-bg-layer-3, rgba(128,128,128,0.1))',
     border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.2))',
     color: 'var(--dsw-alias-label-secondary, inherit)',
@@ -183,6 +186,7 @@ export function StylesCard({ lang, showToast }) {
     fontSize: '11px',
     cursor: 'pointer',
     whiteSpace: 'nowrap',
+    flexShrink: 0,
   };
 
   const primaryBtnStyle = {
@@ -198,7 +202,7 @@ export function StylesCard({ lang, showToast }) {
         background: 'var(--dsw-alias-bg-layer-3, rgba(128,128,128,0.06))',
         border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.15))',
         borderRadius: '12px',
-        padding: '18px 20px',
+        padding: '14px 14px',
         display: 'flex',
         flexDirection: 'column',
         gap: '14px',
@@ -253,8 +257,8 @@ export function StylesCard({ lang, showToast }) {
                   .filter((s) => s.builtin)
                   .map((s) => (
                     <div key={s.id} style={rowStyle}>
-                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', flexWrap: 'wrap' }}>
-                        <div style={{ flex: 1, minWidth: '180px' }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+                        <div style={{ flex: '1 1 180px', minWidth: 0, maxWidth: '100%' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                             <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--dsw-alias-label-primary, inherit)' }}>
                               {s.name}
@@ -290,8 +294,8 @@ export function StylesCard({ lang, showToast }) {
                             </div>
                           ) : null}
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, flexWrap: 'wrap' }}>
-                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', cursor: 'pointer' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px 8px', flexWrap: 'wrap', maxWidth: '100%' }}>
+                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
                             <input
                               type="checkbox"
                               checked={s.pcEnabled}
@@ -300,7 +304,7 @@ export function StylesCard({ lang, showToast }) {
                             />
                             🖥️ {t('stylesPcShort', lang)}
                           </label>
-                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', cursor: 'pointer' }}>
+                          <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
                             <input
                               type="checkbox"
                               checked={s.mobileEnabled}
@@ -309,12 +313,14 @@ export function StylesCard({ lang, showToast }) {
                             />
                             📱 {t('stylesMobileShort', lang)}
                           </label>
-                          <button type="button" onClick={() => toggleExpand(s.id)} style={miniBtnStyle}>
-                            {expanded[s.id] ? t('stylesHideCss', lang) : t('stylesViewCss', lang)}
-                          </button>
-                          <button type="button" onClick={() => copyCss(s.css)} style={miniBtnStyle}>
-                            {t('stylesCopyCss', lang)}
-                          </button>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                            <button type="button" onClick={() => toggleExpand(s.id)} style={miniBtnStyle}>
+                              {expanded[s.id] ? t('stylesHideCss', lang) : t('stylesViewCss', lang)}
+                            </button>
+                            <button type="button" onClick={() => copyCss(s.css)} style={miniBtnStyle}>
+                              {t('stylesCopyCss', lang)}
+                            </button>
+                          </div>
                         </div>
                       </div>
                       {expanded[s.id] ? (
@@ -466,8 +472,8 @@ export function StylesCard({ lang, showToast }) {
                 .filter((s) => !s.builtin)
                 .map((s) => (
                   <div key={s.id} style={rowStyle}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', flexWrap: 'wrap' }}>
-                      <div style={{ flex: 1, minWidth: '180px' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' }}>
+                      <div style={{ flex: '1 1 180px', minWidth: 0, maxWidth: '100%' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                           <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--dsw-alias-label-primary, inherit)' }}>
                             {s.name}
@@ -491,8 +497,8 @@ export function StylesCard({ lang, showToast }) {
                           </div>
                         ) : null}
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, flexWrap: 'wrap' }}>
-                        <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', cursor: 'pointer' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px 8px', flexWrap: 'wrap', maxWidth: '100%' }}>
+                        <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
                           <input
                             type="checkbox"
                             checked={s.pcEnabled}
@@ -501,7 +507,7 @@ export function StylesCard({ lang, showToast }) {
                           />
                           🖥️ {t('stylesPcShort', lang)}
                         </label>
-                        <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', cursor: 'pointer' }}>
+                        <label style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap' }}>
                           <input
                             type="checkbox"
                             checked={s.mobileEnabled}
@@ -510,18 +516,20 @@ export function StylesCard({ lang, showToast }) {
                           />
                           📱 {t('stylesMobileShort', lang)}
                         </label>
-                        <button type="button" onClick={() => startEdit(s)} style={miniBtnStyle}>
-                          {t('stylesEditBtn', lang)}
-                        </button>
-                        <button type="button" onClick={() => remove(s)} style={{ ...miniBtnStyle, color: '#ef4444' }}>
-                          {t('stylesDeleteBtn', lang)}
-                        </button>
-                        <button type="button" onClick={() => toggleExpand(s.id)} style={miniBtnStyle}>
-                          {expanded[s.id] ? t('stylesHideCss', lang) : t('stylesViewCss', lang)}
-                        </button>
-                        <button type="button" onClick={() => copyCss(s.css)} style={miniBtnStyle}>
-                          {t('stylesCopyCss', lang)}
-                        </button>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                          <button type="button" onClick={() => startEdit(s)} style={miniBtnStyle}>
+                            {t('stylesEditBtn', lang)}
+                          </button>
+                          <button type="button" onClick={() => remove(s)} style={{ ...miniBtnStyle, color: '#ef4444' }}>
+                            {t('stylesDeleteBtn', lang)}
+                          </button>
+                          <button type="button" onClick={() => toggleExpand(s.id)} style={miniBtnStyle}>
+                            {expanded[s.id] ? t('stylesHideCss', lang) : t('stylesViewCss', lang)}
+                          </button>
+                          <button type="button" onClick={() => copyCss(s.css)} style={miniBtnStyle}>
+                            {t('stylesCopyCss', lang)}
+                          </button>
+                        </div>
                       </div>
                     </div>
                     {expanded[s.id] ? (

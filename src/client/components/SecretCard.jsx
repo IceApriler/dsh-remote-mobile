@@ -20,7 +20,7 @@ export function SecretCard({
         background: 'var(--dsw-alias-bg-layer-3, rgba(128,128,128,0.06))',
         border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.15))',
         borderRadius: '12px',
-        padding: '18px 20px',
+        padding: '14px 14px',
       }}
     >
       {/* 注入样式强制隐藏浏览器原生密码眼睛 */}
@@ -83,11 +83,12 @@ export function SecretCard({
         {t('secretCardDesc', lang)}
       </div>
 
-      <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
         <div
           style={{
             position: 'relative',
-            flex: 1,
+            flex: '1 1 200px',
+            minWidth: '200px',
             display: 'flex',
             alignItems: 'center',
           }}

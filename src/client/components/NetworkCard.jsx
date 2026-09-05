@@ -15,7 +15,7 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
         background: 'var(--dsw-alias-bg-layer-3, rgba(128,128,128,0.06))',
         border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.15))',
         borderRadius: '12px',
-        padding: '18px 20px',
+        padding: '14px 14px',
       }}
     >
       <div
@@ -45,13 +45,20 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
           borderBottom: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.12))',
           marginBottom: '16px',
           display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'flex-start',
-          gap: '16px',
+          flexDirection: 'column',
+          gap: '10px',
         }}
       >
-        {/* 左侧内容区：标题 + 徽标 + URL + 说明 */}
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        {/* 顶部 Header：标题区 + 开关区（自适应 flexWrap） */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '8px 12px',
+          }}
+        >
           {/* 标题与状态徽标 */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '16px', flexShrink: 0 }}>🔒</span>
@@ -91,197 +98,178 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
             )}
           </div>
 
-          {/* 访问链接行 */}
+          {/* 右侧：Tailscale 免密开关（宽屏浮动在右，移动窄屏自适应换行靠右） */}
           {status.tailscaleIp ? (
-            <div
-              style={{
-                fontSize: '13px',
-                fontFamily: 'monospace',
-                color: 'var(--dsw-alias-brand-primary, #3b82f6)',
-                display: 'flex',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: '8px',
-              }}
-            >
-              <span>{`http://${tsHost}:${port}`}</span>
-              <button
-                type="button"
-                onClick={() => copyText(`http://${tsHost}:${port}`, t('copiedTip', lang))}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, marginLeft: 'auto' }}>
+              <span
                 style={{
-                  padding: '2px 8px',
-                  background: 'transparent',
-                  border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.25))',
-                  borderRadius: '4px',
-                  fontSize: '11px',
-                  cursor: 'pointer',
-                  color: 'var(--dsw-alias-label-secondary, inherit)',
+                  fontSize: '12px',
+                  color: status.allowTailscale
+                    ? 'var(--dsw-alias-brand-primary, #3b82f6)'
+                    : 'var(--dsw-alias-label-secondary, #888)',
+                  fontWeight: '600',
                   whiteSpace: 'nowrap',
+                }}
+              >
+                {status.allowTailscale ? t('directBypassOn', lang) : t('directBypassOff', lang)}
+              </span>
+              <label
+                style={{
+                  position: 'relative',
+                  display: 'inline-block',
+                  width: '44px',
+                  height: '24px',
+                  cursor: 'pointer',
+                  userSelect: 'none',
                   flexShrink: 0,
                 }}
               >
-                {t('copyUrlBtn', lang)}
-              </button>
-            </div>
-          ) : (
-            <div
-              style={{
-                fontSize: '12px',
-                color: 'var(--dsw-alias-label-tertiary, #888)',
-                lineHeight: '1.4',
-              }}
-            >
-              {t('tailscaleGuide', lang)}
-            </div>
-          )}
-
-          {status.tailscaleIp ? (
-            <div
-              style={{
-                fontSize: '12px',
-                color: 'var(--dsw-alias-label-tertiary, #888)',
-                lineHeight: '1.4',
-              }}
-            >
-              {t('tailscaleBypassDesc', lang)}
+                <input
+                  type="checkbox"
+                  checked={!!status.allowTailscale}
+                  onChange={toggleTailscale}
+                  style={{ opacity: 0, width: 0, height: 0, margin: 0 }}
+                />
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: status.allowTailscale
+                      ? 'var(--dsw-alias-brand-primary, #3b82f6)'
+                      : 'var(--dsw-alias-border-l2, rgba(128,128,128,0.3))',
+                    transition: 'background-color 0.25s ease',
+                    borderRadius: '24px',
+                  }}
+                />
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: '3px',
+                    left: '3px',
+                    width: '18px',
+                    height: '18px',
+                    backgroundColor: '#ffffff',
+                    borderRadius: '50%',
+                    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.25)',
+                    transform: status.allowTailscale ? 'translateX(20px)' : 'translateX(0px)',
+                    transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+                  }}
+                />
+              </label>
             </div>
           ) : null}
         </div>
 
-        {/* 右侧：Tailscale 免密开关 (固定在右上角) */}
+        {/* 访问链接胶囊栏 */}
         {status.tailscaleIp ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, paddingTop: '2px' }}>
+          <div
+            style={{
+              fontSize: '13px',
+              fontFamily: 'monospace',
+              color: 'var(--dsw-alias-brand-primary, #3b82f6)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '8px',
+              padding: '6px 10px',
+              background: 'var(--dsw-alias-bg-layer-2, rgba(128, 128, 128, 0.08))',
+              border: '1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.15))',
+              borderRadius: '8px',
+            }}
+          >
             <span
               style={{
-                fontSize: '12px',
-                color: status.allowTailscale
-                  ? 'var(--dsw-alias-brand-primary, #3b82f6)'
-                  : 'var(--dsw-alias-label-secondary, #888)',
-                fontWeight: '600',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
+                flex: 1,
+                minWidth: 0,
               }}
             >
-              {status.allowTailscale ? t('directBypassOn', lang) : t('directBypassOff', lang)}
+              {`http://${tsHost}:${port}`}
             </span>
-            <label
+            <button
+              type="button"
+              onClick={() => copyText(`http://${tsHost}:${port}`, t('copiedTip', lang))}
               style={{
-                position: 'relative',
-                display: 'inline-block',
-                width: '44px',
-                height: '24px',
+                padding: '3px 10px',
+                background: 'var(--dsw-alias-bg-layer-3, rgba(255, 255, 255, 0.08))',
+                border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.25))',
+                borderRadius: '4px',
+                fontSize: '11px',
                 cursor: 'pointer',
-                userSelect: 'none',
+                color: 'var(--dsw-alias-label-secondary, inherit)',
+                whiteSpace: 'nowrap',
                 flexShrink: 0,
               }}
             >
-              <input
-                type="checkbox"
-                checked={!!status.allowTailscale}
-                onChange={toggleTailscale}
-                style={{ opacity: 0, width: 0, height: 0, margin: 0 }}
-              />
-              <span
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  backgroundColor: status.allowTailscale
-                    ? 'var(--dsw-alias-brand-primary, #3b82f6)'
-                    : 'var(--dsw-alias-border-l2, rgba(128,128,128,0.3))',
-                  transition: 'background-color 0.25s ease',
-                  borderRadius: '24px',
-                }}
-              />
-              <span
-                style={{
-                  position: 'absolute',
-                  top: '3px',
-                  left: '3px',
-                  width: '18px',
-                  height: '18px',
-                  backgroundColor: '#ffffff',
-                  borderRadius: '50%',
-                  boxShadow: '0 2px 4px rgba(0, 0, 0, 0.25)',
-                  transform: status.allowTailscale ? 'translateX(20px)' : 'translateX(0px)',
-                  transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-                }}
-              />
-            </label>
+              {t('copyUrlBtn', lang)}
+            </button>
+          </div>
+        ) : (
+          <div
+            style={{
+              fontSize: '12px',
+              color: 'var(--dsw-alias-label-tertiary, #888)',
+              lineHeight: '1.4',
+            }}
+          >
+            {t('tailscaleGuide', lang)}
+          </div>
+        )}
+
+        {status.tailscaleIp ? (
+          <div
+            style={{
+              fontSize: '12px',
+              color: 'var(--dsw-alias-label-tertiary, #888)',
+              lineHeight: '1.4',
+            }}
+          >
+            {t('tailscaleBypassDesc', lang)}
           </div>
         ) : null}
       </div>
 
       {/* 网络条目 2: 局域网 Wi-Fi */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        {/* 顶部主体：左侧信息 + 右侧开关 */}
+        {/* 顶部 Header：标题区 + 开关区（自适应 flexWrap） */}
         <div
           style={{
             display: 'flex',
+            alignItems: 'center',
             justifyContent: 'space-between',
-            alignItems: 'flex-start',
-            gap: '16px',
+            flexWrap: 'wrap',
+            gap: '8px 12px',
           }}
         >
-          {/* 左侧内容区：标题 + 徽标 + URL */}
-          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '16px', flexShrink: 0 }}>🏠</span>
-              <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--dsw-alias-label-primary, inherit)' }}>
-                {t('lanSectionTitle', lang)}
-              </span>
-              <span
-                style={{
-                  fontSize: '11px',
-                  padding: '2px 6px',
-                  borderRadius: '4px',
-                  background: 'rgba(16,185,129,0.15)',
-                  color: '#10b981',
-                  fontWeight: '600',
-                  whiteSpace: 'nowrap',
-                  flexShrink: 0,
-                }}
-              >
-                {lang === 'en' ? 'Ready' : '已就绪'}
-              </span>
-            </div>
-
-            {/* 访问链接行 */}
-            <div
+          {/* 标题与状态徽标 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '16px', flexShrink: 0 }}>🏠</span>
+            <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--dsw-alias-label-primary, inherit)' }}>
+              {t('lanSectionTitle', lang)}
+            </span>
+            <span
               style={{
-                fontSize: '13px',
-                fontFamily: 'monospace',
-                color: 'var(--dsw-alias-brand-primary, #3b82f6)',
-                display: 'flex',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: '8px',
+                fontSize: '11px',
+                padding: '2px 6px',
+                borderRadius: '4px',
+                background: 'rgba(16,185,129,0.15)',
+                color: '#10b981',
+                fontWeight: '600',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
               }}
             >
-              <span>{`http://${lanHost}:${port}`}</span>
-              <button
-                type="button"
-                onClick={() => copyText(`http://${lanHost}:${port}`, t('copiedTip', lang))}
-                style={{
-                  padding: '2px 8px',
-                  background: 'transparent',
-                  border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.25))',
-                  borderRadius: '4px',
-                  fontSize: '11px',
-                  cursor: 'pointer',
-                  color: 'var(--dsw-alias-label-secondary, inherit)',
-                  whiteSpace: 'nowrap',
-                  flexShrink: 0,
-                }}
-              >
-                {t('copyUrlBtn', lang)}
-              </button>
-            </div>
+              {lang === 'en' ? 'Ready' : '已就绪'}
+            </span>
           </div>
 
-          {/* 右侧：局域网免密开关 (固定在右上角) */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, paddingTop: '2px' }}>
+          {/* 右侧：局域网免密开关（宽屏浮动在右，移动窄屏自适应换行靠右） */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, marginLeft: 'auto' }}>
             <span
               style={{
                 fontSize: '12px',
@@ -347,6 +335,52 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
               />
             </label>
           </div>
+        </div>
+
+        {/* 访问链接胶囊栏 */}
+        <div
+          style={{
+            fontSize: '13px',
+            fontFamily: 'monospace',
+            color: 'var(--dsw-alias-brand-primary, #3b82f6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '8px',
+            padding: '6px 10px',
+            background: 'var(--dsw-alias-bg-layer-2, rgba(128, 128, 128, 0.08))',
+            border: '1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.15))',
+            borderRadius: '8px',
+          }}
+        >
+          <span
+            style={{
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              flex: 1,
+              minWidth: 0,
+            }}
+          >
+            {`http://${lanHost}:${port}`}
+          </span>
+          <button
+            type="button"
+            onClick={() => copyText(`http://${lanHost}:${port}`, t('copiedTip', lang))}
+            style={{
+              padding: '3px 10px',
+              background: 'var(--dsw-alias-bg-layer-3, rgba(255, 255, 255, 0.08))',
+              border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.25))',
+              borderRadius: '4px',
+              fontSize: '11px',
+              cursor: 'pointer',
+              color: 'var(--dsw-alias-label-secondary, inherit)',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+            }}
+          >
+            {t('copyUrlBtn', lang)}
+          </button>
         </div>
 
         {/* 🚨 局域网免密高危醒目警示横幅 */}

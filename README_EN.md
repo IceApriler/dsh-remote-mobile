@@ -64,6 +64,9 @@ Run the DSH official plugin management command in your terminal (Recommended):
 dsh plugin --profile web add dsh-remote-mobile
 ```
 
+> [!IMPORTANT]
+> **Ecosystem Plugin Advice**: **Installing `@linxin666/dsh-web-all` (all-in-one package) is not recommended**. We suggest **installing individual standalone plugins on demand**. The all-in-one package bundles multiple frontend modules together, which may result in duplicated mobile floating buttons and conflicting gesture handlers. If you need task boards, pet widgets, or other tools, install their standalone packages directly (see details below).
+
 ---
 
 <span id="config"></span>
@@ -90,6 +93,24 @@ Because DSH defaults to `127.0.0.1`, ensure your `~/.dsh/profiles/web/cordis.pat
 ```
 
 > **💡 Note**: Plugin self-registration is automatically handled by the DSH Bundle system. You do **not** need to add `id: remote-mobile` manually. Windows users can press `Win + R` and enter `%USERPROFILE%\.dsh\profiles\web` to quickly jump to the configuration folder.
+
+> [!WARNING]
+> **⚠️ Plugin Compatibility & Coexistence Note: Prefer installing standalone plugins over the all-in-one bundle (`@linxin666/dsh-web-all`)**
+> 
+> * **Why do we recommend avoiding `@linxin666/dsh-web-all`?**
+>   1. **Avoid duplicated entries and gesture conflicts**: The all-in-one package compiles the frontend logic of multiple plugins into a single `client.js`. Its mobile adaptation logic executes upon script load. Even if you set `web-ui-remote-web-ui: disabled: true` in `cordis.patch.yml`, the browser may still render the floating whale button (`#dshRemoteWhale`), leading to duplicated mobile entry points and conflicting touch gestures.
+>   2. **Lightweight and independently upgradable**: Installing standalone packages keeps the environment minimal and lets you upgrade, rollback, or configure each component independently.
+> 
+> * **Recommended Best Practice (Install Standalone Plugins)**:
+>   Install only the specific standalone packages you actually need, for example:
+>   ```bash
+>   # Recommended: clear responsibilities, decoupled, fully controllable
+>   dsh plugin --profile web add @linxin666/dsh-client-ui-task-board
+>   dsh plugin --profile web add @linxin666/dsh-client-ui-web-ui-settings
+>   dsh plugin --profile web add @linxin666/dsh-pet
+>   dsh plugin --profile web add @linxin666/dsh-ssh
+>   ```
+>   *(Note: Starting from v1.6.0, `dsh-remote-mobile` includes automated compatibility handling that prepends `dsh-remote-force-desktop` to sessionStorage and coordinates with CSS to prevent the `#dshRemoteWhale` button from mounting twice. For the cleanest setup, installing standalone packages remains the best practice)*.
 
 ---
 
@@ -161,7 +182,7 @@ Open the DSH Web Console in your browser, navigate to **Settings ⚙️ -> Remot
 
 The DSH web UI still carries many desktop-oriented styles on phones. This plugin ships a built-in **Mobile Style Snippets** module that splits mobile adaptation into toggleable CSS snippets:
 
-- **Three area-based built-in presets**: `preset-sidebar` (collapsed sidebar becomes a 0-width drawer with a draggable floating toggle), `preset-settings` (centered/scaled settings dialog with locked overlay scroll), `preset-main` (dense conversation typography with scrollable code blocks). Mobile on / PC off by default;
+- **Three area-based built-in presets**: `preset-sidebar` (collapsed sidebar becomes a 0-width drawer with draggable floating toggle, adaptive width, and touch-friendly 44px tap targets), `preset-settings` (vertically stacked layout with horizontally scrollable nav tabs and natural vertical scrolling), `preset-main` (dense conversation typography with scrollable code blocks). Mobile on / PC off by default;
 - **Separate PC / Mobile toggles (viewport-width based, device-independent)**: every preset and custom snippet has independent PC and Mobile switches; "Mobile" = applies at narrow viewports (≤900px) — **a PC browser with a narrow window gets it too**; "PC" = applies at wide viewports (>900px); both on = applies at all widths;
 - **Custom snippets (your own mini-plugins)**: paste your CSS in **Settings ⚙️ → Remote & Mobile → 🎨 Mobile Style Snippets** to add a snippet, with edit/toggle/delete/**one-click copy** support (every snippet has a "📋 Copy CSS" button next to "View CSS"). Persisted to `~/.dsh/remote-mobile/style-snippets.json`; changes apply on the next page load without restart;
 - **UA-based marker + width-based styling**: styles apply by viewport-width band (see above), independent of device UA; mobile UA requests additionally add `data-dsh-mobile="1"` to `<html>` as a scope hook, and the draggable toggle script is injected for all clients (it only activates while the sidebar is collapsed).
@@ -377,6 +398,15 @@ If your log instead shows `service "remoteWebUiPairing" has been registered`, pl
 <summary><b>Q3: Does mobile support creating and switching workspaces normally?</b></summary>
 
 **Answer**: **Supported.** The plugin uses request isolation so that mobile devices get the same workspace management and execution capabilities as the desktop Web interface.
+</details>
+
+<details>
+<summary><b>Q6: Why is installing standalone plugins recommended over monolithic all-in-one packages (e.g. @linxin666/dsh-web-all)?</b></summary>
+
+**Answer**: This is primarily based on **avoiding functional conflicts** and **keeping the environment lightweight and decoupled**:
+1. **Avoid duplicated mobile entries and touch gesture conflicts**: All-in-one packages compile the frontend logic of dozens of sub-plugins into a single `client.js`. Its mobile adaptation logic executes upon script load. Even if you set `web-ui-remote-web-ui: disabled: true` in `cordis.patch.yml`, the browser may still render the floating whale button (`#dshRemoteWhale`), causing duplicated mobile floating entry points and touch gesture interference.
+2. **Lightweight and independently upgradable**: Installing standalone packages on demand (e.g. installing only `@linxin666/dsh-client-ui-task-board` and `@linxin666/dsh-pet` when needed) maintains a minimal dependency footprint and allows independent upgrading, rollback, and maintenance.
+*(Note: As of v1.6.0, `dsh-remote-mobile` provides built-in compatibility handling to prevent `#dshRemoteWhale` from mounting repeatedly, ensuring smooth coexistence when an all-in-one package is present; for the cleanest environment, installing standalone plugins remains the recommended practice)*.
 </details>
 
 ---

@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-09-06
+
+### Mobile UX (解决 Issue #5 · 移动端体验全面重构与极窄屏排版加固)
+- **解决 Issue #5：设置面板移动端改上下堆叠（preset-settings）**：针对窄屏下设置弹窗左右并排导致右侧文字被挤压成单字一列的痛点，彻底重构布局。通过 `[role="dialog"]:has(nav)` 精准定位带导航弹窗，取消 `530px` 定宽与 `zoom: 0.88` 微缩；导航栏置顶横排并支持横向滑动手势，内容区 100% 铺满并恢复纵向自然滚动，移除横滑提示；常规通用 Modal 不受任何影响。
+- **解决 Issue #5：侧边栏抽屉自适应宽度与触控区友好化（preset-sidebar）**：
+  - 展开态抽屉宽度改为自适应 `width: min(85vw, 320px)`，告别 360px 窄屏或大屏手机沿用官方 280px 定宽的死板体验；
+  - 条目行高增大到 `min-height: 44px`、次级操作按钮增大到 `min-width/height: 36px`，符合移动端人机交互规范，大幅降低误触；
+  - **工作区与会话右侧操作按钮（更多操作 ⋯、新建会话 + 等）移动端常显**：彻底解决 PC 鼠标 hover 依赖在触屏上无法唤出操作按钮的痛点，结合标题容器自适应省略号截断防挤压；
+  - **精准区分会话选中与操作点击（闭环 Issue #5 抽屉收起取舍）**：点击会话条目（`_sessionRow`）主体直接程序化收起抽屉丝滑回到主聊天区；而点击条目操作按钮（`_rowActions` / `⋯` / `+`）或点击工作区行（`_projectRow` 展开/折叠）继续被防误收起守卫保护，抽屉保持展开；
+  - 折叠展开悬浮把手放大至 `44px`（圆角 12px），并通过 `top: max(12px, env(safe-area-inset-top))` 智能避让 iPhone 刘海屏、灵动岛与系统状态栏。
+- **极窄屏弹窗与内边距紧凑化（解决 Issue #5 窄屏挤压）**：
+  - 设置弹窗宽度由 `94vw` 提升至 `96vw`，圆角微调至 `14px`，消除手机屏幕两侧过宽的无用灰边；收紧官方 `[role="dialog"] [class*="_content"]` 默认过厚（24px~32px）的内边距为 `10px 4px`，为内部卡片释放出 35px 以上的宝贵横向宽度；
+  - 将所有设置卡片（`DeviceListCard`、`NetworkCard`、`SecurityCard`、`SecretCard`、`ConfigCard`、`StylesCard`、`QrPairingCard`、`StorageCard`）的基础内边距由原本过宽的 `18px 20px` 统一调整为紧凑舒适的 `14px 14px`。
+- **Tab 导航栏防文字折断与横滑支持（MainSection）**：给顶部页签按钮增加 `whiteSpace: nowrap` 与 `flexShrink: 0`，配合隐藏滚动条的弹性横向滑动（`overflow-x: auto`），彻底消除窄屏下“设备与安全”、“样式覆写”、“本地数据”等页签文字被挤压拆成两截的现象。
+- **操作按钮防竖排挤压变形（SecurityCard 等）**：
+  - 修复安全审计卡片中「🗑️ 清空审计日志」等按钮因左侧标题不可压缩而缺少换行保护，导致文字被挤压成每行两字竖排的狭长细框的问题；全面为操作按钮配置 `whiteSpace: nowrap`、`flexShrink: 0` 与 `marginLeft: auto`；
+  - 容器统一重构为自适应 `flexWrap: wrap` 流式排版，宽屏下自然并排，窄屏下平滑换行靠右展示，按钮文字永远保持单行水平胶囊样式；
+  - 优化设备卡片（`DeviceListCard`）头部布局，说明文字通栏独立展示，不再与「一键注销」按钮争抢水平宽度。
+- **设置页样式片段列表移动端响应式折行**：修复窄屏下操作按钮组与双端开关在同一行溢出卡片右边界的问题，移除强制不收缩限制，支持开关组与按钮组弹性自适应换行。
+- **网络接入卡片移动端响应式流式排版（NetworkCard）**：修复窄屏下 Tailscale 与本地局域网（LAN）接入项的「标题/状态」与「免密直连开关」并排挤压导致图标与文字撕裂拆行的问题。重构为结构化自适应流：标题与状态徽标通栏舒展展示，免密开关在窄屏自适应换行靠右；访问链接与复制按钮收纳为底色胶囊输入条，彻底消除移动端排版错乱。
+
+
+### Stability & Lifecycle (生命周期与启动稳定性加固)
+- **修复：底座 Patch 重载时的 inactive context 异常崩溃**。底座加载 `cordis.patch.yml`（如覆盖 `webserver` 监听 `0.0.0.0`）会触发服务重启与旧插件上下文注销（dispose）；原就绪横幅延时函数在已注销的 context 下通过原生定时器触发并访问 `ctx.webServer`，触发 Cordis 容器断言抛出 `cannot get required service "webServer" in inactive context` 导致进程退出。现引入闭包 `disposed` 状态标志、监听 `ctx.on('dispose')` 自动清理定时器，并对服务访问与异步回调执行全流程异常隔离兜底，彻底保证各种极端重载与时序下的平稳运行。
+- **修复：消除 Cordis 特权属性访问隔离拦截**。移除直接对未注入特权属性（如 `ctx.scope`、`ctx.setTimeout`）的读取，规避 Cordis 严格隔离模式下的 `cannot get property "timer"/"scope" without inject` 报错。
+
+### Compatibility (生态插件兼容与冲突防护)
+- **新增：小鲸鱼悬浮按钮 (#dshRemoteWhale) 冲突防护**。针对第三方生态插件聚合打包时前端自适应逻辑在模块加载时自执行、容易与本插件产生移动端悬浮入口重复与手势交互冲突的问题：
+  - 新增 `FORCE_DESKTOP_SUPPRESSION_SNIPPET`，在 HTML `<head>` 最前置注入 `sessionStorage.setItem('dsh-remote-force-desktop', '1')`，触发其内置的桌面模式逻辑，平滑避免其移动端 DOM 重复挂载；
+  - 内置预设样式（`preset-sidebar`）补充 `#dshRemoteWhale` 与 `[data-dsh-plugin="remote-web-ui"]` 隐藏（`display: none !important`）规则，提供双重共存保障。
+- **完善：文档新增单体插件安装指引**。说明聚合包打包机制对前端配置生效的影响，推荐按需单独安装单体功能插件，保持环境轻量清晰、互不干扰。
+
+---
+
 ## [1.5.0] - 2026-09-04
 
 ### Compatibility (适配 dsh@0.1.2-rc.1 官方 Token 鉴权)

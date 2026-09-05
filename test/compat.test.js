@@ -2,12 +2,12 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import { SessionStore } from '../lib/auth/token.js'
-import { patchHttpServerWithVirtualizer, CRYPTO_POLYFILL_SNIPPET, CLIPBOARD_POLYFILL_SNIPPET, DRAGGABLE_NAV_SNIPPET } from '../lib/bridge/compat.js'
+import { patchHttpServerWithVirtualizer, CRYPTO_POLYFILL_SNIPPET, CLIPBOARD_POLYFILL_SNIPPET, DRAGGABLE_NAV_SNIPPET, FORCE_DESKTOP_SUPPRESSION_SNIPPET } from '../lib/bridge/compat.js'
 import { getClientIp } from '../lib/auth/tailscale.js'
 import { StyleSnippetStore } from '../lib/styles/style-snippets.js'
 
 test('上下文虚拟化与兼容性补丁测试 (compat.ts)', async (t) => {
-  await t.test('HTML 响应自动注入 crypto.randomUUID Polyfill 脚本', (t, done) => {
+  await t.test('HTML 响应自动注入 crypto.randomUUID Polyfill 脚本与生态移动端冲突防护脚本', (t, done) => {
     const mockServer = new EventEmitter()
     const store = new SessionStore({ devicesFile: `/tmp/dsh-compat-test-${Date.now()}.json` })
 
@@ -43,6 +43,9 @@ test('上下文虚拟化与兼容性补丁测试 (compat.ts)', async (t) => {
         assert.ok(endCalledWith.includes('randomUUID'))
         assert.ok(endCalledWith.includes('id="dsh-clipboard-polyfill"'))
         assert.ok(endCalledWith.includes('navigator.clipboard'))
+        assert.ok(endCalledWith.includes('id="dsh-force-desktop-suppression"'))
+        assert.ok(endCalledWith.includes('dsh-remote-force-desktop'))
+        assert.ok(FORCE_DESKTOP_SUPPRESSION_SNIPPET.includes("setItem('dsh-remote-force-desktop', '1')"))
         done()
       },
     }
@@ -328,6 +331,8 @@ test('上下文虚拟化与兼容性补丁测试 (compat.ts)', async (t) => {
     assert.ok(DRAGGABLE_NAV_SNIPPET.includes('isSidebarToggle && Date.now() - lastEntryTapAt < 900'))
     // 条目主体匹配：仍然限定在侧边栏内的 treeitem / sidebar-entry
     assert.ok(DRAGGABLE_NAV_SNIPPET.includes('[role="treeitem"], [data-dsh-part="sidebar-entry"]'))
+    // 会话主体（_sessionRow）放行：除操作按钮以外的主体点击重置 lastEntryTapAt=0，允许自动回主区
+    assert.ok(DRAGGABLE_NAV_SNIPPET.includes('isSessionRow && !isActionOrToggle'))
     // 收起行为仍被守卫吞掉（真实用户点击收起按钮走浏览器合成事件，不受影响）
     assert.ok(DRAGGABLE_NAV_SNIPPET.includes('收起侧边栏|Collapse sidebar|Open sidebar'))
   })

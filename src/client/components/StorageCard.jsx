@@ -47,7 +47,7 @@ export function StorageCard({ status, lang, copyText }) {
         background: 'var(--dsw-alias-bg-layer-2, rgba(128,128,128,0.04))',
         border: '1px dashed var(--dsw-alias-border-l2, rgba(128,128,128,0.2))',
         borderRadius: '10px',
-        padding: '14px 16px',
+        padding: '14px 14px',
         display: 'flex',
         flexDirection: 'column',
         gap: '10px',

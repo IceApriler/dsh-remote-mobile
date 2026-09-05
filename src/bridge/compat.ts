@@ -114,6 +114,21 @@ export const CLIPBOARD_POLYFILL_SNIPPET = `
 `
 
 /**
+ * 注入到 index.html <head> 最前列的生态插件 remote-web-ui 移动端冲突防护脚本
+ * 写入 sessionStorage 'dsh-remote-force-desktop' = '1'，触发对方内置的强制桌面跳过机制，
+ * 避免生态插件重复渲染小鲸鱼按钮 (#dshRemoteWhale) 以及引发手势拦截冲突
+ */
+export const FORCE_DESKTOP_SUPPRESSION_SNIPPET = `
+(function() {
+  try {
+    if (typeof window !== "undefined" && window.sessionStorage) {
+      window.sessionStorage.setItem('dsh-remote-force-desktop', '1');
+    }
+  } catch (e) {}
+})();
+`
+
+/**
  * 注入到 index.html 的移动端悬浮入口拖拽与位置记忆脚本
  * 允许用户在移动端上下随心拖动左上角入口把手，避免遮挡聊天内容，并自动保存位置
  */
@@ -139,6 +154,16 @@ export const DRAGGABLE_NAV_SNIPPET = `
         var t = e.target;
         if (!t || !t.closest) return;
         if (!t.closest('[data-pane="sidebar"], [class*="_sidebarCol"]')) return;
+
+        // 会话条目（_sessionRow）除操作按钮（_rowActions/button等）以外的主体点击：
+        // 用户意在进入/切换会话并查看正文，不拦截程序化收起（放行自动回主区）
+        var isSessionRow = t.closest('[class*="_sessionRow"]');
+        var isActionOrToggle = t.closest('[class*="_rowActions"], [class*="_chevron"], [class*="_arrow"], button, [role="button"]');
+        if (isSessionRow && !isActionOrToggle) {
+          lastEntryTapAt = 0;
+          return;
+        }
+
         var entry = t.closest('[role="treeitem"], [data-dsh-part="sidebar-entry"]');
         if (!entry) return;
         lastEntryTapAt = Date.now();
@@ -152,7 +177,7 @@ export const DRAGGABLE_NAV_SNIPPET = `
           this.matches('[data-dsh-responsive-part="sidebar-toggle"]') ||
           /收起侧边栏|Collapse sidebar|Open sidebar/i.test(this.getAttribute('aria-label') || '');
         if (isSidebarToggle && Date.now() - lastEntryTapAt < 900) {
-          return; // 吞掉紧随条目任意部位点击之后的程序化收起
+          return; // 吞掉紧随工作区/操作控件点击之后的程序化收起
         }
       } catch (err) {}
       return protoClick.apply(this, arguments);
@@ -290,12 +315,10 @@ export const MOBILE_DISMISS_SNIPPET = `
           toggle.click();
           return;
         }
-        // 点击侧边栏条目（选中后回主区）→ 下一帧程序化收起。
-        // 既有防误收起守卫（dsh-draggable-nav 包装 HTMLButtonElement.prototype.click
-        // + 900ms 窗口）会拦截「点条目任意部位（含项目名称主体）」后的误收起，
-        // 保证选中高亮后浮现的展开/收起箭头与新增/更多操作图标可操作，行为与 web-ui 一致。
-        if (target.closest('[class*="_toggle"]')) return;
-        if (!target.closest('[role="treeitem"], [data-dsh-part="sidebar-entry"]')) return;
+        // 点击侧边栏内次级操作图标（更多操作 ⋯ / 展开箭头等）、工作区行（_projectRow）或原生切换按钮 → 不收起抽屉
+        if (target.closest('[class*="_toggle"], [class*="_rowActions"], [class*="_projectRow"], [class*="_chevron"], [class*="_arrow"], button, [role="button"]')) return;
+        // 点击会话条目（_sessionRow）主体（选中会话后回主区）→ 下一帧程序化收起
+        if (!target.closest('[class*="_sessionRow"], [role="treeitem"], [data-dsh-part="sidebar-entry"]')) return;
         if (raf !== 0) cancelAnimationFrame(raf);
         raf = requestAnimationFrame(function () {
           raf = 0;
@@ -390,8 +413,9 @@ export function patchHttpServerWithVirtualizer(
           // web-ui 在场时完全交给它处理，未装时复刻等价行为
           html = html.replace('<head>', `<head><script id="dsh-mobile-dismiss">${MOBILE_DISMISS_SNIPPET}</script>`)
           html = html.replace('<head>', `<head><script id="dsh-crypto-polyfill">${CRYPTO_POLYFILL_SNIPPET}</script>`)
-          // Clipboard Polyfill 最后 replace → 位于 <head> 最前，先于官方 bundle 生效
           html = html.replace('<head>', `<head><script id="dsh-clipboard-polyfill">${CLIPBOARD_POLYFILL_SNIPPET}</script>`)
+          // 冲突防护脚本后 replace → 位于 <head> 最前，优先写入 sessionStorage 避免小鲸鱼重复挂载
+          html = html.replace('<head>', `<head><script id="dsh-force-desktop-suppression">${FORCE_DESKTOP_SUPPRESSION_SNIPPET}</script>`)
           chunk = html
           injected = true
         } else if (Buffer.isBuffer(chunk)) {
@@ -404,8 +428,8 @@ export function patchHttpServerWithVirtualizer(
             str = str.replace('<head>', `<head><script id="dsh-draggable-nav">${DRAGGABLE_NAV_SNIPPET}</script>`)
             str = str.replace('<head>', `<head><script id="dsh-mobile-dismiss">${MOBILE_DISMISS_SNIPPET}</script>`)
             str = str.replace('<head>', `<head><script id="dsh-crypto-polyfill">${CRYPTO_POLYFILL_SNIPPET}</script>`)
-            // Clipboard Polyfill 最后 replace → 位于 <head> 最前，先于官方 bundle 生效
             str = str.replace('<head>', `<head><script id="dsh-clipboard-polyfill">${CLIPBOARD_POLYFILL_SNIPPET}</script>`)
+            str = str.replace('<head>', `<head><script id="dsh-force-desktop-suppression">${FORCE_DESKTOP_SUPPRESSION_SNIPPET}</script>`)
             chunk = Buffer.from(str, 'utf8')
             injected = true
           }
@@ -505,8 +529,9 @@ export function mountIndexInjections(ctx: any): void {
       if (html.includes('<head>')) {
         return html
           .replace('<head>', `<head><script id="dsh-crypto-polyfill">${CRYPTO_POLYFILL_SNIPPET}</script>`)
-          // Clipboard Polyfill 后 replace → 位于 <head> 最前，先于官方 bundle 生效
           .replace('<head>', `<head><script id="dsh-clipboard-polyfill">${CLIPBOARD_POLYFILL_SNIPPET}</script>`)
+          // 冲突防护脚本后 replace → 位于 <head> 最前，优先写入 sessionStorage 避免小鲸鱼重复挂载
+          .replace('<head>', `<head><script id="dsh-force-desktop-suppression">${FORCE_DESKTOP_SUPPRESSION_SNIPPET}</script>`)
       }
       return html
     })
@@ -523,6 +548,11 @@ export function mountIndexInjections(ctx: any): void {
         kind: 'script',
         placement: 'head',
         text: CLIPBOARD_POLYFILL_SNIPPET,
+      })
+      table.push({
+        kind: 'script',
+        placement: 'head',
+        text: FORCE_DESKTOP_SUPPRESSION_SNIPPET,
       })
     }
   })

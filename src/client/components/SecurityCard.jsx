@@ -27,26 +27,27 @@ export function SecurityCard({ status, unlockIp, clearIpStats, lang }) {
         background: 'var(--dsw-alias-bg-layer-3, rgba(128,128,128,0.06))',
         border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.15))',
         borderRadius: '12px',
-        padding: '18px 20px',
+        padding: '14px 14px',
       }}
     >
-      {/* 头部第 1 行：标题 + 清空日志按钮 */}
+      {/* 头部第 1 行：标题 + 清空日志按钮（自适应 flexWrap 防挤压） */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '8px 12px',
           marginBottom: '8px',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '16px' }}>🛡️</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+          <span style={{ fontSize: '16px', flexShrink: 0 }}>🛡️</span>
           <span
             style={{
               fontSize: '15px',
               fontWeight: '600',
               color: 'var(--dsw-alias-label-primary, inherit)',
-              whiteSpace: 'nowrap',
             }}
           >
             {t('securityCardTitle', lang)}
@@ -60,10 +61,13 @@ export function SecurityCard({ status, unlockIp, clearIpStats, lang }) {
               background: 'transparent',
               border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.25))',
               color: 'var(--dsw-alias-label-secondary, inherit)',
-              padding: '3px 10px',
+              padding: '4px 10px',
               borderRadius: '6px',
-              fontSize: '12px',
+              fontSize: '11px',
               cursor: 'pointer',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+              marginLeft: 'auto',
             }}
           >
             {t('clearSecurityLogBtn', lang)}

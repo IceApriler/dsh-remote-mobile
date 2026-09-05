@@ -36,7 +36,7 @@ export function QrPairingCard({
         background: 'var(--dsw-alias-bg-layer-3, rgba(128,128,128,0.06))',
         border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.15))',
         borderRadius: '12px',
-        padding: '20px',
+        padding: '14px 14px',
         textAlign: 'center',
       }}
     >
@@ -316,6 +316,8 @@ export function QrPairingCard({
             fontSize: '13px',
             fontWeight: '600',
             cursor: 'pointer',
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
           }}
         >
           {showQr ? `📷 ${t('toggleQrHide', lang)}` : `📷 ${t('toggleQrShow', lang)}`}
@@ -332,6 +334,8 @@ export function QrPairingCard({
             fontSize: '13px',
             fontWeight: '600',
             cursor: 'pointer',
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
           }}
         >
           {t('refreshCodeBtn', lang)}
