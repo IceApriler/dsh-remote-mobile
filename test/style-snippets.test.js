@@ -55,6 +55,20 @@ test('移动端样式片段模块测试 (style-snippets.ts)', async (t) => {
       assert.ok(sidebarCss.includes('[class*="_frame"]:has([class*="_sidebarCol"])::after'))
       assert.ok(sidebarCss.includes('[class*="_frame"]:has([class*="_sidebarCol"]):not([data-sidebar-collapsed])::after'))
       assert.ok(/z-index:\s*899 !important/.test(sidebarCss))
+      // 回归守卫 (Issue #6)：官方三栏 Grid 布局必须显式锚定三列轨道，防止 sidebarCol 脱离 Grid 流后
+      // rightbarCol 前移至第 2 列全屏覆盖对话区并拦截全部触摸与点击
+      assert.ok(sidebarCss.includes('[class*="_frame"]:has([class*="_sidebarCol"]) > [class*="_sidebarCol"]'))
+      assert.ok(/grid-column:\s*1 !important/.test(sidebarCss))
+      assert.ok(sidebarCss.includes('[class*="_frame"]:has([class*="_sidebarCol"]) > [class*="_centerCol"]'))
+      assert.ok(/grid-column:\s*2 !important/.test(sidebarCss))
+      assert.ok(sidebarCss.includes('[class*="_frame"]:has([class*="_sidebarCol"]) > [class*="_rightbarCol"]'))
+      assert.ok(/grid-column:\s*3 !important/.test(sidebarCss))
+      // 回归守卫：右侧栏折叠态尺寸清零与 pointer-events 防御
+      assert.ok(sidebarCss.includes('[class*="_frame"][data-rightbar-collapsed] [class*="_rightbarCol"]'))
+      assert.ok(sidebarCss.includes('pointer-events: none !important'))
+      // 回归守卫：侧边栏内部含 _collapsed 时禁止渲染遮罩 ::after，防止 data-sidebar-collapsed 缺失时遮罩常驻
+      assert.ok(sidebarCss.includes('[class*="_frame"]:has([class*="_sidebarCol"]:has([class*="_collapsed"]))::after'))
+      assert.ok(/content:\s*none !important/.test(sidebarCss))
       // 回归守卫：移动端 UA 下隐藏官方 Tooltip 气泡（触屏点击后 mouseleave/blur 永不触发导致气泡永久滞留）
       assert.ok(sidebarCss.includes('html[data-dsh-mobile="1"] [role="tooltip"]'))
       // 回归守卫：窄屏隐藏官方详情（details）列，杜绝详情浮层与顶部 header 重叠

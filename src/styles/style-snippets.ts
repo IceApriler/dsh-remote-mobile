@@ -106,9 +106,37 @@ const PRESET_SIDEBAR_CSS = `
     position: relative !important;
   }
 
-  [class*="_frame"]:has([class*="_sidebarCol"]) [class*="_centerCol"] {
+  /* 核心修复：显式将三列锁定到各自的 Grid 轨道！
+     官方 AppFrame 为三栏 CSS Grid 布局（sidebarCol + centerCol + rightbarCol）。
+     当 sidebarCol 设为 position: fixed 后脱离 Grid 自动流，会导致后续两列前移：
+     centerCol 移入第 1 列(0px)，rightbarCol 移入第 2 列(1fr 全宽) 并全屏覆盖在
+     对话区上方，其透明容器拦截全部点击与触摸手势（Issue #6）。
+     通过显式指定 grid-column，确保每列始终位于设计轨道，杜绝错位覆盖。 */
+  [class*="_frame"]:has([class*="_sidebarCol"]) > [class*="_sidebarCol"] {
+    grid-column: 1 !important;
+  }
+
+  [class*="_frame"]:has([class*="_sidebarCol"]) [class*="_centerCol"],
+  [class*="_frame"]:has([class*="_sidebarCol"]) > [class*="_centerCol"] {
+    grid-column: 2 !important;
     width: 100vw !important;
     max-width: 100vw !important;
+  }
+
+  [class*="_frame"]:has([class*="_sidebarCol"]) > [class*="_rightbarCol"] {
+    grid-column: 3 !important;
+  }
+
+  /* 右侧栏折叠态穿透防御：折叠时宽度清零并禁用指针事件，杜绝透明层与边缘手柄拦截触摸 */
+  [class*="_frame"][data-rightbar-collapsed] [class*="_rightbarCol"],
+  [class*="_rightbarCol"]:not(:has([data-sidebar-right-open])) {
+    width: 0px !important;
+    min-width: 0px !important;
+    pointer-events: none !important;
+  }
+  [class*="_rightbarCol"]:has([data-sidebar-right-open]),
+  [class*="_frame"]:not([data-rightbar-collapsed]) [class*="_rightbarCol"] {
+    pointer-events: auto !important;
   }
 
   /* 2. 侧边栏最外层容器：作为整体抽屉浮层（阴影仅加在最外层，严禁污染内部列表） */
@@ -158,6 +186,14 @@ const PRESET_SIDEBAR_CSS = `
     inset: 0;
     z-index: 899;
     background: rgb(0 0 0 / 24%);
+  }
+
+  /* 兜底防御：当左侧栏实际处于折叠状态（内部含 _collapsed 类，如官方仅收起内部但 frame
+     未及时打上 data-sidebar-collapsed）时，严禁渲染遮罩，彻底杜绝黑纱常驻与点击拦截 */
+  [class*="_frame"]:has([class*="_sidebarCol"]:has([class*="_collapsed"]))::after,
+  [class*="_frame"][data-sidebar-collapsed]::after {
+    content: none !important;
+    display: none !important;
   }
 
   /* 展开态自适应宽度：支持 360px 窄屏与大屏手机灵活伸缩，覆盖官方内联 280px */

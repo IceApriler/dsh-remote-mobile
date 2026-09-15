@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-09-15
+
+### Fixed & Compatibility (解决 Issue #6 · 适配官方新版三栏布局与右侧边栏)
+- **解决 Issue #6：修复官方右侧边栏引入导致移动端触摸/滑动/点击被全屏拦截**：
+  - **Grid 轨道显式锚定**：官方新版（0.1.5-rc.1 及以上）引入右侧边栏（`_rightbarCol` / `@deepseek-ai/dsh-client-ui-sidebar-right`），整体外层 `_frame` 采用三栏 CSS Grid 布局。在移动端抽屉样式覆写（`preset-sidebar`）将左侧栏设为 `position: fixed` 后脱离了 Grid 自动放置流，导致后续列整体前移：中间正文 `_centerCol` 被移到第 1 轨（0px），而右侧边栏 `_rightbarCol` 被自动排入第 2 轨（1fr 全宽）并全屏覆盖在正文上方；其透明容器拦截了全部点击、滑动与触摸手势。现显式指定三列 Grid 轨道（`_sidebarCol` 绑定第 1 轨、`_centerCol` 绑定第 2 轨、`_rightbarCol` 绑定第 3 轨），彻底解决自动放置错位问题。
+  - **右侧栏折叠态穿透防御**：在窄屏下为折叠状态的右侧栏（`[data-rightbar-collapsed]` 或未处于展开状态）设置宽度清零与 `pointer-events: none !important;`，展开时恢复 `pointer-events: auto`，杜绝任何透明占位层或边缘手柄拦截触摸手势。
+  - **抽屉遮罩折叠态常驻兜底**：增强 `preset-sidebar` 中的全屏遮罩规则，当侧边栏内部含有 `_collapsed` 折叠类时，强制禁止渲染 `::after` 遮罩，防止页面异步加载或属性未就绪时遮罩常驻阻挡操作。
+  - **正文点击拦截双重守卫**：在网关层注入的移动端点击监听脚本（`MOBILE_DISMISS_SNIPPET`）中引入对侧边栏内部 `_collapsed` 类的状态检查，仅在侧边栏真正处于展开状态时才拦截正文点击以收起抽屉；在侧边栏已折叠时绝不误拦截任何主工作区操作。
+
+---
+
 ## [1.6.0] - 2026-09-06
 
 ### Mobile UX (解决 Issue #5 · 移动端体验全面重构与极窄屏排版加固)

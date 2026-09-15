@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import { SessionStore } from '../lib/auth/token.js'
-import { patchHttpServerWithVirtualizer, CRYPTO_POLYFILL_SNIPPET, CLIPBOARD_POLYFILL_SNIPPET, DRAGGABLE_NAV_SNIPPET, FORCE_DESKTOP_SUPPRESSION_SNIPPET } from '../lib/bridge/compat.js'
+import { patchHttpServerWithVirtualizer, CRYPTO_POLYFILL_SNIPPET, CLIPBOARD_POLYFILL_SNIPPET, DRAGGABLE_NAV_SNIPPET, FORCE_DESKTOP_SUPPRESSION_SNIPPET, MOBILE_DISMISS_SNIPPET } from '../lib/bridge/compat.js'
 import { getClientIp } from '../lib/auth/tailscale.js'
 import { StyleSnippetStore } from '../lib/styles/style-snippets.js'
 
@@ -46,6 +46,7 @@ test('上下文虚拟化与兼容性补丁测试 (compat.ts)', async (t) => {
         assert.ok(endCalledWith.includes('id="dsh-force-desktop-suppression"'))
         assert.ok(endCalledWith.includes('dsh-remote-force-desktop'))
         assert.ok(FORCE_DESKTOP_SUPPRESSION_SNIPPET.includes("setItem('dsh-remote-force-desktop', '1')"))
+        assert.ok(MOBILE_DISMISS_SNIPPET.includes("sidebar.querySelector('[class*=\"_collapsed\"]')"))
         done()
       },
     }

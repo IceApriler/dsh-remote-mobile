@@ -308,8 +308,10 @@ export const MOBILE_DISMISS_SNIPPET = `
         if (!sidebar || !toggle) return;
 
         // 抽屉展开时点击正文（sidebar 外）→ 触发官方收起按钮，并拦截被吞掉的点击；
-        // 找不到收起按钮时上面已 return，绝不误拦正文交互
-        if (!frame.hasAttribute('data-sidebar-collapsed') && !sidebar.contains(target)) {
+        // 找不到收起按钮时上面已 return，绝不误拦正文交互；
+        // 增加对 sidebar 内部 _collapsed 的状态校验，双重保证仅在侧边栏真正展开时才拦截正文点击
+        var isSidebarOpen = !frame.hasAttribute('data-sidebar-collapsed') && !sidebar.querySelector('[class*="_collapsed"]');
+        if (isSidebarOpen && !sidebar.contains(target)) {
           event.preventDefault();
           event.stopPropagation();
           toggle.click();
