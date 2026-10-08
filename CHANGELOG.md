@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2026-10-08
+
+### Fixed & Security (适配 NAS / 网关子路径前缀反代，修复静默失败与开放重定向)
+
+- **子路径 / 反向代理前缀自适应**：
+  - **前端设置面板与 SSE 长连接**：新增基于 `document.baseURI` 动态解析的 API 基础路径 `RM_API_BASE`，替换原先硬编码的 15 处 `/api/remote-mobile/...` 绝对路径。经统一网关子路径（如飞牛 fnOS `/app/dsh/`）反代时，请求不再丢失前缀，修复「点保存 / 生成配对码毫无反应」的静默失败；
+  - **独立手机登录页**：`verifyApiUrl` 与 `successRedirectUrl` 改为按当前路径与 `<base>` 动态推导，登录校验及登录成功后的跳转均保持在网关子路径内；
+  - **服务端 302 重定向**：新增 `resolveRedirectPath` / `resolveForwardedPrefix` 工具，使安全门禁（`gate.ts`）与 `/auth` 路由的重定向自动拼接 `X-Forwarded-Prefix`，不再跳出到宿主根路径。
+- **错误处理与反馈**：
+  - **请求层容错**：封装 `safeFetchJson`，统一捕获非 2xx、HTML 错误页等异常响应并透传服务端 `reason`，避免 `res.json()` 解析失败被 Promise 链静默吞掉；
+  - **交互反馈**：设置面板与样式卡片补齐 `.catch` 与失败分支，改用 `showToast` / `showFeedback` 提示具体原因，杜绝操作无反馈。
+- **安全加固**：严格校验 `X-Forwarded-Prefix`（`src/auth/prefix.ts`），仅接受同站绝对路径，拒绝 `//` 协议相对 URL、反斜杠、控制字符与协议前缀，防御开放重定向与 CRLF 注入。
+- **文档**：README（中 / 英）新增 Q7，说明统一网关子路径部署注意事项、`X-Forwarded-Prefix` 依赖，以及本地回环 (127.0.0.1) 放行机制。
+
+---
+
 ## [1.7.0] - 2026-09-15
 
 ### Fixed & Compatibility (解决 Issue #6 · 适配官方新版三栏布局与右侧边栏)

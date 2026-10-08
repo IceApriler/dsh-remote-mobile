@@ -28,8 +28,10 @@ test('客户端 Bundle 实时刷新链路完整性测试', async (t) => {
     assert.ok(localeEffect.includes('localeUnsubs.length'))
   })
 
-  await t.test('SSE 长连接与事件派发链路完整', () => {
-    assert.ok(bundle.includes('new EventSource("/api/remote-mobile/events")'))
+  await t.test('SSE 长连接与事件派发链路完整，且支持 RM_API_BASE 网关子路径自适应', () => {
+    assert.ok(bundle.includes('new EventSource(RM_API_BASE + "events")'))
+    assert.ok(bundle.includes('RM_API_BASE'))
+    assert.ok(bundle.includes('document.baseURI'))
     assert.ok(bundle.includes('window.__DSH_REMOTE_MOBILE_SSE_LISTENER__'))
     assert.ok(bundle.includes('dispatchEvent(new CustomEvent("dsh-device-updated"'))
     assert.ok(bundle.includes('device-connected'))
@@ -41,5 +43,11 @@ test('客户端 Bundle 实时刷新链路完整性测试', async (t) => {
     assert.ok(bundle.includes('ipSecurityStats'))
     assert.ok(bundle.includes('refreshStatusOnly'))
     assert.ok(bundle.includes('fetchStatus'))
+  })
+
+  await t.test('前端 API 源码中已彻底消除裸写绝对路径 /api/remote-mobile/', () => {
+    const apiSrc = readFileSync(resolve(__dirname, '../src/client/api.js'), 'utf8')
+    assert.ok(!apiSrc.includes("fetch('/api/remote-mobile/"), 'src/client/api.js 中不应存在硬编码绝对路径 fetch')
+    assert.ok(!apiSrc.includes('fetch("/api/remote-mobile/'), 'src/client/api.js 中不应存在硬编码绝对路径 fetch')
   })
 })

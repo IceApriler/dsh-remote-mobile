@@ -335,6 +335,40 @@ export function getLoginPageHtml(publicKeyPem?: string, lang: 'zh' | 'en' = 'zh'
       input.value = queryToken;
     }
 
+    // 自适应网关子路径 / baseURI 与重定向
+    const verifyApiUrl = (function () {
+      try {
+        if (document.baseURI && document.querySelector('base')) {
+          return new URL('api/remote-mobile/verify', document.baseURI).toString();
+        }
+        const pathname = window.location.pathname.replace(/\/auth\/?$/, '/');
+        return new URL('api/remote-mobile/verify', window.location.origin + pathname).toString();
+      } catch (e) {
+        return '/api/remote-mobile/verify';
+      }
+    })();
+
+    const successRedirectUrl = (function () {
+      try {
+        // 预留参数能力：支持通过 ?redirect=/path 携带登录后重定向目标
+        const redirectParam = urlParams.get('redirect');
+        if (redirectParam && redirectParam.startsWith('/') && !redirectParam.startsWith('//')) {
+          const appPrefix = window.location.pathname.replace(/\/auth\/?$/, '');
+          if (appPrefix && redirectParam.startsWith(appPrefix)) {
+            return window.location.origin + redirectParam;
+          }
+          return window.location.origin + appPrefix + redirectParam;
+        }
+        if (document.baseURI && document.querySelector('base')) {
+          return new URL('./', document.baseURI).toString();
+        }
+        const appPrefix = window.location.pathname.replace(/\/auth\/?$/, '/');
+        return window.location.origin + appPrefix;
+      } catch (e) {
+        return '/';
+      }
+    })();
+
     form.addEventListener('submit', (e) => {
       e.preventDefault();
       const val = input.value.trim();
@@ -350,7 +384,7 @@ export function getLoginPageHtml(publicKeyPem?: string, lang: 'zh' | 'en' = 'zh'
 
       try {
         const payload = await encryptCredential(credential);
-        const res = await fetch('/api/remote-mobile/verify', {
+        const res = await fetch(verifyApiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -361,7 +395,7 @@ export function getLoginPageHtml(publicKeyPem?: string, lang: 'zh' | 'en' = 'zh'
           statusMsg.innerText = ${JSON.stringify(i18n.success)};
           statusMsg.style.display = 'block';
           setTimeout(() => {
-            window.location.href = '/';
+            window.location.href = successRedirectUrl;
           }, 600);
         } else {
           statusMsg.className = 'status-msg error';

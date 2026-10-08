@@ -409,6 +409,20 @@ If your log instead shows `service "remoteWebUiPairing" has been registered`, pl
 *(Note: As of v1.6.0, `dsh-remote-mobile` provides built-in compatibility handling to prevent `#dshRemoteWhale` from mounting repeatedly, ensuring smooth coexistence when an all-in-one package is present; for the cleanest environment, installing standalone plugins remains the recommended practice)*.
 </details>
 
+<details>
+<summary><b>Q7: What should I keep in mind when deploying behind a NAS / Unified Gateway / Nginx reverse proxy (e.g. fnOS <code>/app/dsh/</code>)?</b></summary>
+
+**Answer**:
+1. **Sub-path & Prefix Adaptive**: As of v1.8.0, the frontend natively adapts to `<base href="...">`, and server-side redirects support the `X-Forwarded-Prefix` header. When accessed through a sub-path gateway (e.g. `http://<ip>:5666/app/dsh/`), all requests automatically stay scoped within the current sub-path:
+   * **Settings panel & SSE live connection**: API paths are resolved dynamically from `<base>`, so saving config, generating pairing codes, and receiving live events never lose the `/app/dsh` prefix (on earlier versions this showed up as “clicking does nothing”);
+   * **Standalone mobile login page & 302 redirects**: login verification, post-login navigation, and the gate / `/auth` redirects all stay within the current sub-path instead of jumping out to the host root;
+   * **Note**: server-side 302 redirects depend on the reverse proxy forwarding `X-Forwarded-Prefix`; if it is not forwarded, redirects fall back to the safe default path `/auth`.
+2. **Gateway Loopback (127.0.0.1) Bypass Mechanism**:
+   * For rigorous security (preventing external attackers from forging `X-Forwarded-For` headers to bypass authentication), the plugin security gate strictly evaluates client authenticity based on the physical socket connection.
+   * When a reverse proxy / host gateway relays traffic directly from localhost `127.0.0.1` to DSH, the request is identified as a local loopback connection and allowed without pairing code prompts—backed by the NAS/host gateway's own authentication and permission boundary.
+   * If you wish to enforce the plugin's pairing code or persistent password even when entering through an external reverse proxy, configure the proxy to transparently pass client IPs or connect directly via the exposed DSH listening port (e.g. default port `3080` or custom mapped ports).
+</details>
+
 ---
 
 ## 📄 License

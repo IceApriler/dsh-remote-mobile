@@ -383,5 +383,23 @@ test('API 路由处理器功能与安全集成测试 (api.ts)', async (t) => {
     const afterReset = get3().json()
     assert.equal(afterReset.success, true)
   })
-})
 
+  await t.test('GET /auth 命中免密直连或已持有有效 Token 时支持 X-Forwarded-Prefix 自适应重定向', async () => {
+    const authRoute = routes.find(r => r.path === '/auth' && r.method === 'GET')
+    assert.ok(authRoute)
+
+    // 开启局域网免密直连
+    store.updateOptions({ allowLan: true })
+    const { req, res, getResponse } = createMockReqRes({
+      method: 'GET',
+      headers: {
+        'x-dsh-real-ip': '192.168.1.188',
+        'x-forwarded-prefix': '/app/dsh/',
+      },
+    })
+    await authRoute.handler(req, res)
+    const resp = getResponse()
+    assert.equal(resp.status, 302)
+    assert.equal(resp.headers.Location, '/app/dsh/')
+  })
+})

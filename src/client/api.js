@@ -1,137 +1,139 @@
 /**
  * 前端 API 交互层
+ * 支持网关子路径 / baseURI 前缀自适应
  */
 
-export function fetchStatus() {
-  return fetch('/api/remote-mobile/status?_t=' + Date.now()).then(function(res) {
-    return res.json();
+export const RM_API_BASE = (function () {
+  try {
+    if (typeof document !== 'undefined' && document.baseURI) {
+      return new URL('api/remote-mobile/', document.baseURI).toString();
+    }
+    return '/api/remote-mobile/';
+  } catch (e) {
+    return '/api/remote-mobile/';
+  }
+})();
+
+function safeFetchJson(url, options) {
+  return fetch(url, options).then(function (res) {
+    if (!res.ok) {
+      return res.text().then(function (text) {
+        var msg = 'HTTP ' + res.status;
+        try {
+          var parsed = JSON.parse(text);
+          if (parsed && (parsed.reason || parsed.message || parsed.error)) {
+            msg = parsed.reason || parsed.message || parsed.error;
+          }
+        } catch (e) {}
+        throw new Error(msg);
+      });
+    }
+    return res.json().catch(function () {
+      throw new Error('响应解析失败 (Invalid JSON response)');
+    });
   });
+}
+
+export function fetchStatus() {
+  return safeFetchJson(RM_API_BASE + 'status?_t=' + Date.now());
 }
 
 export function generatePairCode() {
-  return fetch('/api/remote-mobile/generate-code', { method: 'POST' }).then(function(res) {
-    return res.json();
-  });
+  return safeFetchJson(RM_API_BASE + 'generate-code', { method: 'POST' });
 }
 
 export function updateBypassConfig(allowTailscale, allowLan) {
-  return fetch('/api/remote-mobile/update-options', {
+  return safeFetchJson(RM_API_BASE + 'update-options', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ allowTailscale: allowTailscale, allowLan: allowLan })
-  }).then(function(res) {
-    return res.json();
+    body: JSON.stringify({ allowTailscale: allowTailscale, allowLan: allowLan }),
   });
 }
 
 export function updateAdvancedSecurityOptions(payload) {
-  return fetch('/api/remote-mobile/update-options', {
+  return safeFetchJson(RM_API_BASE + 'update-options', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  }).then(function(res) {
-    return res.json();
+    body: JSON.stringify(payload),
   });
 }
 
 export function updateSecret(secret) {
-  return fetch('/api/remote-mobile/set-secret', {
+  return safeFetchJson(RM_API_BASE + 'set-secret', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ secret: secret })
-  }).then(function(res) {
-    return res.json();
+    body: JSON.stringify({ secret: secret }),
   });
 }
 
 export function clearSecretApi() {
-  return fetch('/api/remote-mobile/clear-secret', {
+  return safeFetchJson(RM_API_BASE + 'clear-secret', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' }
-  }).then(function(res) {
-    return res.json();
+    headers: { 'Content-Type': 'application/json' },
   });
 }
 
 export function revokeDeviceApi(token) {
-  return fetch('/api/remote-mobile/revoke-device', {
+  return safeFetchJson(RM_API_BASE + 'revoke-device', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token: token })
-  }).then(function(res) {
-    return res.json();
+    body: JSON.stringify({ token: token }),
   });
 }
 
 export function revokeAllDevicesApi() {
-  return fetch('/api/remote-mobile/revoke-all', {
+  return safeFetchJson(RM_API_BASE + 'revoke-all', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' }
-  }).then(function(res) {
-    return res.json();
+    headers: { 'Content-Type': 'application/json' },
   });
 }
 
 export function unlockIpApi(ip) {
-  return fetch('/api/remote-mobile/unlock-ip', {
+  return safeFetchJson(RM_API_BASE + 'unlock-ip', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ip: ip })
-  }).then(function(res) {
-    return res.json();
+    body: JSON.stringify({ ip: ip }),
   });
 }
 
 export function clearIpStatsApi() {
-  return fetch('/api/remote-mobile/clear-ip-stats', {
+  return safeFetchJson(RM_API_BASE + 'clear-ip-stats', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' }
-  }).then(function(res) {
-    return res.json();
+    headers: { 'Content-Type': 'application/json' },
   });
 }
 
 export function fetchStyles() {
-  return fetch('/api/remote-mobile/styles?_t=' + Date.now()).then(function(res) {
-    return res.json();
-  });
+  return safeFetchJson(RM_API_BASE + 'styles?_t=' + Date.now());
 }
 
 export function saveStyleSnippet(payload) {
-  return fetch('/api/remote-mobile/styles', {
+  return safeFetchJson(RM_API_BASE + 'styles', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  }).then(function(res) {
-    return res.json();
+    body: JSON.stringify(payload),
   });
 }
 
 export function toggleStyleApi(id, scope, enabled) {
-  return fetch('/api/remote-mobile/styles/toggle', {
+  return safeFetchJson(RM_API_BASE + 'styles/toggle', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id: id, scope: scope, enabled: enabled })
-  }).then(function(res) {
-    return res.json();
+    body: JSON.stringify({ id: id, scope: scope, enabled: enabled }),
   });
 }
 
 export function deleteStyleSnippetApi(id) {
-  return fetch('/api/remote-mobile/styles/delete', {
+  return safeFetchJson(RM_API_BASE + 'styles/delete', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id: id })
-  }).then(function(res) {
-    return res.json();
+    body: JSON.stringify({ id: id }),
   });
 }
 
 export function resetStylesApi() {
-  return fetch('/api/remote-mobile/styles/reset', {
+  return safeFetchJson(RM_API_BASE + 'styles/reset', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' }
-  }).then(function(res) {
-    return res.json();
+    headers: { 'Content-Type': 'application/json' },
   });
 }

@@ -76,6 +76,13 @@ export function TailscaleMobileSection(props) {
   const [conflictBannerDismissed, setConflictBannerDismissed] = useState(false);
   // 用户是否手动切换过扫码页签：手动选择后，状态轮询不再自动跳回 Tailscale
   const qrTabTouchedRef = useRef(false);
+  const toastTimerRef = useRef(null);
+  const showToast = useCallback((message, type = 'success', duration = 2500) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast({ message, type });
+    toastTimerRef.current = setTimeout(() => setToast(null), duration);
+  }, []);
+
   const updateQrTab = useCallback((tab) => {
     qrTabTouchedRef.current = true;
     setSelectedTab(tab);
@@ -300,9 +307,13 @@ export function TailscaleMobileSection(props) {
   // 交互逻辑
   const toggleTailscale = () => {
     const nextVal = !status.allowTailscale;
-    updateBypassConfig(nextVal, status.allowLan).then(() => {
-      setStatus((prev) => ({ ...prev, allowTailscale: nextVal }));
-    });
+    updateBypassConfig(nextVal, status.allowLan)
+      .then(() => {
+        setStatus((prev) => ({ ...prev, allowTailscale: nextVal }));
+      })
+      .catch((err) => {
+        showToast((currentLang === 'en' ? 'Operation failed: ' : '操作失败：') + (err?.message || err), 'danger', 3500);
+      });
   };
 
   const toggleLan = () => {
@@ -311,9 +322,13 @@ export function TailscaleMobileSection(props) {
       const warnMsg = t('lanBypassConfirm', currentLang);
       if (!confirm(warnMsg)) return;
     }
-    updateBypassConfig(status.allowTailscale, nextVal).then(() => {
-      setStatus((prev) => ({ ...prev, allowLan: nextVal }));
-    });
+    updateBypassConfig(status.allowTailscale, nextVal)
+      .then(() => {
+        setStatus((prev) => ({ ...prev, allowLan: nextVal }));
+      })
+      .catch((err) => {
+        showToast((currentLang === 'en' ? 'Operation failed: ' : '操作失败：') + (err?.message || err), 'danger', 3500);
+      });
   };
 
   const saveSecret = () => {
@@ -328,62 +343,78 @@ export function TailscaleMobileSection(props) {
       alert(t('secretWeakTip', currentLang));
       return;
     }
-    updateSecret(trimmed).then((data) => {
-      if (data.success) {
-        setStatus((prev) => ({ ...prev, hasSecret: true }));
-        setSecretInput('');
-        showToast(
-          currentLang === 'en'
-            ? 'Persistent password saved!'
-            : '长期访问密码已成功保存并启用！',
-          'success',
-          3000
-        );
-      } else {
-        alert((currentLang === 'en' ? 'Save failed: ' : '保存失败：') + (data.reason || ''));
-      }
-    });
+    updateSecret(trimmed)
+      .then((data) => {
+        if (data.success) {
+          setStatus((prev) => ({ ...prev, hasSecret: true }));
+          setSecretInput('');
+          showToast(
+            currentLang === 'en'
+              ? 'Persistent password saved!'
+              : '长期访问密码已成功保存并启用！',
+            'success',
+            3000
+          );
+        } else {
+          showToast((currentLang === 'en' ? 'Save failed: ' : '保存失败：') + (data.reason || ''), 'danger', 3500);
+        }
+      })
+      .catch((err) => {
+        showToast((currentLang === 'en' ? 'Save failed: ' : '保存失败：') + (err?.message || err), 'danger', 3500);
+      });
   };
 
   const clearSecret = () => {
     if (confirm(t('clearSecretConfirm', currentLang))) {
-      clearSecretApi().then(() => {
-        setStatus((prev) => ({ ...prev, hasSecret: false }));
-        setSecretInput('');
-        showToast(
-          currentLang === 'en' ? 'Password cleared!' : '已成功清除长期访问密码！',
-          'info',
-          3000
-        );
-      });
+      clearSecretApi()
+        .then(() => {
+          setStatus((prev) => ({ ...prev, hasSecret: false }));
+          setSecretInput('');
+          showToast(
+            currentLang === 'en' ? 'Password cleared!' : '已成功清除长期访问密码！',
+            'info',
+            3000
+          );
+        })
+        .catch((err) => {
+          showToast((currentLang === 'en' ? 'Clear failed: ' : '清除失败：') + (err?.message || err), 'danger', 3500);
+        });
     }
   };
 
   const revokeDevice = (token) => {
     if (confirm(t('revokeDeviceConfirm', currentLang))) {
-      revokeDeviceApi(token).then(() => {
-        refreshStatusAndCode();
-        showToast(
-          currentLang === 'en' ? 'Device disconnected!' : '已成功踢出该设备！',
-          'info',
-          2500
-        );
-      });
+      revokeDeviceApi(token)
+        .then(() => {
+          refreshStatusAndCode();
+          showToast(
+            currentLang === 'en' ? 'Device disconnected!' : '已成功踢出该设备！',
+            'info',
+            2500
+          );
+        })
+        .catch((err) => {
+          showToast((currentLang === 'en' ? 'Revoke failed: ' : '断开失败：') + (err?.message || err), 'danger', 3500);
+        });
     }
   };
 
   const revokeAll = () => {
     if (confirm(t('revokeAllConfirm', currentLang))) {
-      revokeAllDevicesApi().then(() => {
-        refreshStatusAndCode();
-        showToast(
-          currentLang === 'en'
-            ? 'All devices disconnected!'
-            : '已成功注销并踢下线所有设备！',
-          'info',
-          2500
-        );
-      });
+      revokeAllDevicesApi()
+        .then(() => {
+          refreshStatusAndCode();
+          showToast(
+            currentLang === 'en'
+              ? 'All devices disconnected!'
+              : '已成功注销并踢下线所有设备！',
+            'info',
+            2500
+          );
+        })
+        .catch((err) => {
+          showToast((currentLang === 'en' ? 'Revoke failed: ' : '断开失败：') + (err?.message || err), 'danger', 3500);
+        });
     }
   };
 
@@ -400,7 +431,9 @@ export function TailscaleMobileSection(props) {
             3000
           );
         })
-        .catch(() => {});
+        .catch((err) => {
+          showToast((currentLang === 'en' ? 'Unlock failed: ' : '解锁失败：') + (err?.message || err), 'danger', 3500);
+        });
     }
   };
 
@@ -417,7 +450,9 @@ export function TailscaleMobileSection(props) {
             2500
           );
         })
-        .catch(() => {});
+        .catch((err) => {
+          showToast((currentLang === 'en' ? 'Clear failed: ' : '清空失败：') + (err?.message || err), 'danger', 3500);
+        });
     }
   };
 
@@ -447,12 +482,12 @@ export function TailscaleMobileSection(props) {
           refreshStatusAndCode();
           showToast(t('saveConfigSuccessToast', currentLang), 'success', 3000);
         } else {
-          alert((currentLang === 'en' ? 'Save failed: ' : '保存失败：') + (data.reason || ''));
+          showToast((currentLang === 'en' ? 'Save failed: ' : '保存失败：') + (data.reason || ''), 'danger', 3500);
         }
       })
-      .catch(() => {
+      .catch((err) => {
         setIsSaving(false);
-        alert(currentLang === 'en' ? 'Network request failed, please try again.' : '网络请求失败，请稍后重试');
+        showToast((currentLang === 'en' ? 'Save failed: ' : '保存失败：') + (err?.message || err), 'danger', 3500);
       });
   };
 
@@ -477,12 +512,12 @@ export function TailscaleMobileSection(props) {
           refreshStatusAndCode();
           showToast(t('restoreDefaultsSuccessToast', currentLang), 'success', 3000);
         } else {
-          alert((currentLang === 'en' ? 'Reset failed: ' : '重置失败：') + (data.reason || ''));
+          showToast((currentLang === 'en' ? 'Reset failed: ' : '重置失败：') + (data.reason || ''), 'danger', 3500);
         }
       })
-      .catch(() => {
+      .catch((err) => {
         setIsSaving(false);
-        alert(currentLang === 'en' ? 'Network request failed, please try again.' : '网络请求失败，请稍后重试');
+        showToast((currentLang === 'en' ? 'Reset failed: ' : '重置失败：') + (err?.message || err), 'danger', 3500);
       });
   };
 
@@ -503,13 +538,6 @@ export function TailscaleMobileSection(props) {
       setStatus((prev) => ({ ...prev, copied: false }));
     }, 2000);
   };
-
-  const toastTimerRef = useRef(null);
-  const showToast = useCallback((message, type = 'success', duration = 2500) => {
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    setToast({ message, type });
-    toastTimerRef.current = setTimeout(() => setToast(null), duration);
-  }, []);
 
   const copyText = (text, successTip) => {
     const triggerToast = () => {

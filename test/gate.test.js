@@ -86,6 +86,29 @@ test('全局安全门禁中间件测试', async (t) => {
     assert.equal(redirectedLocation, '/auth')
   })
 
+  await t.test('未授权的外部 HTML 页面请求在携带 x-forwarded-prefix 时重定向拼装前缀', () => {
+    const req = {
+      method: 'GET',
+      url: '/',
+      socket: { remoteAddress: '192.168.1.100' },
+      headers: {
+        accept: 'text/html,application/xhtml+xml',
+        'x-forwarded-prefix': '/app/dsh/',
+      },
+    }
+    let redirectedLocation = null
+    const res = {
+      writeHead(code, headers) {
+        if (code === 302) redirectedLocation = headers.Location
+      },
+      end() {},
+    }
+    let passed = false
+    gate(req, res, () => { passed = true })
+    assert.equal(passed, false)
+    assert.equal(redirectedLocation, '/app/dsh/auth')
+  })
+
   await t.test('未授权的外部 API 请求被 401 拦截', () => {
     const req = {
       method: 'POST',
@@ -161,6 +184,8 @@ test('全局安全门禁中间件测试', async (t) => {
     assert.equal(statusCode, 200)
     assert.ok(responseHtml.includes('SERVER_RSA_KEY'))
     assert.ok(responseHtml.includes('BEGIN PUBLIC KEY'))
+    assert.ok(responseHtml.includes('verifyApiUrl'))
+    assert.ok(responseHtml.includes('successRedirectUrl'))
   })
 
   await t.test('局域网免密直连 (allowLan) 开关放行与拦截测试', () => {

@@ -50,18 +50,24 @@ export function StylesCard({ lang, showToast }) {
   }, [load]);
 
   const toggle = (id, scope, enabled) => {
-    toggleStyleApi(id, scope, enabled).then((data) => {
-      if (data.success) {
-        load();
-        const scopeLabel = scope === 'pc' ? (lang === 'en' ? 'PC' : 'PC 端') : (lang === 'en' ? 'Mobile' : '移动端');
-        showFeedback(
-          enabled
-            ? (lang === 'en' ? scopeLabel + ' enabled!' : scopeLabel + ' 已启用！')
-            : (lang === 'en' ? scopeLabel + ' disabled!' : scopeLabel + ' 已停用！'),
-          'success'
-        );
-      }
-    });
+    toggleStyleApi(id, scope, enabled)
+      .then((data) => {
+        if (data.success) {
+          load();
+          const scopeLabel = scope === 'pc' ? (lang === 'en' ? 'PC' : 'PC 端') : (lang === 'en' ? 'Mobile' : '移动端');
+          showFeedback(
+            enabled
+              ? (lang === 'en' ? scopeLabel + ' enabled!' : scopeLabel + ' 已启用！')
+              : (lang === 'en' ? scopeLabel + ' disabled!' : scopeLabel + ' 已停用！'),
+            'success'
+          );
+        } else {
+          showFeedback((lang === 'en' ? 'Toggle failed: ' : '切换失败：') + (data.reason || ''), 'danger');
+        }
+      })
+      .catch((err) => {
+        showFeedback((lang === 'en' ? 'Toggle failed: ' : '切换失败：') + (err?.message || err), 'danger');
+      });
   };
 
   const startEdit = (s) => {
@@ -86,7 +92,7 @@ export function StylesCard({ lang, showToast }) {
 
   const save = () => {
     if (!name.trim() || !css.trim()) {
-      alert(t('stylesFieldsRequired', lang));
+      showFeedback(t('stylesFieldsRequired', lang), 'danger');
       return;
     }
     saveStyleSnippet({
@@ -102,35 +108,47 @@ export function StylesCard({ lang, showToast }) {
           cancelEdit();
           showFeedback(t('stylesSaveSuccess', lang));
         } else {
-          alert((lang === 'en' ? 'Save failed: ' : '保存失败：') + (data.reason || ''));
+          showFeedback((lang === 'en' ? 'Save failed: ' : '保存失败：') + (data.reason || ''), 'danger');
         }
       })
-      .catch(() => {
-        alert(lang === 'en' ? 'Network request failed, please try again.' : '网络请求失败，请稍后重试');
+      .catch((err) => {
+        showFeedback((lang === 'en' ? 'Save failed: ' : '保存失败：') + (err?.message || err), 'danger');
       });
   };
 
   const remove = (s) => {
     if (s.builtin) return;
     if (confirm(t('stylesDeleteConfirm', lang))) {
-      deleteStyleSnippetApi(s.id).then((data) => {
-        if (data.success) {
-          if (editingId === s.id) cancelEdit();
-          load();
-          showFeedback(lang === 'en' ? 'Style snippet deleted!' : '自定义样式片段已删除！');
-        }
-      });
+      deleteStyleSnippetApi(s.id)
+        .then((data) => {
+          if (data.success) {
+            if (editingId === s.id) cancelEdit();
+            load();
+            showFeedback(lang === 'en' ? 'Style snippet deleted!' : '自定义样式片段已删除！');
+          } else {
+            showFeedback((lang === 'en' ? 'Delete failed: ' : '删除失败：') + (data.reason || ''), 'danger');
+          }
+        })
+        .catch((err) => {
+          showFeedback((lang === 'en' ? 'Delete failed: ' : '删除失败：') + (err?.message || err), 'danger');
+        });
     }
   };
 
   const resetAll = () => {
     if (!confirm(t('stylesResetConfirm', lang))) return;
-    resetStylesApi().then((data) => {
-      if (data.success) {
-        load();
-        showFeedback(lang === 'en' ? 'Style snippets reset to defaults!' : '已恢复所有片段的默认启停状态！');
-      }
-    });
+    resetStylesApi()
+      .then((data) => {
+        if (data.success) {
+          load();
+          showFeedback(lang === 'en' ? 'Style snippets reset to defaults!' : '已恢复所有片段的默认启停状态！');
+        } else {
+          showFeedback((lang === 'en' ? 'Reset failed: ' : '重置失败：') + (data.reason || ''), 'danger');
+        }
+      })
+      .catch((err) => {
+        showFeedback((lang === 'en' ? 'Reset failed: ' : '重置失败：') + (err?.message || err), 'danger');
+      });
   };
 
   const toggleExpand = (id) => {

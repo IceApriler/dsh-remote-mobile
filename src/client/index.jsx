@@ -2,6 +2,7 @@ import React from 'react';
 import { TailscaleMobileSection } from './components/MainSection.jsx';
 import { showGlobalDeviceToast, showGlobalSecurityToast } from './utils/toast.js';
 import { resolveLocale } from './i18n.js';
+import { RM_API_BASE } from './api.js';
 
 export const inject = ["slots", "locale", "connection", "settingsScope", "remote"];
 
@@ -21,7 +22,7 @@ export function apply(ctx) {
       window.__DSH_REMOTE_MOBILE_SSE_LISTENER__ = true;
       var initSse = function() {
         try {
-          var eventSource = new EventSource("/api/remote-mobile/events");
+          var eventSource = new EventSource(RM_API_BASE + "events");
           eventSource.onmessage = function(event) {
             try {
               var data = JSON.parse(event.data || "{}");

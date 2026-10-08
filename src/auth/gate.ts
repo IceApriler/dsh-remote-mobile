@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { isTailscaleIp, isLanIp, getClientIp } from './tailscale.js'
 import type { SessionStore } from './token.js'
+import { resolveRedirectPath } from './prefix.js'
 
 /**
  * 判断请求是否来自本机回环
@@ -127,8 +128,9 @@ export function createGlobalAuthGate(store: SessionStore) {
     const isHtmlRequest = req.method === 'GET' && (accept.includes('text/html') || req.url === '/' || req.url?.startsWith('/?'))
 
     if (isHtmlRequest) {
+      const authLocation = resolveRedirectPath(req.headers, '/auth')
       res.writeHead(302, {
-        Location: '/auth',
+        Location: authLocation,
         'Cache-Control': 'no-cache, no-store, must-revalidate',
       })
       res.end()

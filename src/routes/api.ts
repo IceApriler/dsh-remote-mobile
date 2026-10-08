@@ -5,6 +5,7 @@ import { getPublicKeyPem, decryptWithPrivateKey, validateSecretStrength, RSA_KEY
 import { getLoginPageHtml } from './login-page.js'
 import { DEFAULT_STYLE_FILE, type StyleSnippetStore } from '../styles/style-snippets.js'
 import { getPairingBridgeState } from '../bridge/compat.js'
+import { resolveRedirectPath } from '../auth/prefix.js'
 
 function jsonResponse(res: ServerResponse, status: number, data: any) {
   res.writeHead(status, {
@@ -315,9 +316,10 @@ export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore
         const ua = req.headers['user-agent'] || ''
         const hasValidToken = token ? store.validateToken(token, clientIp) : false
 
-        // 如果开启了免密直连（Tailscale 或 局域网）或者已持有有效 Token，直接放行直跳根目录
+        // 如果开启了免密直连（Tailscale 或 局域网）或者已持有有效 Token，直接放行直跳根目录（支持网关前缀）
         if ((opts.allowTailscale && isTs) || (opts.allowLan && isLan) || hasValidToken) {
-          res.writeHead(302, { Location: '/' })
+          const rootLocation = resolveRedirectPath(req.headers, '/')
+          res.writeHead(302, { Location: rootLocation })
           return res.end()
         }
 
