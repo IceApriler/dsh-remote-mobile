@@ -8,9 +8,17 @@
 [![npm downloads](https://img.shields.io/npm/dm/dsh-remote-mobile.svg?style=flat-square&color=22c55e)](https://www.npmjs.com/package/dsh-remote-mobile)
 [![node](https://img.shields.io/badge/node-%3E%3D18.0.0-8b5cf6?style=flat-square)](https://nodejs.org)
 [![license](https://img.shields.io/npm/l/dsh-remote-mobile.svg?style=flat-square&color=10b981)](https://github.com/IceApriler/dsh-remote-mobile/blob/master/LICENSE)
+[![DSH](https://img.shields.io/badge/DSH-Web%20Profile-0ea5e9?style=flat-square)](https://github.com/IceApriler/dsh-remote-mobile)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://github.com/IceApriler/dsh-remote-mobile/pulls)
 
 <p align="center">
-  <b>Zero Core Modifications · Break Loopback Limits · QR Quick Pairing · Full Workspace Parity · Transport Encryption</b>
+  <b>Zero Core Modifications · Secure LAN / Tailscale Access · QR Pairing · Mobile UI Adaptation · Workspace Parity · Real-Time Push</b>
+</p>
+
+<p align="center">
+  📱 <b>Desktop-grade mobile workspace</b>: create / switch workspaces and run terminal commands on your phone<br>
+  🛡️ <b>Multi-tier auth</b>: QR pairing · persistent password · passwordless bypass + RSA encryption + brute-force lockout<br>
+  🎨 <b>Mobile style snippets</b>: three built-in presets, fully customizable with your own CSS
 </p>
 
 English Documentation · [简体中文](./README.md)
@@ -23,6 +31,8 @@ English Documentation · [简体中文](./README.md)
   <a href="#preview">UI Preview</a> •
   <a href="#features">Features</a> •
   <a href="#install">Installation & Update</a> •
+  <a href="#advanced">Advanced Configuration</a> •
+  <a href="#storage">Local File Storage</a> •
   <a href="#faq">FAQ</a>
 </p>
 
@@ -37,15 +47,15 @@ English Documentation · [简体中文](./README.md)
 
 By default, DSH strictly listens only to the local loopback address (`127.0.0.1`), preventing mobile devices, tablets, or external computers from accessing the Web console. This plugin uses **access control middleware** and **request isolation** to securely open up **Tailscale Private Network** and **Local Area Network (LAN / Wi-Fi)** access, complete with RSA transmission encryption, QR code pairing, persistent password auth, and automated brute-force defense.
 
-When accessed from a phone, the plugin also adapts the DSH interface for **mobile styles**: a collapsible sidebar drawer with a draggable floating toggle, seamless compatibility with the official 3-column Grid layout & right sidebar, a centered/scaled settings dialog, and dense conversation typography — so the mobile experience feels closer to the desktop.
+When accessed from a phone, the plugin also adapts the DSH interface for **mobile styles**: a collapsible sidebar drawer with a draggable floating toggle, compatibility with the official 3-column Grid layout & right sidebar, a centered/scaled settings dialog, and dense conversation typography — so the mobile experience feels closer to the desktop.
 
 ---
 
 <span id="advantages"></span>
 ## ⚡ Key Advantages
 
-* 🚀 **Break Network Barriers with Full Workspace Parity**: Solves the core issue of accessing DSH Web over LAN and Tailscale. When accessed on mobile devices, **creating workspaces, switching workspaces, and executing terminal commands are supported** without feature degradation.
-* 📱 **Dedicated Mobile Adaptations & Same-Origin Reuse**: Directly reuses the official DSH Web base and complete plugin ecosystem (such as `dsh-pet`, task boards, etc.) without maintaining a separate mobile backend. Includes out-of-the-box mobile adaptations (sidebar drawer toggle, centered settings modal, and compact chat font scaling for higher information density), alongside a built-in **Style Snippet Override system** to toggle presets or inject custom CSS snippets on demand.
+* 🚀 **Break Network Barriers with Desktop-Grade Workspace**: For accessing DSH Web over LAN / Tailscale. On mobile devices, **common desktop operations such as creating / switching workspaces and running terminal commands are supported**.
+* 📱 **Dedicated Mobile Adaptations & Same-Origin Reuse**: Directly reuses the official DSH Web frontend (the very same UI as desktop) and the wider plugin ecosystem (sidebars, task boards, terminal panels, etc.) without maintaining a separate mobile backend. Includes out-of-the-box mobile adaptations (sidebar drawer toggle, centered settings modal, and compact chat font scaling for higher information density), alongside a built-in **Style Snippet Override system** to toggle presets or inject custom CSS snippets on demand.
 * 🛡️ **Security Gateway & Transport Encryption**: Built-in client-side RSA asymmetric public key encryption, `scrypt` salted slow-hashing password persistence, and automated IP lockout upon consecutive brute-force failures, blocking unauthorized access over public/LAN networks.
 * 📲 **Quick QR Pairing**: Auto-detects Tailscale CGNAT and LAN IP addresses to generate dedicated pairing QR codes. Scan the code to authenticate and obtain persistent credentials.
 * 🔄 **SSE Real-Time Push**: Device connection, reconnection, revocation, and security alert events are pushed in real time via Server-Sent Events without polling.
@@ -65,7 +75,7 @@ dsh plugin --profile web add dsh-remote-mobile
 ```
 
 > [!IMPORTANT]
-> **Ecosystem Plugin Advice**: **Installing `@linxin666/dsh-web-all` (all-in-one package) is not recommended**. We suggest **installing individual standalone plugins on demand**. The all-in-one package bundles multiple frontend modules together, which may result in duplicated mobile floating buttons and conflicting gesture handlers. If you need task boards, pet widgets, or other tools, install their standalone packages directly (see details below).
+> **Ecosystem Plugin Advice**: **Installing `@linxin666/dsh-web-all` (all-in-one package) is not recommended**. We suggest **installing individual standalone plugins on demand**. The all-in-one package bundles multiple frontend modules together, which may result in duplicated mobile floating buttons and conflicting gesture handlers. If you need task boards, pet widgets, or other tools, install their standalone packages directly (see [FAQ Q6](#faq) for the rationale, recommended commands, and coexistence notes).
 
 ---
 
@@ -95,22 +105,7 @@ Because DSH defaults to `127.0.0.1`, ensure your `~/.dsh/profiles/web/cordis.pat
 > **💡 Note**: Plugin self-registration is automatically handled by the DSH Bundle system. You do **not** need to add `id: remote-mobile` manually. Windows users can press `Win + R` and enter `%USERPROFILE%\.dsh\profiles\web` to quickly jump to the configuration folder.
 
 > [!WARNING]
-> **⚠️ Plugin Compatibility & Coexistence Note: Prefer installing standalone plugins over the all-in-one bundle (`@linxin666/dsh-web-all`)**
-> 
-> * **Why do we recommend avoiding `@linxin666/dsh-web-all`?**
->   1. **Avoid duplicated entries and gesture conflicts**: The all-in-one package compiles the frontend logic of multiple plugins into a single `client.js`. Its mobile adaptation logic executes upon script load. Even if you set `web-ui-remote-web-ui: disabled: true` in `cordis.patch.yml`, the browser may still render the floating whale button (`#dshRemoteWhale`), leading to duplicated mobile entry points and conflicting touch gestures.
->   2. **Lightweight and independently upgradable**: Installing standalone packages keeps the environment minimal and lets you upgrade, rollback, or configure each component independently.
-> 
-> * **Recommended Best Practice (Install Standalone Plugins)**:
->   Install only the specific standalone packages you actually need, for example:
->   ```bash
->   # Recommended: clear responsibilities, decoupled, fully controllable
->   dsh plugin --profile web add @linxin666/dsh-client-ui-task-board
->   dsh plugin --profile web add @linxin666/dsh-client-ui-web-ui-settings
->   dsh plugin --profile web add @linxin666/dsh-pet
->   dsh plugin --profile web add @linxin666/dsh-ssh
->   ```
->   *(Note: Starting from v1.6.0, `dsh-remote-mobile` includes automated compatibility handling that prepends `dsh-remote-force-desktop` to sessionStorage and coordinates with CSS to prevent the `#dshRemoteWhale` button from mounting twice. For the cleanest setup, installing standalone packages remains the best practice)*.
+> **Installing the all-in-one bundle (`@linxin666/dsh-web-all`) is not recommended**: it compiles the frontend logic of multiple sub-plugins into a single `client.js` that self-executes on load, which may duplicate mobile entry points and cause gesture conflicts with this plugin. Install only the standalone plugins you need (task board, pet, etc.). See [FAQ Q6](#faq) for the full rationale, recommended commands, and coexistence notes.
 
 ---
 
@@ -137,7 +132,7 @@ Open the DSH Web Console in your browser, navigate to **Settings ⚙️ -> Remot
 
 ---
 
-### Mobile Live Demonstration (Same-Origin Auth & Full Workspace Control)
+### Mobile Live Demonstration (Same-Origin Auth & Workspace Control)
 
 | Login & Auth | Chat Font Scaling | Mobile Sidebar Styling | Official Trajectory / Trace |
 | :---: | :---: | :---: | :---: |
@@ -155,23 +150,25 @@ Open the DSH Web Console in your browser, navigate to **Settings ⚙️ -> Remot
 
 ### 2. Multi-Tier Authentication
 - **Dynamic 6-Digit Pairing Codes**: Generates 6-digit short codes (5-minute validity, single-use) that exchange for 365-day persistent authentication cookies on mobile.
-- **Persistent Access Passwords**: Set customizable persistent passwords (minimum 6 characters with letters and numbers) for seamless long-term logins across multiple devices.
+- **Persistent Access Passwords**: Set customizable persistent passwords (minimum 6 characters with letters and numbers) for convenient long-term logins across multiple devices.
 - **Direct Bypass Mode**: Enable passwordless direct bypass independently for Tailscale or LAN. Disabling bypass immediately cleans up temporary credentials and resets device state.
 - **Device Session Management**: Real-time inspection of connected device types, OS, browser, source IP, and last active timestamp, with single-device revocation and one-click bulk revocation.
 
 ### 3. Security & Cryptography
-- **Transport RSA Asymmetric Encryption**: Login endpoints support client-side RSA encryption. In secure contexts (HTTPS) this prioritizes native Web Crypto `RSA-OAEP-SHA256`; in DSH's default HTTP LAN/Tailscale access (non-secure context) it falls back to a pure JS shim using `crypto.getRandomValues()` for cryptographically secure random padding. Sensitive passwords and pairing codes are encrypted on the client before network transmission.
+- **Transport RSA Asymmetric Encryption**: The login endpoint encrypts on the client first, so sensitive passwords and pairing codes travel the network only in ciphertext.
+  - **Secure contexts (HTTPS)**: prioritizes native Web Crypto `RSA-OAEP-SHA256`;
+  - **DSH default HTTP LAN/Tailscale access (non-secure context)**: falls back to a pure JS shim using `crypto.getRandomValues()` for cryptographically secure random padding.
 - **scrypt Slow Hash Storage**: Server persists passwords with `scrypt` salted slow-hashing (`scrypt:${salt}:${hash}`). Verification uses `crypto.timingSafeEqual` constant-time comparison to prevent timing side-channel attacks.
 - **Brute-Force Defense & Rate Limiting**:
   - Automatically locks out IPs for 15 minutes after reaching consecutive failed attempt thresholds (default: 5), returning HTTP 429;
   - Sliding-window rate limiting (default: 60 visits/min) to prevent high-frequency brute-force scraping;
   - Audit logs and lockout states persist to disk and restore across restarts;
   - Administrators can manually unlock blocked IPs with one click in the panel.
-- **Intelligent Static Asset Whitelisting**: The authentication gate automatically allows verified frontend asset extensions (`.js`, `.css`, `.png`, `.svg`, `.woff2`, etc., 20+ types) while strictly blocking extensionless or dynamic API routes (e.g. `/plugins/xxx/admin`), ensuring smooth third-party plugin rendering without manual whitelist configuration.
+- **Intelligent Static Asset Whitelisting**: The authentication gate automatically allows verified frontend asset extensions (`.js`, `.css`, `.png`, `.svg`, `.woff2`, etc., 20 types) while blocking extensionless or dynamic API routes (e.g. `/plugins/xxx/admin`), ensuring smooth third-party plugin rendering without manual whitelist configuration. (The DSH core static directory `/assets/` is an official resource and is allowed unconditionally.)
 - **Resilient Atomic Persistence & Debounce**: Millisecond-level debounce write-throttling to safeguard disk I/O (500ms for session data, 300ms for style snippets), coupled with `beforeExit` process flush hooks and atomic temporary file replacement (`renameSync`) for `settings.yaml` and `style-snippets.json`.
 - **Real Socket IP Extraction**: Relies strictly on underlying Socket connection addresses, preventing spoofed `X-Forwarded-For` header attacks.
 - **Loopback CSRF Defense**: Mutating plugin APIs validate browser same-origin signals (`Origin` / `Sec-Fetch-Site`). Cross-site write requests to `127.0.0.1` driven by malicious webpages are rejected outright; non-browser clients (curl / local scripts) are unaffected.
-- **No Context Laundering for Loopback**: Context virtualization applies only to external traffic. Loopback requests keep their original Host / Origin, so the built-in DNS-rebinding and same-origin checks of DSH keep working against external domains. The SSE event stream accepts same-origin connections only, with no cross-origin reads.
+- **No Context Rewriting for Loopback Requests**: Context virtualization applies only to external traffic. Loopback requests keep their original Host / Origin (no "laundering"), so DSH's built-in DNS-rebinding and same-origin checks keep working against external domains. The SSE event stream accepts same-origin connections only, with no cross-origin reads.
 
 ### 4. Real-Time Sync & Internationalization
 - **SSE Real-Time Push**: Push notifications for new device pairing, reconnections, revocations, and security alerts via Server-Sent Events, with bidirectional close listeners and idempotent cleanup.
@@ -182,14 +179,18 @@ Open the DSH Web Console in your browser, navigate to **Settings ⚙️ -> Remot
 
 The DSH web UI still carries many desktop-oriented styles on phones. This plugin ships a built-in **Mobile Style Snippets** module that splits mobile adaptation into toggleable CSS snippets:
 
-- **Three area-based built-in presets**: `preset-sidebar` (collapsed sidebar becomes a 0-width drawer with draggable floating toggle, adaptive width, and touch-friendly 44px tap targets), `preset-settings` (vertically stacked layout with horizontally scrollable nav tabs and natural vertical scrolling), `preset-main` (dense conversation typography with scrollable code blocks). Mobile on / PC off by default;
+- **Three area-based built-in presets** (mobile on / PC off by default):
+  - `preset-sidebar` **Sidebar Drawer**: the collapsed sidebar occupies 0 width, with a draggable floating toggle, adaptive drawer width, and touch-friendly 44px tap targets;
+  - `preset-settings` **Settings Panel**: vertically stacked layout with horizontally scrollable nav tabs and natural vertical scrolling;
+  - `preset-main` **Dense Conversation Typography**: compact 12.5px text, tight line-height and margins for more content per line; built on stable HTML elements and localName suffixes, with no layout scaling and no right-side gaps;
 - **Separate PC / Mobile toggles (viewport-width based, device-independent)**: every preset and custom snippet has independent PC and Mobile switches; "Mobile" = applies at narrow viewports (≤900px) — **a PC browser with a narrow window gets it too**; "PC" = applies at wide viewports (>900px); both on = applies at all widths;
+  - **About the `html[data-dsh-mobile]` selector**: that marker is only written for **mobile-UA** requests. If your custom CSS starts with `html[data-dsh-mobile]`, it only matches phone/mobile-UA clients; to also target a narrow desktop window, write the selector directly (without the `html[data-dsh-mobile]` prefix) and the injection layer wraps it in the media query automatically.
 - **Custom snippets (your own mini-plugins)**: paste your CSS in **Settings ⚙️ → Remote & Mobile → 🎨 Mobile Style Snippets** to add a snippet, with edit/toggle/delete/**one-click copy** support (every snippet has a "📋 Copy CSS" button next to "View CSS"). Persisted to `~/.dsh/remote-mobile/style-snippets.json`; changes apply on the next page load without restart;
-- **UA-based marker + width-based styling**: styles apply by viewport-width band (see above), independent of device UA; mobile UA requests additionally add `data-dsh-mobile="1"` to `<html>` as a scope hook, and the draggable toggle script is injected for all clients (it only activates while the sidebar is collapsed).
+- **UA-based marker + width-based styling**: styles apply by viewport-width band (see above), independent of device UA; mobile UA requests additionally add `data-dsh-mobile="1"` to `<html>` as a scope hook (using it as a selector only matches mobile UA — see the note above), and the draggable toggle script is injected for all clients (it only activates while the sidebar is collapsed).
 
 ### 6. Generic Plugin Coexistence Protection
 
-- **Conflict-free startup**: when the shared pairing service `remoteWebUiPairing` is already registered by another remote/Web access plugin, this plugin yields automatically (deferred arbitration: it waits until the activation window settles, then checks who owns the service name), completely avoiding the fatal whole-tree rollback caused by service-name collisions — installing from the plugin market works out of the box with zero manual configuration;
+- **Conflict-free startup**: when the shared pairing service `remoteWebUiPairing` is already registered by another remote/Web access plugin, this plugin yields automatically (deferred arbitration: it waits until the activation window settles, then checks who owns the service name), avoiding the whole-tree rollback caused by service-name collisions — installing from the plugin market works out of the box with zero manual configuration;
 - **Visible coexistence status**: when a conflict is detected, a dismissible warning banner (Chinese/English) appears at the top of the settings panel, explaining the yield behavior and the "keep only one" recommendation; refresh after resolving and it disappears;
 - **One-click diagnosis report**: the **"📋 Copy diagnosis & fix"** button in the banner copies a full report — the conflicting plugin's package name and loader entry id are auto-detected at runtime, and the report includes line-exact fix configuration and commands (disable the other / remove this one), ready to paste to an AI assistant.
 
@@ -278,9 +279,10 @@ dsh plugin --profile web remove dsh-remote-mobile
 
 ---
 
+<span id="advanced"></span>
 ## ⚙️ Advanced Configuration
 
-Fully integrated with the DSH official Settings system. Configurations can be adjusted in the Web UI or edited in `~/.dsh/settings.yaml` under the `dsh-remote-mobile` namespace:
+Integrated with the DSH official Settings system. Configurations can be adjusted in the Web UI or edited in `~/.dsh/settings.yaml` under the `dsh-remote-mobile` namespace:
 
 ```yaml
 dsh-remote-mobile:
@@ -302,7 +304,7 @@ Custom snippets (style mini-plugins) and their enabled states are persisted in `
   "presetStates": {
     "preset-sidebar": { "pc": false, "mobile": true },
     "preset-settings": { "pc": false, "mobile": true },
-    "preset-main": { "pc": true, "mobile": true }
+    "preset-main": { "pc": false, "mobile": true }
   },
   "custom": [
     {
@@ -321,6 +323,7 @@ Custom snippets (style mini-plugins) and their enabled states are persisted in `
 
 ---
 
+<span id="storage"></span>
 ## 📂 Local File Storage Locations
 
 > **💡 Path Note**: On macOS / Linux, the base path is `~/.dsh/`; on Windows, it resolves to `C:\Users\<username>\.dsh\` (you can directly paste `%USERPROFILE%\.dsh` into the File Explorer address bar).
@@ -381,7 +384,8 @@ If your log instead shows `service "remoteWebUiPairing" has been registered`, pl
 <details>
 <summary><b>Q4: Not happy with the mobile styles and want full control?</b></summary>
 
-**A**: Open **Settings ⚙️ → Remote & Mobile → 🎨 Mobile Style Snippets**. First try toggling the three area presets (sidebar / settings / conversation), each with independent PC and Mobile switches; if that is not enough, paste your own CSS into the "Custom Snippets" area (e.g. `html[data-dsh-mobile] .xxx { ... }`). Refresh the mobile page to see the effect immediately. Everything lives in `~/.dsh/remote-mobile/style-snippets.json` and survives plugin upgrades.
+**A**: Open **Settings ⚙️ → Remote & Mobile → 🎨 Mobile Style Snippets**. First try toggling the three area presets (sidebar / settings / conversation), each with independent PC and Mobile switches; if that is not enough, paste your own CSS into the "Custom Snippets" area (e.g. `.my-selector { ... }`). Refresh the mobile page to see the effect immediately. Everything lives in `~/.dsh/remote-mobile/style-snippets.json` and survives plugin upgrades.
+> Tip: if your selector starts with `html[data-dsh-mobile]`, it only applies to mobile-UA clients and will not match a narrow desktop window; drop the prefix if you want both.
 </details>
 
 <details>
@@ -405,15 +409,22 @@ If your log instead shows `service "remoteWebUiPairing" has been registered`, pl
 
 **Answer**: This is primarily based on **avoiding functional conflicts** and **keeping the environment lightweight and decoupled**:
 1. **Avoid duplicated mobile entries and touch gesture conflicts**: All-in-one packages compile the frontend logic of dozens of sub-plugins into a single `client.js`. Its mobile adaptation logic executes upon script load. Even if you set `web-ui-remote-web-ui: disabled: true` in `cordis.patch.yml`, the browser may still render the floating whale button (`#dshRemoteWhale`), causing duplicated mobile floating entry points and touch gesture interference.
-2. **Lightweight and independently upgradable**: Installing standalone packages on demand (e.g. installing only `@linxin666/dsh-client-ui-task-board` and `@linxin666/dsh-pet` when needed) maintains a minimal dependency footprint and allows independent upgrading, rollback, and maintenance.
-*(Note: As of v1.6.0, `dsh-remote-mobile` provides built-in compatibility handling to prevent `#dshRemoteWhale` from mounting repeatedly, ensuring smooth coexistence when an all-in-one package is present; for the cleanest environment, installing standalone plugins remains the recommended practice)*.
+2. **Lightweight and independently upgradable**: Installing standalone packages on demand keeps a minimal dependency footprint and allows independent upgrading, rollback, and maintenance. Install only the standalone packages you need, for example:
+   ```bash
+   # Install only what you need — clear responsibilities, no interference
+   dsh plugin --profile web add @linxin666/dsh-client-ui-task-board
+   dsh plugin --profile web add @linxin666/dsh-client-ui-web-ui-settings
+   dsh plugin --profile web add @linxin666/dsh-pet
+   dsh plugin --profile web add @linxin666/dsh-ssh
+   ```
+*(Note: As of v1.6.0, `dsh-remote-mobile` includes compatibility protection — an injected suppression script writes `dsh-remote-force-desktop=1` into `sessionStorage` and coordinates with CSS to prevent `#dshRemoteWhale` from being **mounted twice**. The whale entry itself may still be rendered by the other plugin, and the root cause of the overlap lies there, so installing standalone packages is still recommended)*.
 </details>
 
 <details>
 <summary><b>Q7: What should I keep in mind when deploying behind a NAS / Unified Gateway / Nginx reverse proxy (e.g. fnOS <code>/app/dsh/</code>)?</b></summary>
 
 **Answer**:
-1. **Sub-path & Prefix Adaptive**: As of v1.8.0, the frontend natively adapts to `<base href="...">`, and server-side redirects support the `X-Forwarded-Prefix` header. When accessed through a sub-path gateway (e.g. `http://<ip>:5666/app/dsh/`), all requests automatically stay scoped within the current sub-path:
+1. **Sub-path & Prefix Adaptive**: As of v1.8.0, the frontend natively adapts to `<base href="...">`, and server-side redirects support the `X-Forwarded-Prefix` header. When accessed through a sub-path gateway (e.g. `http://<ip>:5666/app/dsh/`), requests automatically stay scoped within the current sub-path:
    * **Settings panel & SSE live connection**: API paths are resolved dynamically from `<base>`, so saving config, generating pairing codes, and receiving live events never lose the `/app/dsh` prefix (on earlier versions this showed up as “clicking does nothing”);
    * **Standalone mobile login page & 302 redirects**: login verification, post-login navigation, and the gate / `/auth` redirects all stay within the current sub-path instead of jumping out to the host root;
    * **Note**: server-side 302 redirects depend on the reverse proxy forwarding `X-Forwarded-Prefix`; if it is not forwarded, redirects fall back to the safe default path `/auth`.

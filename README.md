@@ -8,9 +8,17 @@
 [![npm downloads](https://img.shields.io/npm/dm/dsh-remote-mobile.svg?style=flat-square&color=22c55e)](https://www.npmjs.com/package/dsh-remote-mobile)
 [![node](https://img.shields.io/badge/node-%3E%3D18.0.0-8b5cf6?style=flat-square)](https://nodejs.org)
 [![license](https://img.shields.io/npm/l/dsh-remote-mobile.svg?style=flat-square&color=10b981)](https://github.com/IceApriler/dsh-remote-mobile/blob/master/LICENSE)
+[![DSH](https://img.shields.io/badge/DSH-Web%20Profile-0ea5e9?style=flat-square)](https://github.com/IceApriler/dsh-remote-mobile)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://github.com/IceApriler/dsh-remote-mobile/pulls)
 
 <p align="center">
-  <b>零改动底层代码 · 突破本地限制 · 扫码直连 · 工作区全功能复用 · 传输层加密</b>
+  <b>零改动底层代码 · 局域网 / Tailscale 安全接入 · 扫码配对 · 移动端样式适配 · 工作区能力复用 · 实时状态推送</b>
+</p>
+
+<p align="center">
+  📱 <b>桌面级移动工作台</b>：手机上也能新建 / 切换工作区、执行终端命令<br>
+  🛡️ <b>多重安全认证</b>：扫码配对 · 长期密码 · 免密直连 + RSA 加密 + 防爆破封禁<br>
+  🎨 <b>移动端样式片段</b>：内置三段预设，不满意可自定义 CSS
 </p>
 
 [English Documentation](./README_EN.md) · [简体中文](./README.md)
@@ -23,6 +31,8 @@
   <a href="#preview">界面预览</a> •
   <a href="#features">功能特性</a> •
   <a href="#install">安装与更新</a> •
+  <a href="#advanced">高级配置</a> •
+  <a href="#storage">本地文件存储</a> •
   <a href="#faq">常见问题</a>
 </p>
 
@@ -37,15 +47,15 @@
 
 DSH 核心服务出于安全考虑默认仅监听本地回环地址（`127.0.0.1`），手机、平板或其他电脑无法从外部访问 Web 控制台。本项目通过**访问控制中间件**与**请求隔离技术**，安全地开放了 **Tailscale 虚拟私网** 以及 **本地局域网 (Wi-Fi/LAN)** 访问能力，并提供传输加密、扫码配对、长期密码认证与防暴力破解审计体系。
 
-手机端访问时，插件还针对 DSH 界面做了**移动端样式适配**：侧边栏抽屉折叠与可拖拽展开把手、新版官方三栏 Grid 布局与右侧边栏无缝兼容、设置弹窗居中微缩、对话正文高密度排版等，让手机上的使用体验更贴近桌面端。
+手机端访问时，插件还针对 DSH 界面做了**移动端样式适配**：侧边栏抽屉折叠与可拖拽展开把手、新版官方三栏 Grid 布局与右侧边栏兼容、设置弹窗居中微缩、对话正文高密度排版等，让手机上的使用体验更贴近桌面端。
 
 ---
 
 <span id="advantages"></span>
 ## ⚡ 核心优势
 
-* 🚀 **突破网络壁垒，工作区全功能复用**：解决局域网和 Tailscale 无法访问 DSH Web 的问题。在移动端或外部设备访问时，**支持新建工作区、切换工作区、执行终端命令等桌面端核心功能**。
-* 📱 **手机端专属适配与同源复用**：直接复用 DSH Web 官方同源底座与生态插件（如 `dsh-pet` 宠物、任务看板等），无需单独维护手机端后台。插件已针对移动端做好了基础响应式适配（如侧边栏抽屉折叠、设置弹窗居中、对话正文字号与行距精细调小以提升一屏信息量），并内置**样式片段覆写功能**，支持开箱即用或按需注入自定义 CSS 样式小插件。
+* 🚀 **突破网络壁垒，复用桌面端能力**：用于在局域网 / Tailscale 下访问 DSH Web。在移动端或外部设备访问时，**支持新建工作区、切换工作区、执行终端命令等常用桌面端操作**。
+* 📱 **手机端专属适配与同源复用**：直接复用 DSH 官方 Web 前端（手机与桌面是同一套界面）与各类生态插件（如侧边栏、任务看板、终端面板等），无需单独维护手机端后台。插件已针对移动端做好了基础响应式适配（如侧边栏抽屉折叠、设置弹窗居中、对话正文字号与行距精细调小以提升一屏信息量），并内置**样式片段覆写功能**，支持开箱即用或按需注入自定义 CSS 样式小插件。
 * 🛡️ **安全门禁与传输加密**：内置 RSA 非对称公钥加密、`scrypt` 加盐慢哈希密码落盘、连续输错自动熔断锁定 IP，拦截公网/局域网未经授权的访问。
 * 📲 **扫码快速配对**：自动识别并生成 Tailscale CGNAT 与局域网专属访问链接与二维码，手机扫码即可完成长效授权。
 * 🔄 **SSE 实时状态推送**：设备上线、下线、注销、IP 锁定等安全事件即时推送，无需前端轮询。
@@ -65,7 +75,7 @@ dsh plugin --profile web add dsh-remote-mobile
 ```
 
 > [!IMPORTANT]
-> **生态插件安装建议**：**不建议安装 `@linxin666/dsh-web-all` 全家桶**，更推荐**按需安装单体功能插件**。全家桶将多个前端模块合并打包，可能引发移动端悬浮入口重复与手势交互冲突。如需任务看板、宠物等生态功能，建议直接安装对应的单体包（详见下方说明）。
+> **生态插件安装建议**：**不建议安装 `@linxin666/dsh-web-all` 全家桶**，更推荐**按需安装单体功能插件**。全家桶将多个前端模块合并打包，可能引发移动端悬浮入口重复与手势交互冲突；如需任务看板、宠物等生态功能，建议直接安装对应的单体包（原因、推荐命令与共存说明见 [常见问题 Q6](#faq)）。
 
 ---
 
@@ -94,22 +104,7 @@ dsh plugin --profile web add dsh-remote-mobile
 > **💡 说明**：插件自身注册已由 DSH Bundle 体系全自动处理，**无需**在 `cordis.patch.yml` 中额外添加 `id: remote-mobile`。Windows 用户可按 `Win + R` 键输入 `%USERPROFILE%\.dsh\profiles\web` 快速直达配置目录。
 
 > [!WARNING]
-> **⚠️ 插件兼容与共存说明：不建议安装聚合全家桶（`@linxin666/dsh-web-all`），更推荐「按需单独安装所需插件」**
-> 
-> * **为什么不建议安装 `@linxin666/dsh-web-all` 全家桶？**
->   1. **避免功能冲突与重复入口**：该全家桶将多个子插件的前端逻辑编译打包在同一个 `client.js` 中，其移动端自适应逻辑在模块加载时会自执行。即使在 `cordis.patch.yml` 中配置了 `web-ui-remote-web-ui: disabled: true`，浏览器加载脚本后依然会渲染出小鲸鱼悬浮按钮（`#dshRemoteWhale`），导致两个插件的移动端入口与手势交互出现重复和冲突。
->   2. **体积更轻量、升级更解耦**：全家桶将多个功能捆绑在一起，按需安装单体插件可以保持环境精简，也便于未来各插件独立升级与维护。
-> 
-> * **推荐的最佳实践（按需单独安装单体插件）**：
->   建议按需安装各自独立的功能单体包，例如：
->   ```bash
->   # 推荐方式：需要哪个装哪个，职责清晰、互不干扰
->   dsh plugin --profile web add @linxin666/dsh-client-ui-task-board
->   dsh plugin --profile web add @linxin666/dsh-client-ui-web-ui-settings
->   dsh plugin --profile web add @linxin666/dsh-pet
->   dsh plugin --profile web add @linxin666/dsh-ssh
->   ```
->   *(注：自 v1.6.0 起，`dsh-remote-mobile` 已内置冲突防护机制，会自动前置注入 `dsh-remote-force-desktop` 并协同 CSS 避免小鲸鱼悬浮按钮 `#dshRemoteWhale` 重复挂载，保障已安装全家桶环境下的共存体验；若追求更清爽的环境，按需安装单体包依然是最佳实践)*。
+> **不建议安装聚合全家桶（`@linxin666/dsh-web-all`）**：它会把多个子插件的前端逻辑合并打包到同一个 `client.js` 中，加载时自执行，可能与本插件产生移动端入口重复与手势冲突。推荐**按需安装所需单体插件**（如任务看板、宠物等）。完整原因、推荐命令与共存说明见 [常见问题 Q6](#faq)。
 
 ---
 
@@ -138,7 +133,7 @@ dsh web --no-open
 
 ---
 
-### 手机端实机演示（同源免登与工作区全功能）
+### 手机端实机演示（同源免登与工作区能力）
 
 | 登录 | 对话列表字号缩放 | 侧边栏移动端样式 | 官方轨迹查看 |
 | :---: | :---: | :---: | :---: |
@@ -161,18 +156,20 @@ dsh web --no-open
 - **设备会话管理**：实时查看已连接设备的类型、操作系统、浏览器、来源 IP 及最近活跃时间，支持单设备注销与一键注销全部设备。
 
 ### 3. 安全防护
-- **传输层 RSA 非对称加密**：登录认证接口支持客户端 RSA 加密。在 HTTPS 等安全上下文下优先使用 Web Crypto 原生 `RSA-OAEP-SHA256`；在 DSH 默认的 HTTP 局域网/Tailscale 访问（非安全上下文）下回退至纯 JS 垫片，并使用 `crypto.getRandomValues()` 进行密码学安全随机数填充。敏感密码与配对码在客户端加密后再通过网络传输。
+- **传输层 RSA 非对称加密**：登录认证接口在客户端即完成 RSA 加密，敏感密码与配对码加密后才经网络传输。
+  - **HTTPS 等安全上下文**：优先使用 Web Crypto 原生 `RSA-OAEP-SHA256`；
+  - **DSH 默认的 HTTP 局域网 / Tailscale 访问（非安全上下文）**：回退至纯 JS 垫片，并使用 `crypto.getRandomValues()` 做密码学安全随机数填充。
 - **scrypt 慢哈希存储**：服务端采用 `scrypt` 加盐慢哈希算法（`scrypt:${salt}:${hash}`）对密码进行落盘存储，比对过程采用 `crypto.timingSafeEqual` 恒定时间比较以防范时序侧信道攻击。
 - **防暴力破解与限频保护**：
   - 连续输错凭证达到阈值（默认 5 次）自动锁定该 IP 15 分钟，拦截后续验证请求并返回 HTTP 429；
   - 滑动窗口限频（默认 60 次/分钟），防范高频恶意刷量探测；
   - 访问审计与锁定状态持久化落盘，服务重启后自动恢复；
   - 支持管理员在管理面板中一键解锁指定 IP。
-- **智能静态资源放行机制**：安全门禁内置智能前端静态扩展名识别（放行 `.js`、`.css`、`.png`、`.svg`、`.woff2` 等 20+ 种合法资源），彻底拦截无扩展名或动态管理 API 请求（如 `/plugins/xxx/admin`），确保第三方生态插件前端正常展示的同时严密保护后台动态接口，无需用户在设置界面手动维护白名单。
+- **智能静态资源放行机制**：安全门禁内置智能前端静态扩展名识别（放行 `.js`、`.css`、`.png`、`.svg`、`.woff2` 等 20 种合法资源），拦截无扩展名或动态管理 API 请求（如 `/plugins/xxx/admin`），确保第三方生态插件前端正常展示的同时严密保护后台动态接口，无需用户在设置界面手动维护白名单。（DSH 核心静态目录 `/assets/` 属官方资源，单独无条件放行。）
 - **高可靠原子持久化与防抖**：采用毫秒级写盘防抖节流保护磁盘 I/O（会话数据 500ms、样式片段 300ms），配合 `beforeExit` 进程退出 Flush 保证数据不丢失；`settings.yaml` 与 `style-snippets.json` 采用临时文件原子替换（`renameSync`），防止异常中断损坏数据。
 - **真实 IP 安全提取**：仅信任底层 Socket 真实连接地址，防范伪造的 `X-Forwarded-For` 欺骗攻击。
 - **本机回环 CSRF 防御**：插件的变更类 API 会校验浏览器同源信号（`Origin` / `Sec-Fetch-Site`），恶意网页驱使浏览器向 `127.0.0.1` 发起的跨站写请求将被直接拒绝；curl / 本机脚本等无浏览器信号的客户端不受影响。
-- **回环上下文不洗白**：上下文虚拟化仅作用于外部来源流量；本机回环请求保留原始 Host / Origin，使 DSH 底层自带的 DNS-Rebinding 与同源校验对外部域名继续生效。SSE 事件流仅限同源连接，不开放跨域读取。
+- **本机回环请求不做上下文改写**：上下文虚拟化仅作用于外部来源流量；本机回环请求保留原始 Host / Origin（不"洗白"），使 DSH 自带的 DNS-Rebinding 与同源校验对外部域名继续生效。SSE 事件流仅限同源连接，不开放跨域读取。
 
 ### 4. 实时状态同步与国际化
 - **SSE 实时事件推送**：基于 Server-Sent Events 实现新设备接入、设备重连、会话撤销及安全告警的实时通知，内置连接双向关闭监听与幂等清理。
@@ -183,14 +180,18 @@ dsh web --no-open
 
 DSH Web 界面在手机上仍有不少沿袭桌面端的样式问题，插件内置「移动端样式片段」模块，把移动端适配拆分为可独立启停的 CSS 片段：
 
-- **按界面区域划分的三段内置预设**：`preset-sidebar` 侧边栏抽屉导航（折叠 0 宽度、可拖拽悬浮把手、自适应抽屉宽度与 44px 触控友好区）、`preset-settings` 设置面板适配（上下堆叠自适应、顶部导航横滑、内容纵向自然滚览）、`preset-main` 对话正文**高密度排版**（小字号 12.5px + 紧凑行距 + 收紧边距 → 每行展示更多内容；基于稳定 HTML 元素与 localName 后缀，不做布局缩放，无右侧留白），默认移动端启用、PC 关闭；
+- **按界面区域划分的三段内置预设**（默认移动端启用、PC 关闭）：
+  - `preset-sidebar` **侧边栏抽屉导航**：折叠时侧边栏 0 宽度占用、可拖拽悬浮把手、自适应抽屉宽度、44px 触控友好区；
+  - `preset-settings` **设置面板适配**：上下堆叠自适应、顶部导航横滑、内容纵向自然滚览；
+  - `preset-main` **对话正文高密度排版**：小字号 12.5px + 紧凑行距 + 收紧边距，每行展示更多内容；基于稳定 HTML 元素与 localName 后缀，不做布局缩放，无右侧留白；
 - **PC / 移动端分别启停（按视口宽度判定，与设备无关）**：每段预设和每个自定义片段都有独立的「🖥️ PC」「📱 移动端」两个开关；「移动端」= 窄视口（≤900px）生效——**PC 浏览器拉小窗口也会生效**，「PC」= 宽视口（>900px）生效，两端都开 = 全宽度生效；
+  - **关于 `html[data-dsh-mobile]` 选择器**：该标记仅在**移动端 UA** 请求时写入。若自定义 CSS 以 `html[data-dsh-mobile]` 打头，则只在手机等移动端 UA 下命中；希望「窄屏桌面窗口也生效」时请直接写选择器（无需 `html[data-dsh-mobile]` 前缀），注入层会自动包裹媒体查询。
 - **用户自定义（样式小插件）**：在 **设置 ⚙️ → 远程与移动端 → 🎨 移动端样式片段** 中粘贴自己的 CSS 即可新增片段，支持编辑/启停/删除/**一键复制**（每个片段「查看 CSS」旁都有「📋 复制样式」按钮），持久化于 `~/.dsh/remote-mobile/style-snippets.json`，保存后下一次页面加载即生效，无需重启；
-- **按 UA 打标记 + 按宽度生效**：样式按视口宽度档生效（见上），与设备 UA 无关；移动端 UA 请求额外给 `<html>` 打上 `data-dsh-mobile="1"` 标记作为作用域钩子，并注入可拖拽的展开把手脚本（全端注入，运行时仅在侧边栏折叠时生效）。
+- **按 UA 打标记 + 按宽度生效**：样式按视口宽度档生效（见上），与设备 UA 无关；移动端 UA 请求额外给 `<html>` 打上 `data-dsh-mobile="1"` 标记作为作用域钩子（以其作为选择器时仅移动端 UA 命中，详见上条），并注入可拖拽的展开把手脚本（全端注入，运行时仅在侧边栏折叠时生效）。
 
 ### 6. 插件通用共存保护
 
-- **启动零冲突**：`remoteWebUiPairing` 配对共享服务被其他远程/Web 接入类插件占用时，本插件自动让出（延迟裁决：等待激活窗口结束后检测服务名归属），彻底避免服务重名导致的整树回滚致命崩溃——从插件市场安装后可直接启动，无需任何手动配置；
+- **启动零冲突**：`remoteWebUiPairing` 配对共享服务被其他远程/Web 接入类插件占用时，本插件自动让出（延迟裁决：等待激活窗口结束后检测服务名归属），避免服务重名导致的整树回滚崩溃——从插件市场安装后可直接启动，无需任何手动配置；
 - **冲突状态可见化**：检测到共存时，设置页顶部展示可关闭的警示横幅（中英文），说明让出行为与「只保留其一」的建议；处理完成后刷新页面即不再出现；
 - **一键诊断报告**：横幅内 **「📋 复制诊断与修复信息」** 按钮可复制完整诊断报告——运行时自动识别占用方插件包名与 loader entry id，报告含精确到行的修复配置与命令（禁用对方 / 卸载本插件二选一），粘贴给 AI 助手即可按步骤处理。
 
@@ -279,9 +280,10 @@ dsh plugin --profile web remove dsh-remote-mobile
 
 ---
 
+<span id="advanced"></span>
 ## ⚙️ 高级配置
 
-插件已完全接入 DSH 官方 Settings 体系，配置项支持在 Web 界面中直观调整，也可在 `~/.dsh/settings.yaml` 的 `dsh-remote-mobile` 命名空间下手动修改：
+插件已接入 DSH 官方 Settings 体系，配置项支持在 Web 界面中直观调整，也可在 `~/.dsh/settings.yaml` 的 `dsh-remote-mobile` 命名空间下手动修改：
 
 ```yaml
 dsh-remote-mobile:
@@ -303,7 +305,7 @@ dsh-remote-mobile:
   "presetStates": {
     "preset-sidebar": { "pc": false, "mobile": true },
     "preset-settings": { "pc": false, "mobile": true },
-    "preset-main": { "pc": true, "mobile": true }
+    "preset-main": { "pc": false, "mobile": true }
   },
   "custom": [
     {
@@ -322,6 +324,7 @@ dsh-remote-mobile:
 
 ---
 
+<span id="storage"></span>
 ## 📂 本地文件存储位置
 
 > **💡 路径提示**：在 macOS / Linux 下根目录为 `~/.dsh/`；在 Windows 下对应为 `C:\Users\<你的用户名>\.dsh\`（可在文件资源管理器地址栏直接输入 `%USERPROFILE%\.dsh` 直达）。
@@ -388,7 +391,8 @@ dsh-remote-mobile:
 <details>
 <summary><b>Q4: 手机端样式还是不满意，想完全自己定制？</b></summary>
 
-**答**：打开 **设置 ⚙️ → 远程与移动端 → 🎨 移动端样式片段**，先尝试启停三段内置预设（侧边栏 / 设置面板 / 正文，每段都有独立的 PC 与移动端开关）；还不够就在「自定义片段」里粘贴自己的 CSS（例如 `html[data-dsh-mobile] .xxx { ... }`）。保存后手机端刷新页面立即可见，改动全部落在 `~/.dsh/remote-mobile/style-snippets.json`，升级插件不会丢失。
+**答**：打开 **设置 ⚙️ → 远程与移动端 → 🎨 移动端样式片段**，先尝试启停三段内置预设（侧边栏 / 设置面板 / 正文，每段都有独立的 PC 与移动端开关）；还不够就在「自定义片段」里粘贴自己的 CSS（例如 `.我的选择器 { ... }`）。保存后手机端刷新页面立即可见，改动全部落在 `~/.dsh/remote-mobile/style-snippets.json`，升级插件不会丢失。
+> 小提示：若选择器写成 `html[data-dsh-mobile] .xxx`，则只在移动端 UA 下生效，窄屏桌面窗口不会命中；希望两端窄屏都生效，请直接写选择器。
 </details>
 
 <details>
@@ -406,8 +410,15 @@ dsh-remote-mobile:
 
 **答**：主要是基于**避免功能冲突**与**环境轻量解耦**的考量：
 1. **避免移动端入口重复与手势交互冲突**：全家桶插件会将十几个独立功能插件的前端代码编译打包在同一个 `client.js` 中，其内置的移动端自适应逻辑在模块加载时会自执行。即使在 `cordis.patch.yml` 中配置了 `web-ui-remote-web-ui: disabled: true`，浏览器加载脚本后仍可能渲染出小鲸鱼悬浮按钮（`#dshRemoteWhale`），导致两个插件的移动端悬浮入口重叠以及触控手势冲突。
-2. **轻量可控与独立升级**：按需单独安装所需插件（例如只需任务看板和宠物时，仅安装 `@linxin666/dsh-client-ui-task-board` 与 `@linxin666/dsh-pet`），既能保证环境轻盈，也便于各个插件独立升级、回滚与维护，避免依赖绑定。
-*(注：自 v1.6.0 起，`dsh-remote-mobile` 已内置无缝兼容处理，通过前置参数与 CSS 协同规避 `#dshRemoteWhale` 重复挂载，保障已安装全家桶环境下的正常使用；若追求更简洁稳定的开发与运行环境，按需安装单体包仍是最佳实践)*。
+2. **轻量可控与独立升级**：按需单独安装所需插件，既能保证环境轻盈，也便于各个插件独立升级、回滚与维护，避免依赖绑定。推荐按需安装各自独立的单体包，例如：
+   ```bash
+   # 需要哪个装哪个，职责清晰、互不干扰
+   dsh plugin --profile web add @linxin666/dsh-client-ui-task-board
+   dsh plugin --profile web add @linxin666/dsh-client-ui-web-ui-settings
+   dsh plugin --profile web add @linxin666/dsh-pet
+   dsh plugin --profile web add @linxin666/dsh-ssh
+   ```
+*(注：自 v1.6.0 起，`dsh-remote-mobile` 已内置兼容防护——注入抑制脚本向 `sessionStorage` 写入 `dsh-remote-force-desktop=1` 并协同 CSS，避免 `#dshRemoteWhale` 被**重复挂载**；但小鲸鱼入口本身仍可能由对方渲染，入口重叠的根源在对方，故仍建议按需安装单体包)*。
 </details>
 
 <details>
