@@ -100,8 +100,8 @@ export var translations = {
 
     // 卡片 7: 全局高级配置
     configCardTitle: "全局高级安全参数配置",
-    configCardDesc: "调整单 IP 访问频率限制、输错封禁阈值与锁定持续时间。点击保存将立即生效并自动同步写回 ~/.dsh/settings.yaml 配置文件。",
-    copySettingsPathBtn: "📋 复制 settings.yaml 路径",
+    configCardDesc: "调整单 IP 访问频率限制、输错封禁阈值与锁定持续时间。点击保存将立即生效并保存到 ~/.dsh/remote-mobile/settings.json。",
+    copySettingsPathBtn: "📋 复制 settings.json 路径",
     fieldVisitsLimit: "⏱️ 每分钟访问上限 (次/分)",
     fieldVisitsLimitHint: "单 IP 1分钟内打开登录页超过此值将触发限频",
     fieldFailedLimit: "🛡️ 输错密码封禁阈值 (次)",
@@ -111,9 +111,9 @@ export var translations = {
     restoreDefaultsBtn: "🔄 恢复默认参数",
     saveConfigBtn: "💾 保存参数配置",
     savingConfigBtn: "正在保存...",
-    saveConfigConfirm: "确定要保存当前高级安全参数配置吗？保存后将立即生效并自动同步写回 ~/.dsh/settings.yaml。",
+    saveConfigConfirm: "确定要保存当前高级安全参数配置吗？保存后将立即生效并保存到 ~/.dsh/remote-mobile/settings.json。",
     restoreDefaultsConfirm: "确定要将安全参数恢复为系统默认值（60次/分、5次失败、锁定15分钟）吗？确认后将直接生效并自动同步。",
-    saveConfigSuccessToast: "高级安全参数已成功保存并同步到 settings.yaml！",
+    saveConfigSuccessToast: "高级安全参数已成功保存并同步到 settings.json！",
     restoreDefaultsSuccessToast: "已成功恢复默认安全参数并立即生效！",
     saveConfigFailTip: "参数必须为大于 0 的有效整数",
 
@@ -265,8 +265,8 @@ export var translations = {
 
     // Card 7: Advanced Security Config
     configCardTitle: "Global Security Policy Configuration",
-    configCardDesc: "Configure per-IP rate limits, brute-force failure thresholds, and lockout durations. Changes take effect immediately and sync to ~/.dsh/settings.yaml.",
-    copySettingsPathBtn: "📋 Copy settings.yaml Path",
+    configCardDesc: "Configure per-IP rate limits, brute-force failure thresholds, and lockout durations. Changes take effect immediately and are saved to ~/.dsh/remote-mobile/settings.json.",
+    copySettingsPathBtn: "📋 Copy settings.json Path",
     fieldVisitsLimit: "⏱️ Max Visits per Minute (visits/min)",
     fieldVisitsLimitHint: "Rate limit triggered when a single IP opens login page more than this value",
     fieldFailedLimit: "🛡️ Max Failed Password Attempts (times)",
@@ -276,9 +276,9 @@ export var translations = {
     restoreDefaultsBtn: "🔄 Restore Defaults",
     saveConfigBtn: "💾 Save Configuration",
     savingConfigBtn: "Saving...",
-    saveConfigConfirm: "Are you sure you want to save the current security policy? It will take effect immediately and sync to ~/.dsh/settings.yaml.",
+    saveConfigConfirm: "Are you sure you want to save the current security policy? It will take effect immediately and be saved to ~/.dsh/remote-mobile/settings.json.",
     restoreDefaultsConfirm: "Are you sure you want to restore security policies to default values (60 visits/min, 5 failed attempts, 15m lockout)? It will take effect immediately.",
-    saveConfigSuccessToast: "Security policy successfully saved and synced to settings.yaml!",
+    saveConfigSuccessToast: "Security policy successfully saved and synced to settings.json!",
     restoreDefaultsSuccessToast: "Default security policies restored and applied immediately!",
     saveConfigFailTip: "Parameters must be valid integers greater than 0",
 

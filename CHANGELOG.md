@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - 2026-10-09
+
+### Fixed (适配 DSH 0.1.7+ 配置存储变更，修复插件配置无法持久化)
+
+- **配置持久化迁移**：DSH 自 **0.1.7** 起（最早见于 v0.1.7-alpha.1 的 release notes，0.2.x 延续）官方已弃用 `~/.dsh/settings.yaml` 作为实时配置源（启动时一次性迁移进当前 profile 的 `cordis.patch.yml` 并改名为 `settings.yaml.imported`）。原实现持续写回该文件，导致免密开关、长期密码哈希、限频/锁定阈值在升级后无法持久化（重启即回落默认）：
+  - 新增插件自有配置 `~/.dsh/remote-mobile/settings.json`（JSON、临时文件原子替换、权限 `0o600`），由 `SessionStore` 读写；
+  - 首次启动自动从旧 `settings.yaml` / `settings.yaml.imported` 一次性迁移，救回既有长期密码与限频配置；
+  - 保留旧版 `ctx.settings.register` 集成作为旧版 DSH 的尽力兼容（0.1.7+ 的 `SettingsForms` 无该 API，会安全跳过）。
+- **防止已清空的密码复活**：配置迁移仅在自有 `settings.json` 不存在时执行一次；一旦自有配置存在，旧 `settings.yaml.imported` 不再参与合并，避免用户清空长期密码后重启又被旧值救回。决策逻辑抽为纯函数 `resolveInitialStoreOptions()` 并由单测锁定。
+- **语言偏好读取适配**：`readGlobalLocale()` 改为优先读取当前 profile 的 `cordis.patch.yml`（locale entry），回退旧 `settings.yaml` / `settings.yaml.imported`，修复升级后登录页与接口语言恒为中文的问题。
+- **测试**：新增 `test/settings-persistence.test.js` 覆盖自有配置读写、旧版迁移合并与 locale 解析。
+- **文档**：README（中 / 英）更新配置存储位置与新增 FAQ Q8，说明 DSH 0.1.7+ 的 settings.yaml 迁移行为。
+
+---
+
 ## [1.8.0] - 2026-10-08
 
 ### Fixed & Security (适配 NAS / 网关子路径前缀反代，修复静默失败与开放重定向)

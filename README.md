@@ -166,7 +166,7 @@ dsh web --no-open
   - 访问审计与锁定状态持久化落盘，服务重启后自动恢复；
   - 支持管理员在管理面板中一键解锁指定 IP。
 - **智能静态资源放行机制**：安全门禁内置智能前端静态扩展名识别（放行 `.js`、`.css`、`.png`、`.svg`、`.woff2` 等 20 种合法资源），拦截无扩展名或动态管理 API 请求（如 `/plugins/xxx/admin`），确保第三方生态插件前端正常展示的同时严密保护后台动态接口，无需用户在设置界面手动维护白名单。（DSH 核心静态目录 `/assets/` 属官方资源，单独无条件放行。）
-- **高可靠原子持久化与防抖**：采用毫秒级写盘防抖节流保护磁盘 I/O（会话数据 500ms、样式片段 300ms），配合 `beforeExit` 进程退出 Flush 保证数据不丢失；`settings.yaml` 与 `style-snippets.json` 采用临时文件原子替换（`renameSync`），防止异常中断损坏数据。
+- **高可靠原子持久化与防抖**：采用毫秒级写盘防抖节流保护磁盘 I/O（会话数据 500ms、样式片段 300ms），配合 `beforeExit` 进程退出 Flush 保证数据不丢失；`settings.json` 与 `style-snippets.json` 采用临时文件原子替换（`renameSync`），防止异常中断损坏数据。
 - **真实 IP 安全提取**：仅信任底层 Socket 真实连接地址，防范伪造的 `X-Forwarded-For` 欺骗攻击。
 - **本机回环 CSRF 防御**：插件的变更类 API 会校验浏览器同源信号（`Origin` / `Sec-Fetch-Site`），恶意网页驱使浏览器向 `127.0.0.1` 发起的跨站写请求将被直接拒绝；curl / 本机脚本等无浏览器信号的客户端不受影响。
 - **本机回环请求不做上下文改写**：上下文虚拟化仅作用于外部来源流量；本机回环请求保留原始 Host / Origin（不"洗白"），使 DSH 自带的 DNS-Rebinding 与同源校验对外部域名继续生效。SSE 事件流仅限同源连接，不开放跨域读取。
@@ -283,17 +283,20 @@ dsh plugin --profile web remove dsh-remote-mobile
 <span id="advanced"></span>
 ## ⚙️ 高级配置
 
-插件已接入 DSH 官方 Settings 体系，配置项支持在 Web 界面中直观调整，也可在 `~/.dsh/settings.yaml` 的 `dsh-remote-mobile` 命名空间下手动修改：
+配置持久化于插件自有文件 `~/.dsh/remote-mobile/settings.json`，可在 Web 界面中直观调整，也可直接编辑该文件：
 
-```yaml
-dsh-remote-mobile:
-  allowTailscale: false       # boolean，默认 false：是否允许 Tailscale 虚拟私网免密访问
-  allowLan: false             # boolean，默认 false：是否允许局域网免密访问（高危警示）
-  secretHash: ""              # string，默认空：长期访问密码的 scrypt 加盐哈希值
-  maxVisitsPerMinute: 60      # number，默认 60：单 IP 每分钟最大访问登录页次数
-  maxFailedAttempts: 5        # number，默认 5：触发封禁的连续认证失败最大次数
-  lockDurationMs: 900000      # number，默认 900000 (15分钟)：IP 锁定持续时间（毫秒）
+```jsonc
+{
+  "allowTailscale": false,     // boolean，默认 false：是否允许 Tailscale 虚拟私网免密访问
+  "allowLan": false,           // boolean，默认 false：是否允许局域网免密访问（高危警示）
+  "secretHash": "",            // string，默认空：长期访问密码的 scrypt 加盐哈希值
+  "maxVisitsPerMinute": 60,    // number，默认 60：单 IP 每分钟最大访问登录页次数
+  "maxFailedAttempts": 5,      // number，默认 5：触发封禁的连续认证失败最大次数
+  "lockDurationMs": 900000     // number，默认 900000 (15分钟)：IP 锁定持续时间（毫秒）
+}
 ```
+
+> **关于配置存储**：DSH 自 **0.1.7** 起（最早见于 v0.1.7-alpha.1 的 release notes，0.2.x 延续）官方已弃用 `~/.dsh/settings.yaml` 作为**实时配置源**——该文件会在启动时被一次性迁移进当前 profile 的 `cordis.patch.yml`，并改名为 `settings.yaml.imported`（详见 [Q8](#faq)）。因此本插件不再写入 settings.yaml，而是持久化到上述自有 `settings.json`；首次启动时会自动从旧 `settings.yaml` / `settings.yaml.imported` 迁移一次（把旧长期密码、限频等配置救回）。
 
 ### 🎨 移动端样式片段（可选）
 
@@ -331,7 +334,7 @@ dsh-remote-mobile:
 
 | 文件路径 | 说明 | 安全级别 |
 |---|---|---|
-| `~/.dsh/settings.yaml` | 全局安全策略与免密开关配置 | 用户级读写 |
+| `~/.dsh/remote-mobile/settings.json` | 插件配置：免密开关、长期密码哈希与限频/锁定策略 | 本地落盘，权限 `0o600`（仅当前用户可读写） |
 | `~/.dsh/remote-mobile/devices.json` | 已授权设备会话、IP 访问计数与安全审计数据（内含长效 Token，权限 `0o600`） | 本地落盘，仅当前用户可读写 |
 | `~/.dsh/remote-mobile/rsa-keys.json` | 服务端 RSA 密钥对文件（含公钥与私钥） | 本地落盘，权限 `0o600`（仅当前用户可读写） |
 | `~/.dsh/remote-mobile/style-snippets.json` | 移动端样式片段（内置预设启停状态 + 用户自定义 CSS 小插件） | 本地落盘持久化 |
@@ -433,6 +436,16 @@ dsh-remote-mobile:
    * 出于严密的安全防护考量（防止外部恶意客户端伪造 `X-Forwarded-For` 请求头绕过认证），插件门禁严格基于底层物理 Socket 连接判断客户端真实来源。
    * 当反向代理/宿主网关直接从本机 `127.0.0.1` 代理至 DSH 时，请求会被识别为本地回环连接并直接放行——此时由网关/NAS 宿主自身的登录与权限隔离机制进行安全兜底。
    * 若你希望通过外部统一域名/网关访问时仍强制要求输入本插件的动态配对码或长期访问密码，建议配置反向代理透明透传客户端源 IP，或直接通过 DSH 开放的外部端口（如默认的 `3080` 或自定义映射端口）直连访问。
+</details>
+
+<details>
+<summary><b>Q8: 升级 DSH 0.1.7+（含 0.2.x）后 <code>~/.dsh/settings.yaml</code> 不见了 / 我的配置丢了？</b></summary>
+
+**答**：这是 **DSH 官方自 0.1.7 起的行为变更**（最早见于 v0.1.7-alpha.1 的 release notes，0.2.x 延续），与本插件无关：
+
+- DSH 自 **0.1.7** 起已**不再把 `~/.dsh/settings.yaml` 当作实时配置源**。启动时它由官方 `dsh-settings` 的 `importLegacyDocument()` **一次性导入**到当前 profile 的 `~/.dsh/profiles/<profile>/cordis.patch.yml`，随后原文件被**改名为 `settings.yaml.imported`**（先改名、再导入；若某个 section 找不到对应 entry，则会跳过，仅保留在该文件中，且不会重试）。官方 release notes 原文：「设置改由当前 Profile 的插件配置保存，支持声明过的实时更新字段；旧 settings.yaml 仅尝试导入一次，自定义设置插件需适配。」
+- 因此升级后 `settings.yaml` 消失、只剩 `settings.yaml.imported` 属**正常现象**；模型 provider、locale 等应改为在 profile 的 `cordis.patch.yml` 中查看/编辑。
+- **本插件自 v1.9.0 起**已改为把自身配置持久化到 `~/.dsh/remote-mobile/settings.json`，并在首次启动时**自动从旧 `settings.yaml` / `settings.yaml.imported` 迁移一次**（把长期密码哈希、免密开关、限频阈值等救回），不再依赖 DSH 的 settings.yaml。若你曾发现"长期密码失效/限频重置"，升级到 v1.9.0 后会自动恢复。
 </details>
 
 ---

@@ -165,7 +165,7 @@ Open the DSH Web Console in your browser, navigate to **Settings ⚙️ -> Remot
   - Audit logs and lockout states persist to disk and restore across restarts;
   - Administrators can manually unlock blocked IPs with one click in the panel.
 - **Intelligent Static Asset Whitelisting**: The authentication gate automatically allows verified frontend asset extensions (`.js`, `.css`, `.png`, `.svg`, `.woff2`, etc., 20 types) while blocking extensionless or dynamic API routes (e.g. `/plugins/xxx/admin`), ensuring smooth third-party plugin rendering without manual whitelist configuration. (The DSH core static directory `/assets/` is an official resource and is allowed unconditionally.)
-- **Resilient Atomic Persistence & Debounce**: Millisecond-level debounce write-throttling to safeguard disk I/O (500ms for session data, 300ms for style snippets), coupled with `beforeExit` process flush hooks and atomic temporary file replacement (`renameSync`) for `settings.yaml` and `style-snippets.json`.
+- **Resilient Atomic Persistence & Debounce**: Millisecond-level debounce write-throttling to safeguard disk I/O (500ms for session data, 300ms for style snippets), coupled with `beforeExit` process flush hooks and atomic temporary file replacement (`renameSync`) for `settings.json` and `style-snippets.json`.
 - **Real Socket IP Extraction**: Relies strictly on underlying Socket connection addresses, preventing spoofed `X-Forwarded-For` header attacks.
 - **Loopback CSRF Defense**: Mutating plugin APIs validate browser same-origin signals (`Origin` / `Sec-Fetch-Site`). Cross-site write requests to `127.0.0.1` driven by malicious webpages are rejected outright; non-browser clients (curl / local scripts) are unaffected.
 - **No Context Rewriting for Loopback Requests**: Context virtualization applies only to external traffic. Loopback requests keep their original Host / Origin (no "laundering"), so DSH's built-in DNS-rebinding and same-origin checks keep working against external domains. The SSE event stream accepts same-origin connections only, with no cross-origin reads.
@@ -282,17 +282,20 @@ dsh plugin --profile web remove dsh-remote-mobile
 <span id="advanced"></span>
 ## ⚙️ Advanced Configuration
 
-Integrated with the DSH official Settings system. Configurations can be adjusted in the Web UI or edited in `~/.dsh/settings.yaml` under the `dsh-remote-mobile` namespace:
+Configurations persist in the plugin-owned file `~/.dsh/remote-mobile/settings.json`; adjust them in the Web UI or edit the file directly:
 
-```yaml
-dsh-remote-mobile:
-  allowTailscale: false       # boolean, default false: allow passwordless access via Tailscale
-  allowLan: false             # boolean, default false: allow passwordless access via LAN (High Risk)
-  secretHash: ""              # string, default empty: scrypt salted hash of the persistent password
-  maxVisitsPerMinute: 60      # number, default 60: max login page visits per minute per IP
-  maxFailedAttempts: 5        # number, default 5: max consecutive failed attempts before IP lockout
-  lockDurationMs: 900000      # number, default 900000 (15 mins): IP lockout duration in ms
+```jsonc
+{
+  "allowTailscale": false,     // boolean, default false: allow passwordless access via Tailscale
+  "allowLan": false,           // boolean, default false: allow passwordless access via LAN (High Risk)
+  "secretHash": "",            // string, default empty: scrypt salted hash of the persistent password
+  "maxVisitsPerMinute": 60,    // number, default 60: max login page visits per minute per IP
+  "maxFailedAttempts": 5,      // number, default 5: max consecutive failed attempts before IP lockout
+  "lockDurationMs": 900000     // number, default 900000 (15 mins): IP lockout duration in ms
+}
 ```
+
+> **About config storage**: Since DSH **0.1.7** (first noted in the v0.1.7-alpha.1 release notes; continued in 0.2.x), `~/.dsh/settings.yaml` is no longer a live configuration source — on boot it is imported once into the active profile's `cordis.patch.yml` and renamed to `settings.yaml.imported` (see [Q8](#faq)). This plugin therefore no longer writes to settings.yaml and persists to its own `settings.json` above; on first launch it automatically migrates once from the legacy `settings.yaml` / `settings.yaml.imported` (recovering your old persistent password, rate limits, etc.).
 
 ### 🎨 Mobile Style Snippets (optional)
 
@@ -330,7 +333,7 @@ Custom snippets (style mini-plugins) and their enabled states are persisted in `
 
 | Path | Description | Security Level |
 |---|---|---|
-| `~/.dsh/settings.yaml` | Global security policies & bypass toggles | User R/W |
+| `~/.dsh/remote-mobile/settings.json` | Plugin config: bypass toggles, persistent-password hash, rate-limit & lockout policy | Local storage, `0o600` (Restricted to current user) |
 | `~/.dsh/remote-mobile/devices.json` | Authorized devices, sessions & IP audit statistics (contains long-lived tokens, `0o600`) | Local storage, restricted to current user |
 | `~/.dsh/remote-mobile/rsa-keys.json` | Server RSA keypair (public & private) | Local storage, `0o600` (Restricted to current user) |
 | `~/.dsh/remote-mobile/style-snippets.json` | Mobile style snippets (built-in toggles + custom CSS mini-plugins) | Local persistent storage |
@@ -432,6 +435,16 @@ If your log instead shows `service "remoteWebUiPairing" has been registered`, pl
    * For rigorous security (preventing external attackers from forging `X-Forwarded-For` headers to bypass authentication), the plugin security gate strictly evaluates client authenticity based on the physical socket connection.
    * When a reverse proxy / host gateway relays traffic directly from localhost `127.0.0.1` to DSH, the request is identified as a local loopback connection and allowed without pairing code prompts—backed by the NAS/host gateway's own authentication and permission boundary.
    * If you wish to enforce the plugin's pairing code or persistent password even when entering through an external reverse proxy, configure the proxy to transparently pass client IPs or connect directly via the exposed DSH listening port (e.g. default port `3080` or custom mapped ports).
+</details>
+
+<details>
+<summary><b>Q8: After upgrading to DSH 0.1.7+ (including 0.2.x), <code>~/.dsh/settings.yaml</code> is gone / my settings were lost?</b></summary>
+
+**Answer**: This is an **official DSH behavior change introduced in 0.1.7** (first noted in the v0.1.7-alpha.1 release notes; continued in 0.2.x), unrelated to this plugin:
+
+- Since DSH **0.1.7**, `~/.dsh/settings.yaml` is **no longer treated as a live configuration source**. On boot it is imported **once** by the official `dsh-settings` `importLegacyDocument()` into the active profile's `~/.dsh/profiles/<profile>/cordis.patch.yml`, then the original file is **renamed to `settings.yaml.imported`** (it renames first, then imports; a section with no matching entry is skipped, kept only in that file, and never retried). The official v0.1.7-alpha.1 release notes state that settings are now persisted as the current profile's plugin configuration (with declared live-update fields), and the legacy `settings.yaml` is imported only once — custom settings plugins must adapt.
+- So after upgrading, `settings.yaml` disappearing and only `settings.yaml.imported` remaining is **expected**; model providers, locale, etc. should now be viewed/edited in the profile's `cordis.patch.yml`.
+- **As of v1.9.0**, this plugin persists its own config to `~/.dsh/remote-mobile/settings.json` and, on first launch, **migrates once from the legacy `settings.yaml` / `settings.yaml.imported`** (recovering the persistent-password hash, bypass toggles, rate limits, etc.). It no longer depends on DSH's settings.yaml. If you saw a "persistent password stopped working / limits reset" symptom, upgrading to v1.9.0 restores it automatically.
 </details>
 
 ---

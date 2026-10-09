@@ -56,10 +56,10 @@ export function ConfigCard({
           onClick={() => {
             if (typeof copyText === 'function') {
               copyText(
-                '~/.dsh/settings.yaml',
+                '~/.dsh/remote-mobile/settings.json',
                 lang === 'en'
-                  ? 'Settings path copied (~/.dsh/settings.yaml)'
-                  : '已复制配置文件路径（~/.dsh/settings.yaml）'
+                  ? 'Settings path copied (~/.dsh/remote-mobile/settings.json)'
+                  : '已复制配置文件路径（~/.dsh/remote-mobile/settings.json）'
               );
             }
           }}

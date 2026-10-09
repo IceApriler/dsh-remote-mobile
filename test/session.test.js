@@ -327,62 +327,32 @@ test('SessionStore 与设备会话生命周期测试', async (t) => {
     assert.match(blocked.reason, /过于频繁/)
   })
 
-  await t.test('settings.yaml 命名空间安全写回与持久化 (writeBackToSettingsYaml)', async () => {
-    const { writeFileSync, readFileSync, rmSync } = await import('node:fs')
-    const { writeBackToSettingsYaml } = await import('../lib/auth/token.js')
+  await t.test('旧版 settings.yaml 命名空间精准解析 (readFromSettingsYaml)', async () => {
+    const { writeFileSync, rmSync } = await import('node:fs')
+    const { readFromSettingsYaml } = await import('../lib/auth/token.js')
     const tempYaml = `/tmp/dsh-temp-settings-${Date.now()}.yaml`
 
-    // 初始化一个模拟 settings.yaml 文件
-    const initialContent = [
+    writeFileSync(tempYaml, [
       'ui-onboarding:',
       '  welcomeNoticeVersion: 2026-08-13.1',
-      'pet:',
-      '  visible: true',
+      'dsh-remote-mobile:',
+      '  allowTailscale: true',
+      '  allowLan: false',
+      "  secretHash: 'scrypt:salt123:hash456'",
+      '  maxFailedAttempts: 8',
+      '  lockDurationMs: 1200000',
+      '  maxVisitsPerMinute: 80',
       'locale:',
       '  preference: zh',
-    ].join('\n')
-    writeFileSync(tempYaml, initialContent, 'utf8')
+    ].join('\n'), 'utf8')
 
-    // 1. 首次追加 dsh-remote-mobile 命名空间
-    const ok1 = writeBackToSettingsYaml({
-      allowTailscale: true,
-      allowLan: false,
-      secretHash: 'scrypt:salt123:hash456',
-      maxFailedAttempts: 8,
-      lockDurationMs: 1200000,
-      maxVisitsPerMinute: 80,
-    }, tempYaml)
-    assert.equal(ok1, true)
-
-    let content = readFileSync(tempYaml, 'utf8')
-    assert.ok(content.includes('dsh-remote-mobile:'))
-    assert.ok(content.includes('allowTailscale: true'))
-    assert.ok(content.includes('maxFailedAttempts: 8'))
-    assert.ok(content.includes('maxVisitsPerMinute: 80'))
-    assert.ok(content.includes('locale:\n  preference: zh')) // 原其他顶级配置完好无损
-
-    // 2. 覆盖更新已存在的 dsh-remote-mobile 配置
-    const ok2 = writeBackToSettingsYaml({
-      allowTailscale: false,
-      allowLan: true,
-      secretHash: '',
-      maxFailedAttempts: 10,
-      lockDurationMs: 600000,
-      maxVisitsPerMinute: 100,
-    }, tempYaml)
-    assert.equal(ok2, true)
-
-    content = readFileSync(tempYaml, 'utf8')
-    assert.ok(content.includes('allowTailscale: false'))
-    assert.ok(content.includes('allowLan: true'))
-    // 3. 测试 readFromSettingsYaml 精准读取解析
-    const { readFromSettingsYaml } = await import('../lib/auth/token.js')
     const parsed = readFromSettingsYaml(tempYaml)
-    assert.equal(parsed.allowTailscale, false)
-    assert.equal(parsed.allowLan, true)
-    assert.equal(parsed.maxFailedAttempts, 10)
-    assert.equal(parsed.maxVisitsPerMinute, 100)
-    assert.equal(parsed.lockDurationMs, 600000)
+    assert.equal(parsed.allowTailscale, true)
+    assert.equal(parsed.allowLan, false)
+    assert.equal(parsed.secretHash, 'scrypt:salt123:hash456')
+    assert.equal(parsed.maxFailedAttempts, 8)
+    assert.equal(parsed.lockDurationMs, 1200000)
+    assert.equal(parsed.maxVisitsPerMinute, 80)
 
     rmSync(tempYaml, { force: true })
   })

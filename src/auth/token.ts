@@ -1,5 +1,5 @@
 import { randomBytes, randomInt } from 'node:crypto'
-import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync, unlinkSync, chmodSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync, unlinkSync, chmodSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 import { EventEmitter } from 'node:events'
@@ -8,8 +8,18 @@ import { hashSecret, verifySecretHash } from './crypto.js'
 import { isTailscaleIp, isLanIp } from './tailscale.js'
 
 export const AUTH_COOKIE_NAME = 'dsh_mobile_token'
-export const DEFAULT_PERSIST_FILE = join(homedir(), '.dsh', 'remote-mobile', 'devices.json')
-export const GLOBAL_SETTINGS_FILE = join(homedir(), '.dsh', 'settings.yaml')
+
+/** DSH_HOME 目录（支持 DSH_HOME 覆盖） */
+export const DSH_HOME = process.env.DSH_HOME || join(homedir(), '.dsh')
+/** 插件自有数据目录 */
+export const REMOTE_MOBILE_DIR = join(DSH_HOME, 'remote-mobile')
+export const DEFAULT_PERSIST_FILE = join(REMOTE_MOBILE_DIR, 'devices.json')
+/** 插件自有配置持久化文件（DSH 0.1.7+ 起官方弃用 settings.yaml，插件改为自持存储） */
+export const SETTINGS_FILE = join(REMOTE_MOBILE_DIR, 'settings.json')
+/** DSH 旧版全局设置文件（0.1.7+ 起仅作一次性迁移来源，启动时会被改名） */
+export const GLOBAL_SETTINGS_FILE = join(DSH_HOME, 'settings.yaml')
+/** DSH 迁移后遗留的旧设置存档（legacy settings.yaml → settings.yaml.imported） */
+export const LEGACY_SETTINGS_IMPORTED_FILE = join(DSH_HOME, 'settings.yaml.imported')
 
 /**
  * 从 ~/.dsh/settings.yaml 中安全读取 dsh-remote-mobile 命名空间的最新配置
@@ -65,70 +75,193 @@ export function readFromSettingsYaml(filePath = GLOBAL_SETTINGS_FILE): Partial<S
 }
 
 /**
- * 从 ~/.dsh/settings.yaml 中读取全局语言偏好 (locale.preference)
+ * 从旧版 settings.yaml 文本内容中解析 locale.preference（返回 null 表示未命中）
  */
-export function readGlobalLocale(filePath = GLOBAL_SETTINGS_FILE): 'zh' | 'en' {
-  try {
-    if (!existsSync(filePath)) return 'zh'
-    const content = readFileSync(filePath, 'utf8')
-    const match = content.match(/^locale:\s*\r?\n\s+preference:\s*['"]?([a-zA-Z_-]+)['"]?/m)
-    if (match && match[1]) {
-      return match[1].toLowerCase().startsWith('en') ? 'en' : 'zh'
+export function parseLocaleFromSettingsYaml(content: string): 'zh' | 'en' | null {
+  const match = content.match(/^locale:\s*\r?\n\s+preference:\s*['"]?([a-zA-Z_-]+)['"]?/m)
+  if (match && match[1]) return match[1].toLowerCase().startsWith('en') ? 'en' : 'zh'
+  return null
+}
+
+/**
+ * 从 cordis.patch.yml 文本内容中解析 locale entry 的 config.preference（返回 null 表示未命中）
+ */
+export function parseLocaleFromPatch(content: string): 'zh' | 'en' | null {
+  const lines = content.split(/\r?\n/)
+  for (let i = 0; i < lines.length; i++) {
+    // 精确匹配 `- id: locale`（避免误命中 locale-xxx 等其它 entry）
+    if (!/^\s*-\s*id:\s*['"]?locale['"]?\s*$/.test(lines[i])) continue
+    for (let j = i + 1; j < Math.min(i + 40, lines.length); j++) {
+      // 进入下一个 patch entry，说明本条已结束
+      if (/^\s*-\s*id:/.test(lines[j])) break
+      const m = lines[j].match(/^\s*preference:\s*['"]?([a-zA-Z_-]+)['"]?/)
+      if (m && m[1]) return m[1].toLowerCase().startsWith('en') ? 'en' : 'zh'
     }
-    return 'zh'
+  }
+  return null
+}
+
+function readLocaleFromFile(filePath: string, parser: (content: string) => 'zh' | 'en' | null): 'zh' | 'en' | null {
+  try {
+    if (!existsSync(filePath)) return null
+    return parser(readFileSync(filePath, 'utf8'))
   } catch {
-    return 'zh'
+    return null
   }
 }
 
 /**
- * 将最新的插件配置安全原子写回 ~/.dsh/settings.yaml 中的 dsh-remote-mobile 命名空间
+ * 读取 DSH 全局语言偏好。
+ *
+ * DSH 0.1.7+ 起配置真实落点为当前 profile 的 cordis.patch.yml（旧版 settings.yaml
+ * 已被一次性迁移并改名为 settings.yaml.imported），因此优先读取 profile patch，
+ * 再回退旧 settings.yaml / settings.yaml.imported。
+ *
+ * @param filePath 显式传入时按旧版 settings.yaml 格式解析（向后兼容与测试）。
  */
-export function writeBackToSettingsYaml(options: SessionStoreOptions, filePath = GLOBAL_SETTINGS_FILE): boolean {
+export function readGlobalLocale(filePath?: string): 'zh' | 'en' {
+  if (filePath) {
+    return readLocaleFromFile(filePath, parseLocaleFromSettingsYaml) ?? 'zh'
+  }
+
+  // 1. 当前 profile 的 cordis.patch.yml（web 优先，其余按目录名排序兜底）
+  try {
+    const profilesDir = join(DSH_HOME, 'profiles')
+    let names: string[] = []
+    try {
+      names = readdirSync(profilesDir, { withFileTypes: true })
+        .filter((e) => e.isDirectory())
+        .map((e) => e.name)
+        .sort((a, b) => (a === 'web' ? -1 : b === 'web' ? 1 : a.localeCompare(b)))
+    } catch {}
+    const candidates = [
+      ...names.map((n) => join(profilesDir, n, 'cordis.patch.yml')),
+      join(DSH_HOME, 'cordis.patch.yml'),
+    ]
+    for (const c of candidates) {
+      const loc = readLocaleFromFile(c, parseLocaleFromPatch)
+      if (loc) return loc
+    }
+  } catch {}
+
+  // 2. 回退旧版 settings.yaml / settings.yaml.imported
+  for (const p of [GLOBAL_SETTINGS_FILE, LEGACY_SETTINGS_IMPORTED_FILE]) {
+    const loc = readLocaleFromFile(p, parseLocaleFromSettingsYaml)
+    if (loc) return loc
+  }
+
+  return 'zh'
+}
+
+/**
+ * 读取插件自有持久化配置文件 ~/.dsh/remote-mobile/settings.json
+ *
+ * 注：若文件中 secretHash 为空串 ""（表示用户清空了密码），此处会跳过赋值以归一化为 undefined。
+ * 上层 resolveInitialStoreOptions 必须根据文件存在性（own !== null）做出决策，严禁在自有配置存在时用 legacy 兜底回退。
+ */
+export function readPluginSettingsJson(filePath = SETTINGS_FILE): Partial<SessionStoreOptions> {
+  try {
+    if (!existsSync(filePath)) return {}
+    const data = JSON.parse(readFileSync(filePath, 'utf8'))
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return {}
+    const result: Partial<SessionStoreOptions> = {}
+    if (typeof data.allowTailscale === 'boolean') result.allowTailscale = data.allowTailscale
+    if (typeof data.allowLan === 'boolean') result.allowLan = data.allowLan
+    if (typeof data.secretHash === 'string' && data.secretHash) result.secretHash = data.secretHash
+    if (typeof data.maxFailedAttempts === 'number' && data.maxFailedAttempts > 0) result.maxFailedAttempts = data.maxFailedAttempts
+    if (typeof data.lockDurationMs === 'number' && data.lockDurationMs > 0) result.lockDurationMs = data.lockDurationMs
+    if (typeof data.maxVisitsPerMinute === 'number' && data.maxVisitsPerMinute > 0) result.maxVisitsPerMinute = data.maxVisitsPerMinute
+    return result
+  } catch {
+    return {}
+  }
+}
+
+/**
+ * 将插件配置原子写回自有配置文件 ~/.dsh/remote-mobile/settings.json（权限 0600）。
+ *
+ * DSH 0.1.7+ 起官方已弃用 ~/.dsh/settings.yaml 作为实时配置源（启动时一次性迁移为
+ * settings.yaml.imported），因此插件不再依赖该文件，改为自持存储，避免升级后配置丢失。
+ */
+export function writePluginSettingsJson(options: SessionStoreOptions, filePath = SETTINGS_FILE): boolean {
   const tmpPath = `${filePath}.${process.pid}.${Date.now()}.tmp`
   try {
-    if (!existsSync(filePath)) return false
-    const content = readFileSync(filePath, 'utf8')
-    const ns = 'dsh-remote-mobile:'
-
-    const fields = [
-      'dsh-remote-mobile:',
-      `  allowTailscale: ${Boolean(options.allowTailscale)}`,
-      `  allowLan: ${Boolean(options.allowLan)}`,
-      `  secretHash: ${options.secretHash ? `'${options.secretHash}'` : `''`}`,
-      `  maxFailedAttempts: ${options.maxFailedAttempts || 5}`,
-      `  lockDurationMs: ${options.lockDurationMs || 900000}`,
-      `  maxVisitsPerMinute: ${options.maxVisitsPerMinute || 60}`,
-    ]
-    const newBlock = fields.join('\n')
-
-    const lines = content.split(/\r?\n/)
-    const startIdx = lines.findIndex((l) => l.trim() === ns)
-
-    let updatedContent = ''
-    if (startIdx === -1) {
-      updatedContent = content.trimEnd() + '\n\n' + newBlock + '\n'
-    } else {
-      let endIdx = lines.length
-      for (let i = startIdx + 1; i < lines.length; i++) {
-        const line = lines[i]
-        if (line.length > 0 && !line.startsWith(' ') && !line.startsWith('\t') && line.includes(':')) {
-          endIdx = i
-          break
-        }
-      }
-      lines.splice(startIdx, endIdx - startIdx, newBlock)
-      updatedContent = lines.join('\n')
+    mkdirSync(dirname(filePath), { recursive: true })
+    const payload = {
+      allowTailscale: Boolean(options.allowTailscale),
+      allowLan: Boolean(options.allowLan),
+      secretHash: options.secretHash || '',
+      maxFailedAttempts: options.maxFailedAttempts || 5,
+      lockDurationMs: options.lockDurationMs || 900000,
+      maxVisitsPerMinute: options.maxVisitsPerMinute || 60,
     }
-
-    writeFileSync(tmpPath, updatedContent, 'utf8')
+    writeFileSync(tmpPath, JSON.stringify(payload, null, 2), { encoding: 'utf8', mode: 0o600 })
     renameSync(tmpPath, filePath)
+    try { chmodSync(filePath, 0o600) } catch {}
     return true
   } catch {
     try {
       if (existsSync(tmpPath)) unlinkSync(tmpPath)
     } catch {}
     return false
+  }
+}
+
+/**
+ * 兼容读取 DSH 旧版 settings.yaml / 迁移后的 settings.yaml.imported 中的
+ * dsh-remote-mobile 段，用于首次启动时把旧配置迁移到自有 settings.json。
+ */
+export function readLegacyDshSettings(
+  liveFile = GLOBAL_SETTINGS_FILE,
+  importedFile = LEGACY_SETTINGS_IMPORTED_FILE
+): Partial<SessionStoreOptions> {
+  return { ...readFromSettingsYaml(importedFile), ...readFromSettingsYaml(liveFile) }
+}
+
+/**
+ * 解析 SessionStore 的初始运行配置（纯函数决策逻辑）。
+ *
+ * 优先级与防反噬规则：
+ * 1. 显式传入的 explicit 参数优先级最高；
+ * 2. 若自有配置文件已存在（own !== null），则以自有配置 own 为准，此时 legacy 配置被彻底忽略（防止已清空的密码死灰复燃）；
+ * 3. 仅当自有配置文件尚不存在（own === null，即首次安装或旧版升级）时，才回退读取 legacy 配置进行一次性迁移；
+ * 4. 最终缺失项采用系统安全默认值。
+ *
+ * @param explicit 构造函数传入的显式参数
+ * @param own 插件自有 settings.json 内容；null 表示文件尚不存在（首次启动迁移状态）
+ * @param legacy 旧版 settings.yaml / settings.yaml.imported 内容
+ */
+export function resolveInitialStoreOptions(
+  explicit: SessionStoreOptions = {},
+  own: Partial<SessionStoreOptions> | null = null,
+  legacy: Partial<SessionStoreOptions> = {}
+): Required<SessionStoreOptions> {
+  // 当自有配置文件已存在时，legacy 彻底失效；仅在 own 为 null 时继承 legacy
+  const base = own !== null ? own : legacy
+  const merged = { ...base, ...explicit }
+
+  // 密码优先级：explicit > base（base 即 own 或 legacy，已由上面的门控决定；
+  // 自有配置存在但未设密码时 base 无密码，保持为空，绝不回退 legacy）
+  let secretHash = ''
+  if (typeof explicit.secretHash === 'string' && explicit.secretHash) {
+    secretHash = explicit.secretHash
+  } else if (typeof explicit.secret === 'string' && explicit.secret) {
+    secretHash = hashSecret(explicit.secret)
+  } else if (typeof base.secretHash === 'string' && base.secretHash) {
+    secretHash = base.secretHash
+  } else if (typeof base.secret === 'string' && base.secret) {
+    secretHash = hashSecret(base.secret)
+  }
+
+  return {
+    allowTailscale: merged.allowTailscale ?? false,
+    allowLan: merged.allowLan ?? false,
+    secret: '',
+    secretHash,
+    devicesFile: merged.devicesFile ?? DEFAULT_PERSIST_FILE,
+    maxFailedAttempts: merged.maxFailedAttempts ?? 5,
+    lockDurationMs: merged.lockDurationMs ?? 15 * 60 * 1000,
+    maxVisitsPerMinute: merged.maxVisitsPerMinute ?? 60,
   }
 }
 
@@ -226,38 +359,29 @@ export class SessionStore extends EventEmitter {
     super()
     this.setMaxListeners(100)
 
-    // 严密隔离单测环境：当处于 node --test 环境或使用了自定义设备文件时，严禁读写全局 settings.yaml
+    // 严密隔离单测环境：当处于 node --test 环境或使用了自定义设备文件时，严禁读写全局配置文件
     const isTestEnv = Boolean(
       process.env.NODE_TEST_CONTEXT ||
       process.argv.some((arg) => arg.includes('test')) ||
       (options.devicesFile && options.devicesFile !== DEFAULT_PERSIST_FILE)
     )
-    this.settingsFilePath = isTestEnv ? null : GLOBAL_SETTINGS_FILE
-    const yamlOpts = isTestEnv ? {} : readFromSettingsYaml(GLOBAL_SETTINGS_FILE)
-    const mergedOpts = { ...yamlOpts, ...options }
+    this.settingsFilePath = isTestEnv ? null : SETTINGS_FILE
 
-    let secretHash = ''
-    if (typeof options.secretHash === 'string' && options.secretHash) {
-      secretHash = options.secretHash
-    } else if (typeof options.secret === 'string' && options.secret) {
-      secretHash = hashSecret(options.secret)
-    } else if (typeof yamlOpts.secretHash === 'string' && yamlOpts.secretHash) {
-      secretHash = yamlOpts.secretHash
-    } else if (typeof yamlOpts.secret === 'string' && yamlOpts.secret) {
-      secretHash = hashSecret(yamlOpts.secret)
-    }
+    // 仅在自有 settings.json 尚不存在时，才尝试读取旧版 settings.yaml / settings.yaml.imported 进行一次性兼容迁移；
+    // 一旦 settings.json 存在，即以自有配置为准，杜绝旧文件中已废弃的密码或参数在重启后反向覆盖当前配置。
+    const hasOwnSettings = !isTestEnv && existsSync(SETTINGS_FILE)
+    const ownOpts = isTestEnv ? {} : (hasOwnSettings ? readPluginSettingsJson(SETTINGS_FILE) : null)
+    const legacyOpts = isTestEnv || hasOwnSettings ? {} : readLegacyDshSettings()
 
-    this.options = {
-      allowTailscale: mergedOpts.allowTailscale ?? false,
-      allowLan: mergedOpts.allowLan ?? false,
-      secret: '',
-      secretHash,
-      devicesFile: mergedOpts.devicesFile ?? DEFAULT_PERSIST_FILE,
-      maxFailedAttempts: mergedOpts.maxFailedAttempts ?? 5,
-      lockDurationMs: mergedOpts.lockDurationMs ?? 15 * 60 * 1000,
-      maxVisitsPerMinute: mergedOpts.maxVisitsPerMinute ?? 60,
-    }
+    this.options = resolveInitialStoreOptions(options, ownOpts, legacyOpts)
     this.persistPath = this.options.devicesFile
+
+    // 首次启动迁移：自有配置不存在但旧 settings.yaml / settings.yaml.imported 中仍有配置时，
+    // 落盘一次到自有 settings.json，把旧配置（如长期密码哈希、限频）救回。
+    if (!isTestEnv && !hasOwnSettings && Object.keys(legacyOpts).length > 0) {
+      writePluginSettingsJson(this.options, SETTINGS_FILE)
+    }
+
     this.loadPersistedData()
     activeStores.add(this)
   }
@@ -302,9 +426,10 @@ export class SessionStore extends EventEmitter {
           this.settingsMutator(patch)
         } catch {}
       }
-      // 仅在非测试环境或指定了 settingsFilePath 时，同步持久化至 ~/.dsh/settings.yaml
+      // 同步持久化到插件自有配置文件 ~/.dsh/remote-mobile/settings.json
+      // （DSH 0.1.7+ 起官方已弃用 ~/.dsh/settings.yaml 作为实时配置源）
       if (this.settingsFilePath) {
-        writeBackToSettingsYaml(this.options, this.settingsFilePath)
+        writePluginSettingsJson(this.options, this.settingsFilePath)
       }
     }
 

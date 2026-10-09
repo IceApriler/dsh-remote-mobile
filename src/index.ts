@@ -9,7 +9,8 @@
  * 4. Tailscale 虚拟私网与局域网 LAN 智能免密直连切换；
  * 5. 防暴力破解限流与单 IP 异常访问熔断审计；
  * 6. 全链路网络上下文虚拟化桥接与 @linxin666 生态无缝兼容。
- * 7. 接入 DSH Settings 服务，配置统一持久化于 ~/.dsh/settings.yaml 的 dsh-remote-mobile 命名空间。
+ * 7. 配置持久化于插件自有文件 ~/.dsh/remote-mobile/settings.json（DSH 0.1.7+ 起官方已弃用 settings.yaml），
+ *    启动时一次性兼容迁移旧 settings.yaml / settings.yaml.imported 中的配置。
  */
 
 import { SessionStore, type SessionStoreOptions } from './auth/token.js'
@@ -34,7 +35,11 @@ export const REMOTE_MOBILE_SETTINGS_NAMESPACE = 'dsh-remote-mobile'
 export const inject = ['webServer']
 
 /**
- * 注册并绑定 DSH Settings 服务（若存在）
+ * 尽力接入 DSH Settings 服务（若宿主提供旧版 register API）。
+ *
+ * 说明：DSH 0.1.7+ 起官方 dsh-settings 已改为基于 profile cordis.patch.yml 的
+ * Config 表单模型（无 register 方法），本函数在该版本下会安全跳过；插件的配置
+ * 持久化改由自有 settings.json 承担（见 token.ts）。
  */
 function bindDshSettings(ctx: any, store: SessionStore): void {
   try {
@@ -50,13 +55,13 @@ function bindDshSettings(ctx: any, store: SessionStore): void {
     })
 
     if (scope) {
-      // 1. 同步 settings.yaml 中的最新配置到 SessionStore
+      // 1. 同步宿主 Settings 中的最新配置到 SessionStore
       const initialVal = scope.get?.()
       if (initialVal && typeof initialVal === 'object') {
         store.updateOptions(initialVal, false)
       }
 
-      // 2. 监听 settings.yaml 或 Web UI 配置变更
+      // 2. 监听宿主 Settings 或 Web UI 配置变更
       scope.watch?.(() => {
         const updated = scope.get?.()
         if (updated && typeof updated === 'object') {
@@ -64,7 +69,7 @@ function bindDshSettings(ctx: any, store: SessionStore): void {
         }
       })
 
-      // 3. 绑定反向写入钩子：当插件 API 修改配置时同步写回 settings.yaml
+      // 3. 绑定反向写入钩子：插件 API 修改配置时同步写回宿主 Settings（旧版 API）
       store.setSettingsMutator((patch) => {
         try {
           const ops = Object.entries(patch).map(([field, value]) => ({
