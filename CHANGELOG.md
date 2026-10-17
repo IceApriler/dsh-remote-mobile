@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.1] - 2026-10-17
+
+### Fixed (解决 Issue #7 · 修复 /auth 登录页内联脚本语法错误导致局域网密码登录完全失效)
+
+- **修复登录页内联脚本模板转义缺陷**：在 1.8.0 引入子路径/网关前缀自适应时，`src/routes/login-page.ts` 内使用 ES6 模板字符串拼接登录页内联 `<script>`，其中第 344/356/365 行的正则字面量写为 `window.location.pathname.replace(/\/auth\/?$/, ...)`。外层模板字符串反引号在求值时将 `\/` 折叠为 `/`，导致下发给客户端浏览器的内联脚本退化为 `replace(//auth/?$, ...)`，被 JS 词法解析器识别为单行注释吞掉后续代码并抛出 `SyntaxError: Unexpected token 'return'`：
+  - 内联脚本因此整体中断执行，表单 submit 监听器、`doVerify()`、RSA 密钥提取与 `/api/remote-mobile/verify` 接口调用均未注册，表现为局域网设备输入正确长期密码点击「立即授权连接」无任何反应，输入错误密码也无错误提示并退化为原生 GET 刷新；
+  - 现改用 `new RegExp('/auth/?$')` 显式构造正则对象，彻底消除模板字符串与正则字面量转义规则的歧义与折叠风险。
+- **测试覆盖与语法保障**：
+  - 在 `test/routes.test.js` 中新增针对中英双语 `/auth` 页面内联 `<script>` 的自动化测试，通过 `new Function(...)` 语法解析并断言无 `SyntaxError`，且严禁出现未转义退化的 `//auth` 注释；
+  - 在 `test/compat.test.js` 中新增对所有注入到客户端的 5 个 Snippet 脚本的 `new Function(...)` 语法合法性全量断言。
+
+---
+
 ## [1.9.0] - 2026-10-09
 
 ### Fixed (适配 DSH 0.1.7+ 配置存储变更，修复插件配置无法持久化)
