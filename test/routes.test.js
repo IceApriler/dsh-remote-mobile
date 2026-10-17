@@ -6,6 +6,7 @@ import { SessionStore, AUTH_COOKIE_NAME } from '../lib/auth/token.js'
 import { createRoutes } from '../lib/routes/api.js'
 import { getPublicKeyPem } from '../lib/auth/crypto.js'
 import { StyleSnippetStore } from '../lib/styles/style-snippets.js'
+import { getLoginPageHtml } from '../lib/routes/login-page.js'
 
 function createMockReqRes({ method = 'GET', url = '/', headers = {}, body = null, socket = {} } = {}) {
   const req = new EventEmitter()
@@ -401,5 +402,36 @@ test('API 路由处理器功能与安全集成测试 (api.ts)', async (t) => {
     const resp = getResponse()
     assert.equal(resp.status, 302)
     assert.equal(resp.headers.Location, '/app/dsh/')
+  })
+
+  await t.test('GET /auth 未授权时返回登录页 HTML，且内联 <script> 脚本语法合法无 SyntaxError', async () => {
+    store.updateOptions({ allowLan: false })
+    const authRoute = routes.find(r => r.path === '/auth' && r.method === 'GET')
+    assert.ok(authRoute)
+
+    const { req, res, getResponse } = createMockReqRes({
+      method: 'GET',
+      socket: { remoteAddress: '192.168.1.188' },
+    })
+    await authRoute.handler(req, res)
+    const resp = getResponse()
+    assert.equal(resp.status, 200)
+    assert.ok(resp.headers['Content-Type'].includes('text/html'))
+
+    for (const lang of ['zh', 'en']) {
+      const html = getLoginPageHtml(undefined, lang)
+      assert.ok(html.includes('<title>'))
+      const scriptMatch = html.match(/<script>([\s\S]*?)<\/script>/)
+      assert.ok(scriptMatch, '必须包含内联 <script> 标签')
+
+      const scriptContent = scriptMatch[1]
+      // 语法校验：new Function 不应抛出 SyntaxError（防止模板字符串反斜杠转义被吞导致 // 注释截断代码）
+      assert.doesNotThrow(() => {
+        new Function(scriptContent)
+      }, `登录页内联脚本 (${lang}) 存在 JavaScript 语法错误`)
+
+      // 确保路径替换正则中未退化为行注释 //auth
+      assert.equal(scriptContent.includes('//auth'), false, '内联脚本中不应包含未转义的 //auth 行注释')
+    }
   })
 })

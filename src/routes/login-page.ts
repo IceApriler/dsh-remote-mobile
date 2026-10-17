@@ -341,7 +341,7 @@ export function getLoginPageHtml(publicKeyPem?: string, lang: 'zh' | 'en' = 'zh'
         if (document.baseURI && document.querySelector('base')) {
           return new URL('api/remote-mobile/verify', document.baseURI).toString();
         }
-        const pathname = window.location.pathname.replace(/\/auth\/?$/, '/');
+        const pathname = window.location.pathname.replace(new RegExp('/auth/?$'), '/');
         return new URL('api/remote-mobile/verify', window.location.origin + pathname).toString();
       } catch (e) {
         return '/api/remote-mobile/verify';
@@ -353,7 +353,7 @@ export function getLoginPageHtml(publicKeyPem?: string, lang: 'zh' | 'en' = 'zh'
         // 预留参数能力：支持通过 ?redirect=/path 携带登录后重定向目标
         const redirectParam = urlParams.get('redirect');
         if (redirectParam && redirectParam.startsWith('/') && !redirectParam.startsWith('//')) {
-          const appPrefix = window.location.pathname.replace(/\/auth\/?$/, '');
+          const appPrefix = window.location.pathname.replace(new RegExp('/auth/?$'), '');
           if (appPrefix && redirectParam.startsWith(appPrefix)) {
             return window.location.origin + redirectParam;
           }
@@ -362,7 +362,7 @@ export function getLoginPageHtml(publicKeyPem?: string, lang: 'zh' | 'en' = 'zh'
         if (document.baseURI && document.querySelector('base')) {
           return new URL('./', document.baseURI).toString();
         }
-        const appPrefix = window.location.pathname.replace(/\/auth\/?$/, '/');
+        const appPrefix = window.location.pathname.replace(new RegExp('/auth/?$'), '/');
         return window.location.origin + appPrefix;
       } catch (e) {
         return '/';

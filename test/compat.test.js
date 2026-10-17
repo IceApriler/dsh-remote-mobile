@@ -337,4 +337,20 @@ test('上下文虚拟化与兼容性补丁测试 (compat.ts)', async (t) => {
     // 收起行为仍被守卫吞掉（真实用户点击收起按钮走浏览器合成事件，不受影响）
     assert.ok(DRAGGABLE_NAV_SNIPPET.includes('收起侧边栏|Collapse sidebar|Open sidebar'))
   })
+
+  await t.test('所有注入客户端的 Snippets 脚本均具有合法的 JavaScript 语法', () => {
+    const snippets = [
+      { name: 'CRYPTO_POLYFILL_SNIPPET', code: CRYPTO_POLYFILL_SNIPPET },
+      { name: 'CLIPBOARD_POLYFILL_SNIPPET', code: CLIPBOARD_POLYFILL_SNIPPET },
+      { name: 'FORCE_DESKTOP_SUPPRESSION_SNIPPET', code: FORCE_DESKTOP_SUPPRESSION_SNIPPET },
+      { name: 'DRAGGABLE_NAV_SNIPPET', code: DRAGGABLE_NAV_SNIPPET },
+      { name: 'MOBILE_DISMISS_SNIPPET', code: MOBILE_DISMISS_SNIPPET },
+    ]
+
+    for (const { name, code } of snippets) {
+      assert.doesNotThrow(() => {
+        new Function(code)
+      }, `${name} 存在 JavaScript 语法错误`)
+    }
+  })
 })
