@@ -24,6 +24,8 @@ import {
   registerRemoteWebUiPairingBridge,
   takeOverConnectionAuth,
 } from './bridge/compat.js'
+import { detectServerMode } from './gateway/detector.js'
+import { GatewayServer } from './gateway/server.js'
 
 /** Cordis 插件名称标识 */
 export const name = 'dsh-remote-mobile'
@@ -162,7 +164,37 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
     }
   }
 
-  // 6. 服务就绪时输出提示横幅与接入地址
+  // 6. 探测 DSH 底座网络暴露姿态，自适应裁决是否拉起独立安全反向代理网关
+  const detection = detectServerMode(ctx, store.getOptions().mode, ctx.webServer?.port ?? 3080)
+  let gatewayServer: GatewayServer | null = null
+
+  if (detection.mode === 'gateway') {
+    const opts = store.getOptions()
+    gatewayServer = new GatewayServer(
+      {
+        port: opts.gatewayPort ?? 3081,
+        host: opts.gatewayHost ?? '0.0.0.0',
+        corePort: detection.corePort,
+        coreHost: detection.coreHost,
+      },
+      store,
+      styleStore,
+      gateMiddleware,
+      ctx.logger
+    )
+
+    store.setActiveGatewayInfo('gateway', opts.gatewayPort ?? 3081, detection.corePort)
+
+    gatewayServer.start().then(({ port }) => {
+      store.setActiveGatewayInfo('gateway', port, detection.corePort)
+    }).catch((err) => {
+      ctx.logger?.error?.('[dsh-remote-mobile] 独立安全反向代理网关启动失败:', err)
+    })
+  } else {
+    store.setActiveGatewayInfo('direct', detection.corePort, detection.corePort)
+  }
+
+  // 7. 服务就绪时输出提示横幅与接入地址
   let printed = false
   let disposed = false
   let timer1: ReturnType<typeof setTimeout> | null = null
@@ -173,6 +205,9 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
       disposed = true
       if (timer1) clearTimeout(timer1)
       if (timer2) clearTimeout(timer2)
+      if (gatewayServer) {
+        gatewayServer.close().catch(() => {})
+      }
     })
   } catch {}
 
@@ -195,20 +230,37 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
 
       const tsIp = getLocalTailscaleIp()
       const lanIp = getLocalLanIp()
-      const port = webServer?.port ?? 3080
+      const activePort = store.getActivePort()
+      const activeMode = store.getActiveMode()
+      const corePort = store.getCorePort()
       const opts = store.getOptions()
 
       const divider = '─'.repeat(72)
       console.log(`\n┌${divider}`)
       console.log(`│ [dsh-remote-mobile] 官方临时 Token 鉴权已接管，PC/移动端访问无需携带官方token`)
-      console.log(`│ 远程安全网关已就绪，支持手机浏览器访问:`)
-      console.log(`│   • 本机回环:   http://127.0.0.1:${port}`)
-      if (lanIp && lanIp !== '127.0.0.1') {
-        console.log(`│   • 局域网:     http://${lanIp}:${port} (同 Wi-Fi 局域网直连)`)
+
+      if (activeMode === 'gateway') {
+        console.log(`│ 独立安全反代网关已激活 (0.0.0.0:${activePort} -> 127.0.0.1:${corePort})`)
+        console.log(`│ 手机/远程设备请访问安全网关地址:`)
+        if (lanIp && lanIp !== '127.0.0.1') {
+          console.log(`│   • 局域网:     http://${lanIp}:${activePort} (同 Wi-Fi 局域网直连)`)
+        }
+        if (tsIp) {
+          console.log(`│   • 虚拟私网:   http://${tsIp}:${activePort} (Tailscale 私网异地直连)`)
+        }
+        console.log(`│ 电脑本机浏览器访问控制台:`)
+        console.log(`│   • 本机回环:   http://127.0.0.1:${corePort}`)
+      } else {
+        console.log(`│ 远程安全网关已就绪，支持手机浏览器访问:`)
+        console.log(`│   • 本机回环:   http://127.0.0.1:${corePort}`)
+        if (lanIp && lanIp !== '127.0.0.1') {
+          console.log(`│   • 局域网:     http://${lanIp}:${corePort} (同 Wi-Fi 局域网直连)`)
+        }
+        if (tsIp) {
+          console.log(`│   • 虚拟私网:   http://${tsIp}:${corePort} (Tailscale 私网异地直连)`)
+        }
       }
-      if (tsIp) {
-        console.log(`│   • 虚拟私网:   http://${tsIp}:${port} (Tailscale 私网异地直连)`)
-      }
+
       console.log(`│ 访问与配置说明:`)
       console.log(`│   - 手机/远程设备打开对应地址即可直接访问`)
       console.log(`│   - 在本机打开 Web 界面 ->「设置」->「远程与移动端」进行安全管理:`)
@@ -216,9 +268,9 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
       console.log(`│   - 项目文档:   https://github.com/IceApriler/dsh-remote-mobile`)
       console.log(`└${divider}\n`)
 
-      ctx.logger?.info?.(`[dsh-remote-mobile] 移动端远程控制与安全门禁已激活 (上下文虚拟化桥接就绪，样式片段: ${styleStore.list().length} 个)`)
+      ctx.logger?.info?.(`[dsh-remote-mobile] 移动端远程控制与安全门禁已激活 (运行模式: ${activeMode}, 对外端口: ${activePort})`)
       if (tsIp) {
-        ctx.logger?.info?.(`[dsh-remote-mobile] Tailscale 地址: http://${tsIp}:${port} (免密直连: ${opts.allowTailscale ? '已开启' : '已关闭'})`)
+        ctx.logger?.info?.(`[dsh-remote-mobile] Tailscale 地址: http://${tsIp}:${activePort} (免密直连: ${opts.allowTailscale ? '已开启' : '已关闭'})`)
       }
     } catch (e) {
       // 上下文若在并发或极端时序下重载，静默退出，防止未捕获异常导致主进程崩溃
@@ -251,4 +303,6 @@ export * from './auth/gate.js'
 export * from './routes/api.js'
 export * from './bridge/compat.js'
 export * from './styles/style-snippets.js'
+export * from './gateway/detector.js'
+export * from './gateway/server.js'
 

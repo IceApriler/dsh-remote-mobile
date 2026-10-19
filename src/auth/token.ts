@@ -171,6 +171,9 @@ export function readPluginSettingsJson(filePath = SETTINGS_FILE): Partial<Sessio
     if (typeof data.maxFailedAttempts === 'number' && data.maxFailedAttempts > 0) result.maxFailedAttempts = data.maxFailedAttempts
     if (typeof data.lockDurationMs === 'number' && data.lockDurationMs > 0) result.lockDurationMs = data.lockDurationMs
     if (typeof data.maxVisitsPerMinute === 'number' && data.maxVisitsPerMinute > 0) result.maxVisitsPerMinute = data.maxVisitsPerMinute
+    if (typeof data.gatewayPort === 'number' && data.gatewayPort > 0) result.gatewayPort = data.gatewayPort
+    if (typeof data.gatewayHost === 'string' && data.gatewayHost) result.gatewayHost = data.gatewayHost
+    if (data.mode === 'auto' || data.mode === 'gateway' || data.mode === 'direct') result.mode = data.mode
     return result
   } catch {
     return {}
@@ -194,6 +197,9 @@ export function writePluginSettingsJson(options: SessionStoreOptions, filePath =
       maxFailedAttempts: options.maxFailedAttempts || 5,
       lockDurationMs: options.lockDurationMs || 900000,
       maxVisitsPerMinute: options.maxVisitsPerMinute || 60,
+      gatewayPort: options.gatewayPort || 3081,
+      gatewayHost: options.gatewayHost || '0.0.0.0',
+      mode: options.mode || 'auto',
     }
     writeFileSync(tmpPath, JSON.stringify(payload, null, 2), { encoding: 'utf8', mode: 0o600 })
     renameSync(tmpPath, filePath)
@@ -262,6 +268,9 @@ export function resolveInitialStoreOptions(
     maxFailedAttempts: merged.maxFailedAttempts ?? 5,
     lockDurationMs: merged.lockDurationMs ?? 15 * 60 * 1000,
     maxVisitsPerMinute: merged.maxVisitsPerMinute ?? 60,
+    gatewayPort: merged.gatewayPort ?? 3081,
+    gatewayHost: merged.gatewayHost ?? '0.0.0.0',
+    mode: merged.mode ?? 'auto',
   }
 }
 
@@ -307,6 +316,9 @@ export interface SessionStoreOptions {
   maxFailedAttempts?: number // 连续失败阈值，默认 5 次
   lockDurationMs?: number    // 锁定时间，默认 15 分钟
   maxVisitsPerMinute?: number // 每分钟打开 auth 页面上限，默认 60 次
+  gatewayPort?: number       // 独立安全网关监听端口，默认 3081
+  gatewayHost?: string       // 独立安全网关监听地址，默认 0.0.0.0
+  mode?: 'auto' | 'gateway' | 'direct' // 运行模式：auto 自适应 / gateway 强制网关 / direct 强制直连
 }
 
 /**
@@ -355,6 +367,11 @@ export class SessionStore extends EventEmitter {
   public readonly persistPath: string
   public readonly settingsFilePath: string | null
 
+  /** 网关运行时状态 */
+  private activeMode: 'gateway' | 'direct' = 'direct'
+  private activePort: number = 3080
+  private corePort: number = 3080
+
   constructor(options: SessionStoreOptions = {}) {
     super()
     this.setMaxListeners(100)
@@ -388,6 +405,28 @@ export class SessionStore extends EventEmitter {
 
   getOptions(): Required<SessionStoreOptions> {
     return { ...this.options }
+  }
+
+  /** 设置网关当前生效的运行时参数 */
+  setActiveGatewayInfo(mode: 'gateway' | 'direct', activePort: number, corePort: number): void {
+    this.activeMode = mode
+    this.activePort = activePort
+    this.corePort = corePort
+  }
+
+  /** 获取当前实际对外提供访问的模式 (gateway | direct) */
+  getActiveMode(): 'gateway' | 'direct' {
+    return this.activeMode
+  }
+
+  /** 获取当前实际对外提供访问的端口 (3081 或 3080) */
+  getActivePort(): number {
+    return this.activePort
+  }
+
+  /** 获取底层 DSH 本地核心端口 (通常为 3080) */
+  getCorePort(): number {
+    return this.corePort
   }
 
   hasSecret(): boolean {

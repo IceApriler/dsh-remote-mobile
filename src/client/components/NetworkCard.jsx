@@ -7,7 +7,7 @@ import { t } from '../i18n.js';
 export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang }) {
   const tsHost = status.tailscaleIp || '100.x.y.z';
   const lanHost = status.lanIp || '127.0.0.1';
-  const port = (typeof window !== 'undefined' && window.location.port) || '3080';
+  const port = (status && status.gateway && status.gateway.activePort) || (typeof window !== 'undefined' && window.location.port) || '3080';
 
   return (
     <div

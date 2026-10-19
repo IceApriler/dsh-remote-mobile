@@ -34,7 +34,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { timingSafeEqual } from 'node:crypto'
 import type { SessionStore } from '../auth/token.js'
-import { getClientIp, isTailscaleIp, isLanIp } from '../auth/tailscale.js'
+import { getClientIp, isTailscaleIp, isLanIp, getAllNetworkIps } from '../auth/tailscale.js'
 import { isLoopbackRequest } from '../auth/gate.js'
 import {
   isMobileUserAgent,
@@ -884,5 +884,32 @@ export function takeOverConnectionAuth(connection: any, store: SessionStore): vo
       return origAuthorizeIndex(req, res)
     }
   }
+
+  // 4. 动态向 DSH 底座 connection.trustedHosts 注入当前本机所有可用 IP 与网关端口
+  // （适配 DSH 0.2.1+ 底层 Host/Origin 信任围栏，使外部网关合规直通，免去伪造 Host 头带来的副作用）
+  injectTrustedHosts(connection, [store.getActivePort(), 3080, 3081])
+}
+
+/**
+ * 动态向 DSH connection.trustedHosts 数组注入受信任的主机与端口
+ */
+export function injectTrustedHosts(connection: any, ports: number[] = [3080, 3081]): void {
+  if (!connection || !Array.isArray(connection.trustedHosts)) return
+  try {
+    const netIps = getAllNetworkIps().map((i) => i.ip)
+    const candidates = ['127.0.0.1', 'localhost', ...netIps]
+    for (const ip of candidates) {
+      if (!connection.trustedHosts.includes(ip)) {
+        connection.trustedHosts.push(ip)
+      }
+      for (const port of ports) {
+        if (!port) continue
+        const withPort = `${ip}:${port}`
+        if (!connection.trustedHosts.includes(withPort)) {
+          connection.trustedHosts.push(withPort)
+        }
+      }
+    }
+  } catch {}
 }
 

@@ -80,23 +80,22 @@ dsh plugin --profile web add dsh-remote-mobile
 ---
 
 <span id="config"></span>
-### 2. 前置配置（开放外部监听）
+### 2. 前置配置（开箱即用 / 零配置）
 
-由于 DSH 默认仅监听 `127.0.0.1`，为了使 Tailscale 私网或局域网设备能够正常连通，请确保在 `~/.dsh/profiles/web/cordis.patch.yml`（Windows 对应 `C:\Users\<用户名>\.dsh\profiles\web\cordis.patch.yml` 或在资源管理器直接输入 `%USERPROFILE%\.dsh`）中包含以下配置：
+> [!TIP]
+> **🚀 DSH 0.2.1+ 架构升级说明（零配置开箱即用）**：
+> 官方在 DSH 0.2.1+ 中出于安全考虑禁止将底座 `webserver` 直接监听在通配地址 `0.0.0.0` 上。
+> 本插件内置了**智能自适应安全反向代理网关**：
+> - **DSH 0.2.1+（新版）**：**无需修改任何网络配置**！DSH 保持官方安全的 `127.0.0.1:3080`，插件自动在 `0.0.0.0:3081` 开启独立安全网关。手机扫码自动连接 `3081`，电脑本机依然使用 `3080`，杜绝一切启动崩溃。
+> - **DSH 0.1.7 ~ 0.2.0（旧版）**：若您在 `cordis.patch.yml` 中保留了 `host: '0.0.0.0'`，插件会自动探测并沿用原生的 `3080` 直连拦截，100% 平滑向下兼容。
+
+如果您安装了其他可能产生冲突的插件，推荐在 `~/.dsh/profiles/web/cordis.patch.yml`（Windows 对应 `%USERPROFILE%\.dsh\profiles\web\cordis.patch.yml`）中禁用冲突项：
 
 ```yaml
-# 1. 允许 webserver 监听外部网络连接（必选）
-- id: webserver
-  name: '@deepseek-ai/dsh-host-webserver'
-  inject: [webStartup]
-  config:
-    host: '0.0.0.0'
-    port: 3080
-
-# 2. （推荐）只保留一款远程/Web 接入类插件，避免功能重复与入口混乱
-#    本插件与其他远程接入类插件共存时也能正常启动：检测到配对共享服务被占用
-#    会自动让出，并在设置页顶部展示警示横幅说明详情。
-#    示例：禁用 @linxin666/dsh-web-ui-all 内置的远程插件
+# （推荐）只保留一款远程/Web 接入类插件，避免功能重复与入口混乱
+# 本插件与其他远程接入类插件共存时也能正常启动：检测到配对共享服务被占用
+# 会自动让出，并在设置页顶部展示警示横幅说明详情。
+# 示例：禁用 @linxin666/dsh-web-ui-all 内置的远程插件
 - id: web-ui-remote-web-ui
   disabled: true
 ```

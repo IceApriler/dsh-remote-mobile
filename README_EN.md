@@ -80,24 +80,23 @@ dsh plugin --profile web add dsh-remote-mobile
 ---
 
 <span id="config"></span>
-### 2. Configuration (Open External Listening)
+### 2. Configuration (Zero-Config / Out of the Box)
 
-Because DSH defaults to `127.0.0.1`, ensure your `~/.dsh/profiles/web/cordis.patch.yml` (on Windows: `C:\Users\<username>\.dsh\profiles\web\cordis.patch.yml` or enter `%USERPROFILE%\.dsh` in File Explorer) includes the following configuration to allow external connectivity:
+> [!TIP]
+> **🚀 DSH 0.2.1+ Architecture Update (Zero Configuration)**:
+> Starting from DSH 0.2.1+, the host `webserver` strictly disallows binding directly to wildcard addresses (`0.0.0.0`) for security.
+> This plugin now includes a built-in **Smart Adaptive Safe Reverse Proxy Gateway**:
+> - **DSH 0.2.1+ (Latest)**: **No network config changes required**! DSH remains safely bound to `127.0.0.1:3080`, and this plugin automatically launches a standalone secure gateway on `0.0.0.0:3081`. Mobile QR codes link to `3081` while desktop stays on `3080`, completely preventing launch crashes.
+> - **DSH 0.1.7 ~ 0.2.0 (Legacy)**: If `host: '0.0.0.0'` is still present in `cordis.patch.yml`, the plugin detects it and seamlessly operates in direct interception mode on `3080`, preserving 100% backward compatibility.
+
+If you have installed other plugins that might conflict, we recommend disabling them in `~/.dsh/profiles/web/cordis.patch.yml` (on Windows: `%USERPROFILE%\.dsh\profiles\web\cordis.patch.yml`):
 
 ```yaml
-# 1. Allow webserver to listen for external connections (Required)
-- id: webserver
-  name: '@deepseek-ai/dsh-host-webserver'
-  inject: [webStartup]
-  config:
-    host: '0.0.0.0'
-    port: 3080
-
-# 2. (Recommended) Keep only ONE remote/Web access plugin to avoid duplicated entries.
-#    This plugin starts normally alongside other remote-access plugins: when it
-#    detects the shared pairing service is already taken by another plugin, it
-#    yields automatically and shows a warning banner at the top of its settings panel.
-#    Example: disable the legacy remote plugin bundled in @linxin666/dsh-web-ui-all
+# (Recommended) Keep only ONE remote/Web access plugin to avoid duplicated entries.
+# This plugin starts normally alongside other remote-access plugins: when it
+# detects the shared pairing service is already taken by another plugin, it
+# yields automatically and shows a warning banner at the top of its settings panel.
+# Example: disable the legacy remote plugin bundled in @linxin666/dsh-web-ui-all
 - id: web-ui-remote-web-ui
   disabled: true
 ```

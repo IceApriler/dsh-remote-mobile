@@ -19,7 +19,7 @@ export function QrPairingCard({
   copyDirectLink,
   lang,
 }) {
-  const port = (typeof window !== 'undefined' && window.location.port) || '3080';
+  const port = (status && status.gateway && status.gateway.activePort) || (typeof window !== 'undefined' && window.location.port) || '3080';
   const isExpired = timeLeft <= 0;
   const currentHost =
     selectedTab === 'lan' && status.lanIp
