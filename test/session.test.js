@@ -1,9 +1,23 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { rmSync, existsSync, statSync } from 'node:fs'
-import { SessionStore, parseDeviceName } from '../lib/auth/token.js'
+import { tmpdir } from 'node:os'
+import { SessionStore, parseDeviceName, DEFAULT_PERSIST_FILE } from '../lib/auth/token.js'
 
 const TEST_FILE = `/tmp/dsh-test-devices-${Date.now()}.json`
+
+test('测试环境默认 SessionStore 不得写入真实 devices.json', () => {
+  const isolated = new SessionStore()
+  try {
+    assert.ok(
+      isolated.persistPath.startsWith(tmpdir()),
+      `测试环境 devicesFile 应位于临时目录，实际为 ${isolated.persistPath}`
+    )
+    assert.notEqual(isolated.persistPath, DEFAULT_PERSIST_FILE)
+  } finally {
+    try { rmSync(isolated.persistPath, { force: true }) } catch {}
+  }
+})
 
 test('SessionStore 与设备会话生命周期测试', async (t) => {
   t.after(() => {

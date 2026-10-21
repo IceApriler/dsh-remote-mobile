@@ -1,7 +1,7 @@
 import { randomBytes, randomInt } from 'node:crypto'
 import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync, unlinkSync, chmodSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { EventEmitter } from 'node:events'
 import type { IncomingMessage } from 'node:http'
 import { hashSecret, verifySecretHash } from './crypto.js'
@@ -174,6 +174,9 @@ export function readPluginSettingsJson(filePath = SETTINGS_FILE): Partial<Sessio
     if (typeof data.gatewayPort === 'number' && data.gatewayPort > 0) result.gatewayPort = data.gatewayPort
     if (typeof data.gatewayHost === 'string' && data.gatewayHost) result.gatewayHost = data.gatewayHost
     if (data.mode === 'auto' || data.mode === 'gateway' || data.mode === 'direct') result.mode = data.mode
+    if (Array.isArray(data.trustedHosts)) {
+      result.trustedHosts = data.trustedHosts.filter((h: any) => typeof h === 'string' && h.trim())
+    }
     return result
   } catch {
     return {}
@@ -200,6 +203,7 @@ export function writePluginSettingsJson(options: SessionStoreOptions, filePath =
       gatewayPort: options.gatewayPort || 3081,
       gatewayHost: options.gatewayHost || '0.0.0.0',
       mode: options.mode || 'auto',
+      trustedHosts: Array.isArray(options.trustedHosts) ? options.trustedHosts : [],
     }
     writeFileSync(tmpPath, JSON.stringify(payload, null, 2), { encoding: 'utf8', mode: 0o600 })
     renameSync(tmpPath, filePath)
@@ -271,6 +275,7 @@ export function resolveInitialStoreOptions(
     gatewayPort: merged.gatewayPort ?? 3081,
     gatewayHost: merged.gatewayHost ?? '0.0.0.0',
     mode: merged.mode ?? 'auto',
+    trustedHosts: Array.isArray(merged.trustedHosts) ? merged.trustedHosts : [],
   }
 }
 
@@ -319,6 +324,7 @@ export interface SessionStoreOptions {
   gatewayPort?: number       // 独立安全网关监听端口，默认 3081
   gatewayHost?: string       // 独立安全网关监听地址，默认 0.0.0.0
   mode?: 'auto' | 'gateway' | 'direct' // 运行模式：auto 自适应 / gateway 强制网关 / direct 强制直连
+  trustedHosts?: string[]    // 静态受信任域名与主机白名单（如 Tailscale MagicDNS xxx.tailnet.ts.net）
 }
 
 /**
@@ -367,10 +373,14 @@ export class SessionStore extends EventEmitter {
   public readonly persistPath: string
   public readonly settingsFilePath: string | null
 
-  /** 网关运行时状态 */
-  private activeMode: 'gateway' | 'direct' = 'direct'
-  private activePort: number = 3080
-  private corePort: number = 3080
+  /** 网关运行时状态契约 */
+  private gatewayStatus = {
+    mode: 'direct' as 'gateway' | 'direct',
+    running: true,
+    port: 3080,
+    corePort: 3080,
+    error: null as string | null,
+  }
 
   constructor(options: SessionStoreOptions = {}) {
     super()
@@ -391,7 +401,13 @@ export class SessionStore extends EventEmitter {
     const legacyOpts = isTestEnv || hasOwnSettings ? {} : readLegacyDshSettings()
 
     this.options = resolveInitialStoreOptions(options, ownOpts, legacyOpts)
-    this.persistPath = this.options.devicesFile
+    // 测试隔离必须同时覆盖 devices.json，而不仅是 settings.json。
+    // 否则测试里的 store.verify() 会持续写入用户真实的 ~/.dsh/remote-mobile/devices.json。
+    const testPersistPath =
+      isTestEnv && (!options.devicesFile || options.devicesFile === DEFAULT_PERSIST_FILE)
+        ? join(tmpdir(), `dsh-rm-test-devices-${process.pid}-${randomBytes(6).toString('hex')}.json`)
+        : this.options.devicesFile
+    this.persistPath = testPersistPath
 
     // 首次启动迁移：自有配置不存在但旧 settings.yaml / settings.yaml.imported 中仍有配置时，
     // 落盘一次到自有 settings.json，把旧配置（如长期密码哈希、限频）救回。
@@ -407,26 +423,41 @@ export class SessionStore extends EventEmitter {
     return { ...this.options }
   }
 
-  /** 设置网关当前生效的运行时参数 */
-  setActiveGatewayInfo(mode: 'gateway' | 'direct', activePort: number, corePort: number): void {
-    this.activeMode = mode
-    this.activePort = activePort
-    this.corePort = corePort
+  /** 设置网关当前生效的运行时参数与状态契约 */
+  setActiveGatewayInfo(
+    mode: 'gateway' | 'direct',
+    activePort: number,
+    corePort: number,
+    running = true,
+    error: string | null = null
+  ): void {
+    this.gatewayStatus = {
+      mode,
+      running,
+      port: activePort,
+      corePort,
+      error,
+    }
+  }
+
+  /** 获取网关完整运行状态对象 (供 /api/remote-mobile/status 消费) */
+  getGatewayStatus(): { mode: 'gateway' | 'direct'; running: boolean; port: number; corePort: number; error: string | null } {
+    return { ...this.gatewayStatus }
   }
 
   /** 获取当前实际对外提供访问的模式 (gateway | direct) */
   getActiveMode(): 'gateway' | 'direct' {
-    return this.activeMode
+    return this.gatewayStatus.mode
   }
 
   /** 获取当前实际对外提供访问的端口 (3081 或 3080) */
   getActivePort(): number {
-    return this.activePort
+    return this.gatewayStatus.port
   }
 
   /** 获取底层 DSH 本地核心端口 (通常为 3080) */
   getCorePort(): number {
-    return this.corePort
+    return this.gatewayStatus.corePort
   }
 
   hasSecret(): boolean {

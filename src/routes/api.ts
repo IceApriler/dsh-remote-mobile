@@ -92,10 +92,9 @@ export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore
           pairingBridgeConflictId: bridgeState.conflictEntryId || '',
           // 独立安全网关运行状态
           gateway: {
-            mode: store.getActiveMode(),
+            ...store.getGatewayStatus(),
             activePort: store.getActivePort(),
             gatewayPort: opts.gatewayPort || 3081,
-            corePort: store.getCorePort(),
           },
         })
       },

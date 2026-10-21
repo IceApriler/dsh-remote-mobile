@@ -38,6 +38,30 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
         {t('netCardDesc', lang)}
       </div>
 
+      {/* 网关未就绪或端口冲突错误横幅 */}
+      {status?.gateway?.mode === 'gateway' && status.gateway.running === false ? (
+        <div
+          style={{
+            background: 'rgba(239, 68, 68, 0.12)',
+            border: '1px solid rgba(239, 68, 68, 0.35)',
+            borderRadius: '8px',
+            padding: '10px 12px',
+            marginBottom: '16px',
+            fontSize: '12px',
+            color: 'var(--dsw-alias-label-error, #ef4444)',
+            lineHeight: '1.5',
+            textAlign: 'left',
+          }}
+        >
+          <strong>⚠️ {lang === 'en' ? 'Gateway Service Not Ready' : '安全反向代理网关未就绪'}</strong>
+          <div>
+            {status.gateway.error
+              ? `${lang === 'en' ? 'Failure reason: ' : '启动失败：'}${status.gateway.error}`
+              : (lang === 'en' ? 'Gateway is initializing or failed to bind port. External devices cannot connect currently.' : '网关正在启动或端口绑定失败，外部手机设备当前暂时无法连接。')}
+          </div>
+        </div>
+      ) : null}
+
       {/* 网络条目 1: Tailscale 虚拟私网 */}
       <div
         style={{

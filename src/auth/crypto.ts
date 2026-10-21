@@ -100,7 +100,9 @@ export function decryptWithPrivateKey(encryptedBase64: string): string {
       return decrypted.toString('utf8')
     } catch {}
 
-    // 3. 尝试 PKCS#1 v1.5 填充兼容模式
+    // 3. 尝试 PKCS#1 v1.5 填充兼容模式（legacy best-effort）。
+    // Node 20+/OpenSSL 3 因 CVE-2023-46809 可能默认禁用该填充的私钥解密，
+    // 此时仅现代 WebCrypto 的 OAEP 路径可用；不要在服务端强制启用不安全的 security-revert。
     try {
       const decrypted = privateDecrypt(
         {

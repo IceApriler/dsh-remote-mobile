@@ -32,10 +32,22 @@
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import net from 'node:net'
 import { timingSafeEqual } from 'node:crypto'
+import zlib from 'node:zlib'
 import type { SessionStore } from '../auth/token.js'
-import { getClientIp, isTailscaleIp, isLanIp, getAllNetworkIps } from '../auth/tailscale.js'
-import { isLoopbackRequest } from '../auth/gate.js'
+import { getPhysicalSocketIp, getClientIp, isTailscaleIp, isLanIp, getAllNetworkIps } from '../auth/tailscale.js'
+import { getGatewaySecret, safeCompareSecret } from '../gateway/secret.js'
+import {
+  extractBareHostname,
+  extractPortString,
+  isLoopbackRequest,
+  isTrustedHost,
+  hasCrossSiteSignal,
+  getRequestProtocol,
+} from '../auth/gate.js'
+export { extractBareHostname, extractPortString }
+
 import {
   isMobileUserAgent,
   applyDataMobileAttr,
@@ -346,11 +358,64 @@ export const MOBILE_DISMISS_SNIPPET = `
 `
 
 /**
+ * 向 HTML 文档的 <head> 顶部安全注入样式片段与 Polyfill 脚本（自带幂等防重守卫）
+ *
+ * @param html - 待注入的原始 HTML 字符串
+ * @param isMobile - 是否为移动端（用于追加 data-dsh-mobile 标记）
+ * @param mobileStyleCss - 动态收集的样式片段 CSS（支持按视口宽度生效）
+ */
+export function injectHtmlPayload(
+  html: string,
+  isMobile: boolean = false,
+  mobileStyleCss: string = ''
+): string {
+  if (!html || !html.includes('<head>')) return html
+
+  let result = html
+  if (isMobile) {
+    result = applyDataMobileAttr(result)
+  }
+
+  // 1. 样式片段覆写（按视口宽度生效，优先且幂等）
+  if (mobileStyleCss && !result.includes('id="dsh-remote-mobile-style-snippets"')) {
+    result = result.replace('<head>', `<head>${buildMobileStyleTag(mobileStyleCss)}`)
+  }
+
+  // 2. 悬浮把手拖拽脚本（全端注入，内部自带仅折叠时生效守卫）
+  if (!result.includes('id="dsh-draggable-nav"')) {
+    result = result.replace('<head>', `<head><script id="dsh-draggable-nav">${DRAGGABLE_NAV_SNIPPET}</script>`)
+  }
+
+  // 3. 移动端抽屉「点外部收起」脚本
+  if (!result.includes('id="dsh-mobile-dismiss"')) {
+    result = result.replace('<head>', `<head><script id="dsh-mobile-dismiss">${MOBILE_DISMISS_SNIPPET}</script>`)
+  }
+
+  // 4. 非安全上下文 Crypto Polyfill 脚本
+  if (!result.includes('id="dsh-crypto-polyfill"')) {
+    result = result.replace('<head>', `<head><script id="dsh-crypto-polyfill">${CRYPTO_POLYFILL_SNIPPET}</script>`)
+  }
+
+  // 5. 非安全上下文 Clipboard Polyfill 脚本
+  if (!result.includes('id="dsh-clipboard-polyfill"')) {
+    result = result.replace('<head>', `<head><script id="dsh-clipboard-polyfill">${CLIPBOARD_POLYFILL_SNIPPET}</script>`)
+  }
+
+  // 6. 桌面端全家桶冲突防护脚本
+  if (!result.includes('id="dsh-force-desktop-suppression"')) {
+    result = result.replace('<head>', `<head><script id="dsh-force-desktop-suppression">${FORCE_DESKTOP_SUPPRESSION_SNIPPET}</script>`)
+  }
+
+  return result
+}
+
+/**
  * 挂载底层 http.Server 门禁劫持与回环上下文虚拟化代理
  * 
  * @param server - 底层 Node.js http.Server 实例
  * @param gateMiddleware - 全局安全门禁拦截器函数
  * @param store - 会话与配置管理器实例
+ * @param styleStore - 样式片段管理器实例
  */
 export function patchHttpServerWithVirtualizer(
   server: any,
@@ -379,7 +444,7 @@ export function patchHttpServerWithVirtualizer(
       (req.socket as any).__dsh_real_remote_address__ = req.socket.remoteAddress
     }
 
-    // 1. 响应层拦截：在主文档 index.html 响应流中的 <head> 首行注入 Crypto Polyfill
+    // 1. 响应层拦截：在主文档 index.html 响应流中注入样式片段与 Polyfill 脚本
     const originalEnd = res.end
     let isHtml = false
 
@@ -397,100 +462,180 @@ export function patchHttpServerWithVirtualizer(
     res.end = function(this: ServerResponse, chunk?: any, ...args: any[]) {
       const currentCt = this.getHeader?.('content-type') || this.getHeader?.('Content-Type') || ''
       const shouldInject = isHtml || String(currentCt).includes('text/html')
+      const contentEncoding = String(this.getHeader?.('content-encoding') || this.getHeader?.('Content-Encoding') || '').toLowerCase()
 
       // 是否实际改写了响应体（注入会改变 body 字节长度）
       let injected = false
 
       if (shouldInject && chunk) {
         if (typeof chunk === 'string' && chunk.includes('<head>')) {
-          let html = chunk
-          if (isMobile) html = applyDataMobileAttr(html)
-          if (mobileStyleCss) {
-            html = html.replace('<head>', `<head>${buildMobileStyleTag(mobileStyleCss)}`)
-          }
-          // 悬浮把手拖拽脚本全端注入：脚本自带“仅折叠时工作”守卫，
-          // 预设按视口宽度生效后 PC 窄窗口同样需要可拖动的展开把手
-          html = html.replace('<head>', `<head><script id="dsh-draggable-nav">${DRAGGABLE_NAV_SNIPPET}</script>`)
-          // 移动端抽屉「点外部收起」全端注入：脚本自带 web-ui 让位守卫，
-          // web-ui 在场时完全交给它处理，未装时复刻等价行为
-          html = html.replace('<head>', `<head><script id="dsh-mobile-dismiss">${MOBILE_DISMISS_SNIPPET}</script>`)
-          html = html.replace('<head>', `<head><script id="dsh-crypto-polyfill">${CRYPTO_POLYFILL_SNIPPET}</script>`)
-          html = html.replace('<head>', `<head><script id="dsh-clipboard-polyfill">${CLIPBOARD_POLYFILL_SNIPPET}</script>`)
-          // 冲突防护脚本后 replace → 位于 <head> 最前，优先写入 sessionStorage 避免小鲸鱼重复挂载
-          html = html.replace('<head>', `<head><script id="dsh-force-desktop-suppression">${FORCE_DESKTOP_SUPPRESSION_SNIPPET}</script>`)
-          chunk = html
-          injected = true
-        } else if (Buffer.isBuffer(chunk)) {
-          let str = chunk.toString('utf8')
-          if (str.includes('<head>')) {
-            if (isMobile) str = applyDataMobileAttr(str)
-            if (mobileStyleCss) {
-              str = str.replace('<head>', `<head>${buildMobileStyleTag(mobileStyleCss)}`)
-            }
-            str = str.replace('<head>', `<head><script id="dsh-draggable-nav">${DRAGGABLE_NAV_SNIPPET}</script>`)
-            str = str.replace('<head>', `<head><script id="dsh-mobile-dismiss">${MOBILE_DISMISS_SNIPPET}</script>`)
-            str = str.replace('<head>', `<head><script id="dsh-crypto-polyfill">${CRYPTO_POLYFILL_SNIPPET}</script>`)
-            str = str.replace('<head>', `<head><script id="dsh-clipboard-polyfill">${CLIPBOARD_POLYFILL_SNIPPET}</script>`)
-            str = str.replace('<head>', `<head><script id="dsh-force-desktop-suppression">${FORCE_DESKTOP_SUPPRESSION_SNIPPET}</script>`)
-            chunk = Buffer.from(str, 'utf8')
+          const updated = injectHtmlPayload(chunk, isMobile, mobileStyleCss)
+          if (updated !== chunk) {
+            chunk = updated
             injected = true
+          }
+        } else if (Buffer.isBuffer(chunk)) {
+          // 判定是否经过压缩：Gzip (Magic Number 0x1f 0x8b) 或 Deflate
+          const isGzip = contentEncoding.includes('gzip') || (chunk.length >= 2 && chunk[0] === 0x1f && chunk[1] === 0x8b)
+          const isDeflate = contentEncoding.includes('deflate')
+
+          if (isGzip) {
+            try {
+              const decompressed = zlib.gunzipSync(chunk).toString('utf8')
+              if (decompressed.includes('<head>')) {
+                const updated = injectHtmlPayload(decompressed, isMobile, mobileStyleCss)
+                if (updated !== decompressed) {
+                  chunk = zlib.gzipSync(Buffer.from(updated, 'utf8'))
+                  injected = true
+                }
+              }
+            } catch {}
+          } else if (isDeflate) {
+            try {
+              const decompressed = zlib.inflateSync(chunk).toString('utf8')
+              if (decompressed.includes('<head>')) {
+                const updated = injectHtmlPayload(decompressed, isMobile, mobileStyleCss)
+                if (updated !== decompressed) {
+                  chunk = zlib.deflateSync(Buffer.from(updated, 'utf8'))
+                  injected = true
+                }
+              }
+            } catch {}
+          } else {
+            // 普通未压缩 Buffer
+            const str = chunk.toString('utf8')
+            if (str.includes('<head>')) {
+              const updated = injectHtmlPayload(str, isMobile, mobileStyleCss)
+              if (updated !== str) {
+                chunk = Buffer.from(updated, 'utf8')
+                injected = true
+              }
+            }
           }
         }
       }
 
-      // 防截断守卫：仅当头部尚未发出时移除显式的 Content-Length，
-      // 让 Node 按最终 body 重新计算长度（writeHead 已发出后 removeHeader 无效，属不可挽救场景）
+      // 长度防截断守卫：仅当头部尚未发出时移除显式的 Content-Length，
+      // 让 Node 按最终 body 重新计算长度或转为分块传输
       if (injected && !(this as any).headersSent) {
         try {
-          if (typeof this.removeHeader === 'function') this.removeHeader('content-length')
+          if (typeof this.removeHeader === 'function') {
+            this.removeHeader('content-length')
+            this.removeHeader('Content-Length')
+          }
         } catch {}
       }
       return (originalEnd as any).apply(this, [chunk, ...args])
     }
 
+    // 1.5 在门禁判定前校验受信网关 Secret。
+    // 网关转发请求同样来自物理回环，且带有 X-Forwarded-*，不能仅凭 Host/Forwarded
+    // 把它误判为同机反向代理；这里用 Secret 打上受信标记，供 isLoopbackRequest 识别。
+    try {
+      const trustSocketIp = getPhysicalSocketIp(req)
+      const trustIsLoopback = trustSocketIp === '127.0.0.1' || trustSocketIp === '::1'
+      const trustSecret = getGatewaySecret(server)
+      if (
+        trustIsLoopback &&
+        trustSecret &&
+        safeCompareSecret(req.headers['x-dsh-gateway-secret'], trustSecret)
+      ) {
+        ;(req as any).__dsh_rm_trusted_gateway__ = true
+      }
+    } catch {}
+
     // 2. 请求层门禁判定与上下文虚拟化
     const allowed = gateMiddleware(req, res, () => {
-      // 记录真实客户端来源信息（内部专用头，无条件覆盖避免伪造）
-      const realIp = getClientIp(req)
-      req.headers['x-dsh-real-ip'] = realIp
-      req.headers['x-real-ip'] = realIp
+      // 物理 Socket 连接真实 IP（严格取底层物理连接，仅去除 ::ffff: 前缀，绝不受任何头篡改）
+      const physicalSocketIp = getPhysicalSocketIp(req)
+      const isLoopbackSocket = physicalSocketIp === '127.0.0.1' || physicalSocketIp === '::1' || physicalSocketIp === 'localhost'
+
+      // 网关受信密钥核验：仅当底层物理连接为本地回环且 Secret 比对一致时，才采纳网关上报的有效真实客户端 IP
+      const currentSecret = getGatewaySecret(server)
+      const candidateSecret = req.headers['x-dsh-gateway-secret']
+      const candidateRealIp = req.headers['x-dsh-real-ip']
+      const candidateIpStr = Array.isArray(candidateRealIp) ? candidateRealIp[0] : candidateRealIp
+
+      const trustedGateway =
+        isLoopbackSocket &&
+        Boolean(currentSecret) &&
+        safeCompareSecret(candidateSecret, currentSecret)
+
+      let effectiveClientIp = physicalSocketIp
+      if (
+        trustedGateway &&
+        typeof candidateIpStr === 'string' &&
+        candidateIpStr.trim() !== '' &&
+        net.isIP(candidateIpStr.replace(/^::ffff:/, '').trim()) !== 0
+      ) {
+        effectiveClientIp = candidateIpStr.replace(/^::ffff:/, '').trim()
+      } else if (isLoopbackSocket && !isLoopbackRequest(req)) {
+        // 同机反向代理：物理来源是 127，但 Host/Forwarded 表明是外部流量；
+        // 采用代理透传的 X-Forwarded-For 首个合法 IP，恢复防暴破/审计真实来源。
+        const rawXff = req.headers['x-forwarded-for']
+        const value = Array.isArray(rawXff) ? rawXff[0] : rawXff
+        if (typeof value === 'string') {
+          const first = value.split(',')[0].trim().replace(/^::ffff:/, '')
+          if (net.isIP(first)) effectiveClientIp = first
+        }
+      } else if (!isLoopbackSocket && req.headers['x-forwarded-for']) {
+        // 反向代理位于 LAN/Tailscale 网段：同样使用代理透传的真实 IP
+        const rawXff = req.headers['x-forwarded-for']
+        const value = Array.isArray(rawXff) ? rawXff[0] : rawXff
+        if (typeof value === 'string') {
+          const first = value.split(',')[0].trim().replace(/^::ffff:/, '')
+          if (net.isIP(first)) effectiveClientIp = first
+        }
+      }
+
+      // 同步有效客户端 IP 到三头（外部伪造的头在此被强制净化，下游生态插件与审计均可准确读取）
+      req.headers['x-dsh-real-ip'] = effectiveClientIp
+      req.headers['x-real-ip'] = effectiveClientIp
+      req.headers['x-forwarded-for'] = effectiveClientIp
+
+      // 消费完毕后立即抹除内部私密密钥头，防止向下游泄露
+      delete req.headers['x-dsh-gateway-secret']
+
       if (!req.headers['x-forwarded-host'] && req.headers.host) {
         req.headers['x-forwarded-host'] = req.headers.host
       }
 
-      // 回环 socket（本机浏览器 / 本机程序）不做 Host/Origin/sec-fetch-site 洗白：
-      // 保留浏览器原始同源信号，让下游自身的 CSRF 与 DNS-Rebinding 校验继续生效，
-      // 防御恶意网页借道本机发起的 drive-by 跨站写与 Rebinding 攻击；虚拟化仅服务于外部合法流量。
-      const isLoopbackSocket = realIp === '127.0.0.1' || realIp === '::1'
-
+      // 仅当底层物理 socket 为外部来源（Direct 模式直接对公网开放）时才由底座补丁进行外部虚拟化；
+      // 若底层物理 socket 为本地回环（包括本机直接访问或来自受信 Gateway 的回环转发），底座绝不无条件洗白 Origin，
+      // 保证下游生态插件的 CSRF / DNS-Rebinding 校验全额生效。
       if (!isLoopbackSocket) {
-        // 虚拟化 Host 与 Origin（解决外部合法流量的 DNS-Rebinding 400 阻断与同源 host === origin 严格检查）
+        // Direct 外部直连模式下的 Host/Origin 虚拟化
+        const externalProto = getRequestProtocol(req)
         const hostHeader = req.headers.host || ''
-        const port = hostHeader.includes(':') ? hostHeader.split(':')[1] : '3080'
+        const port = extractPortString(hostHeader) || '3080'
         req.headers.host = `127.0.0.1:${port}`
         if (req.headers.origin) {
-          req.headers.origin = `http://127.0.0.1:${port}`
+          req.headers.origin = `${externalProto}://127.0.0.1:${port}`
         }
-
-        // 补齐浏览器同源探针标记（解决 task-board 等插件对 sec-fetch-site 的检查）
         if (!req.headers['sec-fetch-site'] || req.headers['sec-fetch-site'] === 'cross-site') {
           req.headers['sec-fetch-site'] = 'same-origin'
         }
       } else {
-        // 仅归一化本地 Host 变体（localhost / [::1] → 127.0.0.1），其余原样保留供下游校验
+        // 本地回环连接：仅成对规范化本地 Host 变体（localhost / [::1] → 127.0.0.1）
+        // 关键安全原则：仅当 Origin 自身也是本地回环变体时才成对规范化；恶意的跨站 Origin（如 http://evil.com）必须 100% 原样保留！
         const hostHeader = req.headers.host || ''
-        let bareHost = hostHeader
-        if (bareHost.startsWith('[')) {
-          bareHost = bareHost.slice(1).split(']')[0]
-        } else {
-          bareHost = bareHost.split(':')[0]
-        }
-        bareHost = bareHost.toLowerCase()
-        if (bareHost === 'localhost' || bareHost === '::1' || /^127\./.test(bareHost)) {
-          const portMatch = hostHeader.match(/:(\d+)$/)
-          req.headers.host = `127.0.0.1:${portMatch ? portMatch[1] : '3080'}`
-          if (req.headers.origin) {
-            req.headers.origin = `http://${req.headers.host}`
+        const bareHost = extractBareHostname(hostHeader)
+        const isLocalHostVariant = bareHost === 'localhost' || bareHost === '::1' || /^127\./.test(bareHost)
+
+        if (isLocalHostVariant) {
+          const targetPort = extractPortString(hostHeader) || '3080'
+          req.headers.host = `127.0.0.1:${targetPort}`
+
+          if (req.headers.origin && typeof req.headers.origin === 'string') {
+            try {
+              const origUrl = new URL(req.headers.origin)
+              const origHostname = origUrl.hostname.toLowerCase()
+              const isLocalOrigin = origHostname === 'localhost' || origHostname === '::1' || /^127\./.test(origHostname)
+              if (isLocalOrigin) {
+                req.headers.origin = `${origUrl.protocol}//127.0.0.1:${targetPort}`
+              }
+              // 非本地 Origin（如 evil.com）原样保留，供下游 CSRF 检查
+            } catch {}
           }
         }
       }
@@ -518,29 +663,57 @@ export function patchHttpServerWithVirtualizer(
       // 请求未通过安全门禁，已在门禁层执行重定向或返回 401 拦截
     }
   })
+
+  // WebSocket Upgrade 不经过上面的 request 监听器；同样需要在校验网关 Secret 后打受信标记，
+  // 否则网关转发的 WS 会因为 X-Forwarded-* 被误判为同机反代，从而在底座再次要求 token。
+  server.prependListener('upgrade', (req: IncomingMessage) => {
+    try {
+      const upgradeSocketIp = getPhysicalSocketIp(req)
+      const upgradeIsLoopback = upgradeSocketIp === '127.0.0.1' || upgradeSocketIp === '::1'
+      const upgradeSecret = getGatewaySecret(server)
+      if (
+        upgradeIsLoopback &&
+        upgradeSecret &&
+        safeCompareSecret(req.headers['x-dsh-gateway-secret'], upgradeSecret)
+      ) {
+        ;(req as any).__dsh_rm_trusted_gateway__ = true
+        delete req.headers['x-dsh-gateway-secret']
+      }
+    } catch {}
+  })
 }
 
 /**
- * 注册 WebServer HTML 模板层的 Polyfill 注入钩子
+ * 注册 WebServer HTML 模板层的样式与 Polyfill 注入钩子（在 Gzip 压缩前执行）
  * 
  * @param ctx - Cordis 上下文对象
+ * @param styleStore - 样式片段管理器实例
  */
-export function mountIndexInjections(ctx: any): void {
+export function mountIndexInjections(ctx: any, styleStore?: StyleSnippetStore): void {
+  if (!ctx || ctx.__dsh_rm_index_mounted__) return
+  ctx.__dsh_rm_index_mounted__ = true
+  const injectFn = (html: string) => {
+    const mobileStyleCss = styleStore ? styleStore.collectCss() : ''
+    // tapIndex 阶段在服务端模板渲染期执行，尚未绑定单次请求的 UA，
+    // 因此 isMobile 设为 false，样式的 collectCss() 自带 @media 视口查询，
+    // PC 与移动端均能完美自适应生效。
+    return injectHtmlPayload(html, false, mobileStyleCss)
+  }
+
   if (ctx.webServer && typeof ctx.webServer.tapIndex === 'function') {
-    ctx.webServer.tapIndex((html: string) => {
-      if (html.includes('<head>')) {
-        return html
-          .replace('<head>', `<head><script id="dsh-crypto-polyfill">${CRYPTO_POLYFILL_SNIPPET}</script>`)
-          .replace('<head>', `<head><script id="dsh-clipboard-polyfill">${CLIPBOARD_POLYFILL_SNIPPET}</script>`)
-          // 冲突防护脚本后 replace → 位于 <head> 最前，优先写入 sessionStorage 避免小鲸鱼重复挂载
-          .replace('<head>', `<head><script id="dsh-force-desktop-suppression">${FORCE_DESKTOP_SUPPRESSION_SNIPPET}</script>`)
-      }
-      return html
-    })
+    ctx.webServer.tapIndex(injectFn)
   }
 
   ctx.on?.('webserver/index-inject', (table: any) => {
     if (Array.isArray(table)) {
+      const mobileStyleCss = styleStore ? styleStore.collectCss() : ''
+      if (mobileStyleCss) {
+        table.push({
+          kind: 'style',
+          placement: 'head',
+          text: mobileStyleCss,
+        })
+      }
       table.push({
         kind: 'script',
         placement: 'head',
@@ -555,6 +728,16 @@ export function mountIndexInjections(ctx: any): void {
         kind: 'script',
         placement: 'head',
         text: FORCE_DESKTOP_SUPPRESSION_SNIPPET,
+      })
+      table.push({
+        kind: 'script',
+        placement: 'head',
+        text: DRAGGABLE_NAV_SNIPPET,
+      })
+      table.push({
+        kind: 'script',
+        placement: 'head',
+        text: MOBILE_DISMISS_SNIPPET,
       })
     }
   })
@@ -800,17 +983,36 @@ function safeStringEqual(a: string, b: string): boolean {
  */
 export function isRequestAuthorizedByGate(req: any, store: SessionStore): boolean {
   if (!req) return false
+
+  // 0. WebSocket Upgrade 直连（direct 模式）必须先通过 Host 白名单与 Origin 同源检查。
+  //    网关模式在 GatewayServer.handleUpgrade 中已完成同样的检查，并打上 __dsh_rm_host_allowed__，
+  //    此处避免重复校验，同时确保 direct 模式的核心 WS 不会被 DNS-Rebinding / CSWSH 绕过。
+  const isWebSocketUpgrade = String(req.headers?.upgrade || '').toLowerCase().includes('websocket')
+  if (isWebSocketUpgrade && !(req as any).__dsh_rm_host_allowed__) {
+    if (!isTrustedHost(req.headers.host, store) || hasCrossSiteSignal(req)) {
+      return false
+    }
+  }
+
   // 1. 本机 127.0.0.1 / ::1 回环无条件放行
   if (isLoopbackRequest(req)) return true
 
   const clientIp = getClientIp(req)
   const options = store.getOptions()
 
+  // 反向代理位于 LAN/Tailscale 网段时不能被当作真实客户端免密放行
+  const hasForwardedHeaders = Boolean(
+    req.headers?.['x-forwarded-for'] ||
+    req.headers?.['x-forwarded-host'] ||
+    req.headers?.['x-forwarded-proto'] ||
+    req.headers?.['x-real-ip']
+  )
+
   // 2. Tailscale 私网免密直连放行
-  if (options.allowTailscale && isTailscaleIp(clientIp)) return true
+  if (!hasForwardedHeaders && options.allowTailscale && isTailscaleIp(clientIp)) return true
 
   // 3. 局域网 LAN 免密直连放行
-  if (options.allowLan && isLanIp(clientIp)) return true
+  if (!hasForwardedHeaders && options.allowLan && isLanIp(clientIp)) return true
 
   // 4. 检查是否携带有效的授权会话 Token (Cookie / Header / URL Token)
   const token = store.extractTokenFromRequest(req)
@@ -887,26 +1089,76 @@ export function takeOverConnectionAuth(connection: any, store: SessionStore): vo
 
   // 4. 动态向 DSH 底座 connection.trustedHosts 注入当前本机所有可用 IP 与网关端口
   // （适配 DSH 0.2.1+ 底层 Host/Origin 信任围栏，使外部网关合规直通，免去伪造 Host 头带来的副作用）
-  injectTrustedHosts(connection, [store.getActivePort(), 3080, 3081])
+  injectTrustedHosts(connection, [store.getActivePort(), 3080, 3081], store.getOptions().trustedHosts)
 }
 
 /**
- * 动态向 DSH connection.trustedHosts 数组注入受信任的主机与端口
+ * 向 DSH 运行时（webRuntime、connection、webStartup）的 trustedHosts 数组注入受信任的主机与端口
+ * 
+ * @param target - Cordis 上下文对象或包含 trustedHosts 的服务对象
+ * @param ports - 允许访问的活跃端口（包含底座端口与网关实际绑定端口）
+ * @param staticTrustedHosts - 用户静态配置的白名单（如 Tailscale MagicDNS 域名等）
  */
-export function injectTrustedHosts(connection: any, ports: number[] = [3080, 3081]): void {
-  if (!connection || !Array.isArray(connection.trustedHosts)) return
+export function injectTrustedHosts(target: any, ports: number[] = [3080, 3081], staticTrustedHosts: string[] = []): void {
+  if (!target) return
+
+  const arraysToInject: string[][] = []
+
+  // 1. 如果 target 本身带有 trustedHosts 数组（如 connection 或 webRuntime）
+  if (Array.isArray(target.trustedHosts)) {
+    arraysToInject.push(target.trustedHosts)
+  }
+
+  // 2. 如果 target 是 Cordis 上下文 ctx，检查并提取各子服务的 trustedHosts
+  try {
+    const wr = (typeof target.get === 'function' ? target.get('webRuntime') : undefined) || target.webRuntime
+    if (wr && Array.isArray(wr.trustedHosts) && !arraysToInject.includes(wr.trustedHosts)) {
+      arraysToInject.push(wr.trustedHosts)
+    }
+
+    const conn = (typeof target.get === 'function' ? target.get('connection') : undefined) || target.connection
+    if (conn && Array.isArray(conn.trustedHosts) && !arraysToInject.includes(conn.trustedHosts)) {
+      arraysToInject.push(conn.trustedHosts)
+    }
+
+    const ws = (typeof target.get === 'function' ? target.get('webStartup') : undefined) || target.webStartup
+    if (ws && Array.isArray(ws.trustedHosts) && !arraysToInject.includes(ws.trustedHosts)) {
+      arraysToInject.push(ws.trustedHosts)
+    }
+  } catch {}
+
+  if (arraysToInject.length === 0) return
+
   try {
     const netIps = getAllNetworkIps().map((i) => i.ip)
-    const candidates = ['127.0.0.1', 'localhost', ...netIps]
-    for (const ip of candidates) {
-      if (!connection.trustedHosts.includes(ip)) {
-        connection.trustedHosts.push(ip)
-      }
-      for (const port of ports) {
-        if (!port) continue
-        const withPort = `${ip}:${port}`
-        if (!connection.trustedHosts.includes(withPort)) {
-          connection.trustedHosts.push(withPort)
+    // 规范化静态配置的主机名：去除端口、去除末尾点、过滤通配符
+    const cleanStatics = (staticTrustedHosts || [])
+      .map((h) => {
+        let raw = String(h).trim().toLowerCase().replace(/\.$/, '')
+        if (raw.startsWith('[')) {
+          const closeBracket = raw.indexOf(']')
+          if (closeBracket !== -1) raw = raw.slice(1, closeBracket)
+        } else if (raw.includes(':')) {
+          raw = raw.split(':')[0]
+        }
+        return raw.trim()
+      })
+      .filter((h) => h && h !== '0.0.0.0' && h !== '::')
+
+    const candidates = ['127.0.0.1', 'localhost', '::1', ...netIps, ...cleanStatics]
+
+    for (const arr of arraysToInject) {
+      for (const hostItem of candidates) {
+        if (!arr.includes(hostItem)) {
+          arr.push(hostItem)
+        }
+        for (const port of ports) {
+          if (!port) continue
+          const isIpv6 = hostItem.includes(':') && !hostItem.startsWith('[')
+          const withPort = isIpv6 ? `[${hostItem}]:${port}` : `${hostItem}:${port}`
+          if (!arr.includes(withPort)) {
+            arr.push(withPort)
+          }
         }
       }
     }

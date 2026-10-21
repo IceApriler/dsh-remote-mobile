@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import http from 'node:http'
 import net from 'node:net'
-import { SessionStore } from '../lib/auth/token.js'
+import { SessionStore, AUTH_COOKIE_NAME } from '../lib/auth/token.js'
 import { StyleSnippetStore } from '../lib/styles/style-snippets.js'
 import { createGlobalAuthGate } from '../lib/auth/gate.js'
 import { detectServerMode, isLoopbackHost } from '../lib/gateway/detector.js'
@@ -88,6 +88,8 @@ test('DSH 独立安全网关与模式探测测试 (gateway)', async (t) => {
     const store = new SessionStore({
       allowTailscale: true,
       allowLan: false,
+      // 测试使用固定的 Tailscale 风格 Host；真实环境该 IP 会出现在本机网卡列表中
+      trustedHosts: ['100.81.241.49'],
     })
     const styleStore = new StyleSnippetStore()
     const gateMiddleware = createGlobalAuthGate(store)
@@ -100,7 +102,6 @@ test('DSH 独立安全网关与模式探测测试 (gateway)', async (t) => {
         coreHost: '127.0.0.1',
       },
       store,
-      styleStore,
       gateMiddleware
     )
 
@@ -152,7 +153,8 @@ test('DSH 独立安全网关与模式探测测试 (gateway)', async (t) => {
 
       // 验证底座接收到的代理头
       assert.ok(coreReceivedHeaders)
-      assert.equal(coreReceivedHeaders['x-forwarded-host'], `100.81.241.49:${gwPort}`)
+      assert.equal(coreReceivedHeaders['x-forwarded-host'], `127.0.0.1:${corePort}`)
+      assert.equal(coreReceivedHeaders['x-original-host'], `100.81.241.49:${gwPort}`)
       assert.ok(coreReceivedHeaders['x-dsh-real-ip'])
 
       // 5. 测试 302 重定向 Location 头改写（防止手机误跳 127.0.0.1）
@@ -197,7 +199,6 @@ test('DSH 独立安全网关与模式探测测试 (gateway)', async (t) => {
         autoIncrementPort: true,
       },
       store,
-      styleStore,
       gateMiddleware
     )
 
@@ -212,16 +213,106 @@ test('DSH 独立安全网关与模式探测测试 (gateway)', async (t) => {
     }
   })
 
-  await t.test('injectTrustedHosts 向 DSH connection 动态注入受信任主机', () => {
-    const mockConnection = {
-      trustedHosts: ['127.0.0.1'],
+  await t.test('injectTrustedHosts 向 DSH connection 与 webRuntime 动态注入受信任主机', () => {
+    const mockCtx = {
+      webRuntime: {
+        trustedHosts: ['127.0.0.1'],
+      },
+      connection: {
+        trustedHosts: ['127.0.0.1'],
+      },
     }
 
-    injectTrustedHosts(mockConnection, [3080, 3081])
+    injectTrustedHosts(mockCtx, [3080, 3081], ['10.10.0.254:3081'])
 
-    assert.ok(mockConnection.trustedHosts.includes('127.0.0.1:3080'))
-    assert.ok(mockConnection.trustedHosts.includes('127.0.0.1:3081'))
-    assert.ok(mockConnection.trustedHosts.includes('localhost:3080'))
-    assert.ok(mockConnection.trustedHosts.includes('localhost:3081'))
+    assert.ok(mockCtx.webRuntime.trustedHosts.includes('127.0.0.1:3080'))
+    assert.ok(mockCtx.webRuntime.trustedHosts.includes('127.0.0.1:3081'))
+    assert.ok(mockCtx.connection.trustedHosts.includes('localhost:3080'))
+    assert.ok(mockCtx.connection.trustedHosts.includes('localhost:3081'))
+    assert.ok(mockCtx.webRuntime.trustedHosts.includes('10.10.0.254:3081'))
+    assert.ok(mockCtx.connection.trustedHosts.includes('10.10.0.254:3081'))
+  })
+
+  await t.test('网关在代理 HTTP 请求时虚拟化内部 Host 与 Origin 以绕过生态插件围栏阻断', async () => {
+    let capturedHeaders = null
+    const mockCoreServer = http.createServer((req, res) => {
+      capturedHeaders = req.headers
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ ok: true }))
+    })
+
+    const corePort = await new Promise((resolve) => {
+      mockCoreServer.listen(0, '127.0.0.1', () => {
+        resolve(mockCoreServer.address().port)
+      })
+    })
+
+    const store = new SessionStore({
+      devicesFile: `/tmp/dsh-gw-test-headers-${Date.now()}.json`,
+      initialBypassLan: true,
+      trustedHosts: ['10.10.0.254'],
+    })
+    const styleStore = new StyleSnippetStore({
+      snippetsFile: `/tmp/dsh-gw-styles-${Date.now()}.json`,
+    })
+    const gateMiddleware = createGlobalAuthGate(store)
+
+    const gateway = new GatewayServer(
+      {
+        port: 0,
+        host: '127.0.0.1',
+        corePort,
+        coreHost: '127.0.0.1',
+      },
+      store,
+      gateMiddleware
+    )
+
+    try {
+      const { port: gwPort } = await gateway.start()
+
+      // 该请求模拟“同机反代”从 127 连入但 Host 为外部域名：
+      // 不能走 loopback 免认证，需要使用有效 Token 走正常鉴权。
+      const { code } = store.generateShortCode()
+      const { token } = store.verify(code, 'TestDevice', '127.0.0.1')
+
+      // 发起模拟客户端请求
+      await new Promise((resolve, reject) => {
+        const req = http.request(
+          {
+            hostname: '127.0.0.1',
+            port: gwPort,
+            path: '/sidebar/api/settings.get',
+            method: 'POST',
+            headers: {
+              host: `10.10.0.254:${gwPort}`,
+              origin: `http://10.10.0.254:${gwPort}`,
+              referer: `http://10.10.0.254:${gwPort}/`,
+              'sec-fetch-site': 'same-origin',
+              Cookie: `${AUTH_COOKIE_NAME}=${token}`,
+            },
+          },
+          (res) => {
+            res.resume()
+            res.on('end', resolve)
+          }
+        )
+        req.on('error', reject)
+        req.end()
+      })
+
+      assert.ok(capturedHeaders)
+      // 底座接收到的 Host 与 Origin 已经被虚拟化为内部回环核心
+      assert.equal(capturedHeaders.host, `127.0.0.1:${corePort}`)
+      assert.equal(capturedHeaders.origin, `http://127.0.0.1:${corePort}`)
+      assert.equal(capturedHeaders.referer, `http://127.0.0.1:${corePort}/`)
+      assert.equal(capturedHeaders['sec-fetch-site'], 'same-origin')
+      // 虚拟化为回环核心以绕过生态插件围栏阻断，同时在 x-original-host 中保留原始 Host
+      assert.equal(capturedHeaders['x-forwarded-host'], `127.0.0.1:${corePort}`)
+      assert.equal(capturedHeaders['x-original-host'], `10.10.0.254:${gwPort}`)
+    } finally {
+      await gateway.close()
+      await new Promise((resolve) => mockCoreServer.close(resolve))
+    }
   })
 })

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { publicEncrypt, constants } from 'node:crypto'
+import { publicEncrypt, privateDecrypt, generateKeyPairSync, constants } from 'node:crypto'
 import { getPublicKeyPem, decryptWithPrivateKey } from '../lib/auth/crypto.js'
 
 test('RSA 密钥与加解密测试', async (t) => {
@@ -40,7 +40,37 @@ test('RSA 密钥与加解密测试', async (t) => {
     assert.equal(decrypted, plain)
   })
 
-  await t.test('PKCS#1 v1.5 填充兼容解密', () => {
+  await t.test('PKCS#1 v1.5 填充兼容解密', (t) => {
+    // Node 20+/OpenSSL 3 出于 CVE-2023-46809（Marvin）安全原因，
+    // 已默认禁止 RSA_PKCS1_PADDING 私钥解密。此时插件保留的 legacy fallback
+    // 只能尽力而为，不应把运行时不支持当作回归；现代 WebCrypto 主路径使用 OAEP。
+    let pkcs1PrivateDecryptSupported = true
+    try {
+      const pair = generateKeyPairSync('rsa', {
+        modulusLength: 2048,
+        publicKeyEncoding: { type: 'spki', format: 'pem' },
+        privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+      })
+      const probe = publicEncrypt(
+        { key: pair.publicKey, padding: constants.RSA_PKCS1_PADDING },
+        Buffer.from('probe')
+      )
+      privateDecrypt(
+        { key: pair.privateKey, padding: constants.RSA_PKCS1_PADDING },
+        probe
+      )
+    } catch (err) {
+      if (String(err?.message || err).includes('RSA_PKCS1_PADDING')) {
+        pkcs1PrivateDecryptSupported = false
+      } else {
+        throw err
+      }
+    }
+    if (!pkcs1PrivateDecryptSupported) {
+      t.skip('当前 Node/OpenSSL 已禁用 PKCS#1 v1.5 私钥解密（CVE-2023-46809）')
+      return
+    }
+
     const plain = 'legacy-pass-123'
     const enc = publicEncrypt(
       {

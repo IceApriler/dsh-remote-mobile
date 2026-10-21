@@ -165,6 +165,34 @@ test('官方 connection 服务透明接管测试 (takeOverConnectionAuth)', asyn
     assert.equal(conn.authorizeIndex(loopbackReq, {}), true)
   })
 
+  await t.test('本机 3080 根路径带有插件注入的 127 Forwarded 头时仍必须放行', () => {
+    const conn = createMockConnection()
+    takeOverConnectionAuth(conn, store)
+
+    const loopbackReq = {
+      method: 'GET',
+      headers: {
+        host: '127.0.0.1:3080',
+        'x-dsh-real-ip': '127.0.0.1',
+        'x-real-ip': '127.0.0.1',
+        'x-forwarded-for': '127.0.0.1',
+        'x-forwarded-host': '127.0.0.1:3080',
+      },
+      socket: { remoteAddress: '127.0.0.1' },
+      url: '/',
+    }
+
+    assert.equal(isRequestAuthorizedByGate(loopbackReq, store), true)
+    assert.equal(conn.authorizeIndex(loopbackReq, {}), true)
+
+    // 真反代的外部 XFF 仍然不能借 loopback 放行
+    const proxyReq = {
+      ...loopbackReq,
+      headers: { ...loopbackReq.headers, 'x-forwarded-for': '203.0.113.9' },
+    }
+    assert.equal(isRequestAuthorizedByGate(proxyReq, store), false)
+  })
+
   await t.test('携带官方有效 launchToken 时依然触发官方原生 token 换取与重定向', () => {
     const conn = createMockConnection('launch-token-abc')
     takeOverConnectionAuth(conn, store)

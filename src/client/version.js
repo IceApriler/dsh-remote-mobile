@@ -2,5 +2,5 @@
  * 客户端版本号与构建时间定义
  * 在 build-client.js 自动化打包时会自动同步
  */
-export const PLUGIN_VERSION = 'v1.9.1';
-export const BUILD_TIME = '2026-10-19 16:05:56';
+export const PLUGIN_VERSION = 'v1.10.0';
+export const BUILD_TIME = '2026-10-22 00:12:57';

@@ -39,12 +39,23 @@ export function isLanIp(rawIp?: string): boolean {
 }
 
 /**
- * 提取请求的客户端真实 IP（基于底层 Socket 连接，防止外部伪造 X-Forwarded-For，且兼容虚拟化场景）
+ * 获取底层物理连接的真实 Socket IP（严格基于底座物理连接，绝不受任何请求头篡改，仅去除 IPv6 映射前缀）
+ * 专用于底座与网关内部的物理信任边界判定（如 isLoopbackSocket）
+ */
+export function getPhysicalSocketIp(req: { socket?: { remoteAddress?: string } }): string {
+  const raw = req?.socket?.remoteAddress
+  return raw ? raw.replace(/^::ffff:/, '').trim() : '127.0.0.1'
+}
+
+/**
+ * 提取请求的物理 Socket 来源 IP（兼容历史接口，保持物理连接语义）
  */
 export function getClientIp(req: { socket?: { remoteAddress?: string; __dsh_real_remote_address__?: string }; headers?: Record<string, string | string[] | undefined> }): string {
   const realAddress = req.socket?.__dsh_real_remote_address__ || req.socket?.remoteAddress
-  return realAddress?.replace(/^::ffff:/, '') || '127.0.0.1'
+  return realAddress?.replace(/^::ffff:/, '').trim() || '127.0.0.1'
 }
+
+
 
 /**
  * 获取当前本机的 Tailscale IP
@@ -102,10 +113,40 @@ export function getLocalLanIp(): string | null {
   return null
 }
 
+let cachedNetworkIps: { name: string; ip: string; isTailscale: boolean; isLan: boolean }[] | null = null
+let cacheExpiresAt = 0
+let mockNetworkIps: { name: string; ip: string; isTailscale: boolean; isLan: boolean }[] | null = null
+
 /**
- * 获取本机所有可用的网络 IP
+ * 设置模拟网络网卡 IP（仅供单测模拟切换 Wi-Fi / 新网卡场景）
+ */
+export function setMockNetworkIps(mockList: { name: string; ip: string; isTailscale: boolean; isLan: boolean }[] | null): void {
+  mockNetworkIps = mockList
+  cachedNetworkIps = null
+  cacheExpiresAt = 0
+}
+
+/**
+ * 清除网络网卡 IP 缓存
+ */
+export function clearNetworkIpCache(): void {
+  cachedNetworkIps = null
+  cacheExpiresAt = 0
+}
+
+/**
+ * 获取本机所有可用的网络 IP（带 2 秒短缓存，兼顾动态切换 Wi-Fi 响应与高频访问性能）
  */
 export function getAllNetworkIps(): { name: string; ip: string; isTailscale: boolean; isLan: boolean }[] {
+  if (mockNetworkIps) {
+    return [...mockNetworkIps]
+  }
+
+  const now = Date.now()
+  if (cachedNetworkIps && now < cacheExpiresAt) {
+    return cachedNetworkIps
+  }
+
   const list: { name: string; ip: string; isTailscale: boolean; isLan: boolean }[] = []
   try {
     const interfaces = networkInterfaces()
@@ -122,6 +163,9 @@ export function getAllNetworkIps(): { name: string; ip: string; isTailscale: boo
       }
     }
   } catch {}
+
+  cachedNetworkIps = list
+  cacheExpiresAt = now + 2000
   return list
 }
 

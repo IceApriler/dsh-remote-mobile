@@ -23,9 +23,11 @@ import {
   mountIndexInjections,
   registerRemoteWebUiPairingBridge,
   takeOverConnectionAuth,
+  injectTrustedHosts,
 } from './bridge/compat.js'
 import { detectServerMode } from './gateway/detector.js'
 import { GatewayServer } from './gateway/server.js'
+import { generateGatewaySecret, setGatewaySecret, clearGatewaySecret } from './gateway/secret.js'
 
 /** Cordis 插件名称标识 */
 export const name = 'dsh-remote-mobile'
@@ -93,10 +95,16 @@ function bindDshSettings(ctx: any, store: SessionStore): void {
  * @param config - 插件持久化配置选项 (SessionStoreOptions)
  */
 export function apply(ctx: any, config: SessionStoreOptions = {}): void {
-  // 1. 初始化会话与令牌持久化管理器
+  // 1. 初始化会话与令牌持久化管理器及内部握手密钥
   const store = new SessionStore(config)
   const styleStore = new StyleSnippetStore()
   const gateMiddleware = createGlobalAuthGate(store)
+
+  // 为本次插件生命周期生成高强度握手 Secret，并绑定到底座 Server
+  const gatewaySecret = generateGatewaySecret()
+  if (ctx.webServer?.server) {
+    setGatewaySecret(ctx.webServer.server, gatewaySecret)
+  }
 
   // 2. 接入 DSH Settings 服务 (命名空间: dsh-remote-mobile)
   bindDshSettings(ctx, store)
@@ -107,8 +115,8 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
       patchHttpServerWithVirtualizer(ctx.webServer.server, gateMiddleware, store, styleStore)
     }
 
-    // 挂载 HTML 模板层的 Crypto Polyfill 注入钩子
-    mountIndexInjections(ctx)
+    // 挂载 HTML 模板层的样式与 Polyfill 注入钩子（在 Gzip 压缩前注入）
+    mountIndexInjections(ctx, styleStore)
 
     // 注册插件专属的 HTTP & SSE API 路由
     if (typeof ctx.webServer.register === 'function') {
@@ -164,9 +172,44 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
     }
   }
 
+  // 动态同步受信任主机到所有底层运行时（webRuntime、connection、webStartup）
+  const syncTrustedHosts = (target?: any) => {
+    try {
+      injectTrustedHosts(target || ctx, [store.getActivePort(), 3080, 3081], store.getOptions().trustedHosts)
+    } catch {}
+  }
+  syncTrustedHosts()
+
+  if (typeof ctx.inject === 'function') {
+    try {
+      ctx.inject(['webRuntime'], (runtimeCtx: any) => {
+        syncTrustedHosts(runtimeCtx)
+      })
+    } catch {}
+  }
+
   // 6. 探测 DSH 底座网络暴露姿态，自适应裁决是否拉起独立安全反向代理网关
-  const detection = detectServerMode(ctx, store.getOptions().mode, ctx.webServer?.port ?? 3080)
+  // 配置错误（如 mode: 'gateway' + 具体 LAN IP）不能把整个插件 apply 抛崩；
+  // 捕获后回退到 direct 模式，让用户仍可通过 3080 本机/局域网访问并修改配置。
+  let modeFallbackError = ''
+  let detection: ReturnType<typeof detectServerMode>
+  try {
+    detection = detectServerMode(ctx, store.getOptions().mode, ctx.webServer?.port ?? 3080)
+  } catch (err: any) {
+    modeFallbackError = err?.message || String(err)
+    ctx.logger?.error?.('[dsh-remote-mobile] 网关模式不可用，已回退 direct 模式:', err)
+    detection = detectServerMode(ctx, 'direct', ctx.webServer?.port ?? 3080)
+  }
+
+  // 强制 gateway 且底座已监听通配地址时，输出安全提醒：核心 3080 仍暴露，
+  // 网关只是附加入口，不能替代核心侧的 Host/Origin 防护。
+  const modeWarning =
+    detection.mode === 'gateway' && !detection.isLoopback
+      ? `底座本身已监听 ${detection.rawCoreHost}，3080 仍是对外入口；网关 3081 为附加入口，建议优先恢复 127.0.0.1 监听。`
+      : ''
+
   let gatewayServer: GatewayServer | null = null
+  let gatewayReadyPromise: Promise<number> | null = null
 
   if (detection.mode === 'gateway') {
     const opts = store.getOptions()
@@ -178,20 +221,28 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
         coreHost: detection.coreHost,
       },
       store,
-      styleStore,
       gateMiddleware,
       ctx.logger
     )
 
-    store.setActiveGatewayInfo('gateway', opts.gatewayPort ?? 3081, detection.corePort)
+    // 初始标记为正在启动中
+    store.setActiveGatewayInfo('gateway', opts.gatewayPort ?? 3081, detection.corePort, false)
 
-    gatewayServer.start().then(({ port }) => {
-      store.setActiveGatewayInfo('gateway', port, detection.corePort)
+    gatewayReadyPromise = gatewayServer.start().then(({ port }) => {
+      if (gatewayServer?.getServer()) {
+        setGatewaySecret(gatewayServer.getServer(), gatewaySecret)
+      }
+      store.setActiveGatewayInfo('gateway', port, detection.corePort, true)
+      syncTrustedHosts()
+      return port
     }).catch((err) => {
+      store.setActiveGatewayInfo('gateway', opts.gatewayPort ?? 3081, detection.corePort, false, err?.message || String(err))
       ctx.logger?.error?.('[dsh-remote-mobile] 独立安全反向代理网关启动失败:', err)
+      return opts.gatewayPort ?? 3081
     })
   } else {
-    store.setActiveGatewayInfo('direct', detection.corePort, detection.corePort)
+    store.setActiveGatewayInfo('direct', detection.corePort, detection.corePort, true)
+    gatewayReadyPromise = Promise.resolve(detection.corePort)
   }
 
   // 7. 服务就绪时输出提示横幅与接入地址
@@ -206,20 +257,41 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
       if (timer1) clearTimeout(timer1)
       if (timer2) clearTimeout(timer2)
       if (gatewayServer) {
+        clearGatewaySecret(gatewayServer.getServer())
         gatewayServer.close().catch(() => {})
+      }
+      const webServer = (typeof ctx.get === 'function' ? ctx.get('webServer') : undefined) || ctx.webServer
+      if (webServer?.server) {
+        clearGatewaySecret(webServer.server)
       }
     })
   } catch {}
 
-  const printReadyBanner = () => {
+  const printReadyBanner = async () => {
     // 生命周期守卫：若上下文已废弃/进入 dispose，放弃回调
     if (disposed || printed) return
     printed = true
 
+    // 等待网关就绪以获得准确的对外端口（避免端口自增探测竞态）
     try {
+      if (gatewayReadyPromise) {
+        await Promise.race([
+          gatewayReadyPromise,
+          new Promise((r) => setTimeout(r, 2000)),
+        ])
+      }
+    } catch {}
+
+    // 等待期间插件可能已被 dispose / 热重载；此时绝不能再 setGatewaySecret / patch / mount
+    if (disposed) return
+
+    try {
+      syncTrustedHosts()
       const webServer = (typeof ctx.get === 'function' ? ctx.get('webServer') : undefined) || ctx.webServer
       if (webServer?.server) {
+        setGatewaySecret(webServer.server, gatewaySecret)
         patchHttpServerWithVirtualizer(webServer.server, gateMiddleware, store, styleStore)
+        mountIndexInjections(ctx, styleStore)
       }
       try {
         const conn = typeof ctx.get === 'function' ? ctx.get('connection') : undefined
@@ -234,22 +306,36 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
       const activeMode = store.getActiveMode()
       const corePort = store.getCorePort()
       const opts = store.getOptions()
+      const gwStatus = store.getGatewayStatus()
 
       const divider = '─'.repeat(72)
       console.log(`\n┌${divider}`)
       console.log(`│ [dsh-remote-mobile] 官方临时 Token 鉴权已接管，PC/移动端访问无需携带官方token`)
+      if (modeFallbackError) {
+        console.log(`│ ⚠️ 网关配置不可用，已回退 direct 模式: ${modeFallbackError}`)
+      }
+      if (modeWarning) {
+        console.log(`│ ⚠️ ${modeWarning}`)
+      }
 
       if (activeMode === 'gateway') {
-        console.log(`│ 独立安全反代网关已激活 (0.0.0.0:${activePort} -> 127.0.0.1:${corePort})`)
-        console.log(`│ 手机/远程设备请访问安全网关地址:`)
-        if (lanIp && lanIp !== '127.0.0.1') {
-          console.log(`│   • 局域网:     http://${lanIp}:${activePort} (同 Wi-Fi 局域网直连)`)
+        if (gwStatus.running) {
+          console.log(`│ 独立安全反代网关已激活 (0.0.0.0:${activePort} -> 127.0.0.1:${corePort})`)
+          console.log(`│ 手机/远程设备请访问安全网关地址:`)
+          if (lanIp && lanIp !== '127.0.0.1') {
+            console.log(`│   • 局域网:     http://${lanIp}:${activePort} (同 Wi-Fi 局域网直连)`)
+          }
+          if (tsIp) {
+            console.log(`│   • 虚拟私网:   http://${tsIp}:${activePort} (Tailscale 私网异地直连)`)
+          }
+          console.log(`│ 电脑本机浏览器访问控制台:`)
+          console.log(`│   • 本机回环:   http://127.0.0.1:${corePort}`)
+        } else {
+          console.log(`│ ⚠️ 独立安全反代网关未成功启动: ${gwStatus.error || '端口占用'}`)
+          console.log(`│ 外部手机设备当前暂时无法连接，请检查 3081 端口占用`)
+          console.log(`│ 电脑本机浏览器仍可直接访问:`)
+          console.log(`│   • 本机回环:   http://127.0.0.1:${corePort}`)
         }
-        if (tsIp) {
-          console.log(`│   • 虚拟私网:   http://${tsIp}:${activePort} (Tailscale 私网异地直连)`)
-        }
-        console.log(`│ 电脑本机浏览器访问控制台:`)
-        console.log(`│   • 本机回环:   http://127.0.0.1:${corePort}`)
       } else {
         console.log(`│ 远程安全网关已就绪，支持手机浏览器访问:`)
         console.log(`│   • 本机回环:   http://127.0.0.1:${corePort}`)

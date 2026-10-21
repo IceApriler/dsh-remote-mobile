@@ -40,3 +40,4 @@ Thumbs.db
 .temp/
 .cache/
 coverage/
+*.patch

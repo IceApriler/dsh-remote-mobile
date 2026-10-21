@@ -8,6 +8,8 @@ test('全局安全门禁中间件测试', async (t) => {
     allowTailscale: false,
     secret: 'adminPass2026',
     devicesFile: `/tmp/dsh-gate-test-${Date.now()}.json`,
+    // 外部请求的 Host 白名单测试用例使用固定局域网地址
+    trustedHosts: ['192.168.1.5'],
   })
   const gate = createGlobalAuthGate(store)
 
@@ -19,6 +21,8 @@ test('全局安全门禁中间件测试', async (t) => {
     assert.equal(isPublicPath('/api/remote-mobile/public-key'), true)
     assert.equal(isPublicPath('/assets/yyy.css'), true)
     assert.equal(isPublicPath('/favicon.ico'), true)
+    assert.equal(isPublicPath('/manifest.webmanifest'), true)
+    assert.equal(isPublicPath('/manifest.json'), true)
 
     // /plugins/ 下合法前端静态文件扩展名放行
     assert.equal(isPublicPath('/plugins/xxx.js'), true)
