@@ -12,7 +12,7 @@
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://github.com/IceApriler/dsh-remote-mobile/pulls)
 
 <p align="center">
-  <b>Zero Core Modifications · Secure LAN / Tailscale Access · QR Pairing · Mobile UI Adaptation · Workspace Parity · Real-Time Push</b>
+  <b>No DSH Source Changes · Secure LAN / Tailscale Access · QR Pairing · Mobile UI Adaptation · Workspace Parity · Real-Time Push</b>
 </p>
 
 <p align="center">
@@ -46,7 +46,7 @@ English Documentation · [简体中文](./README.md)
 
 `dsh-remote-mobile` is a dedicated remote and mobile security governance plugin designed specifically for **DeepSeek Harness (DSH)**.
 
-By default, DSH strictly listens only to the local loopback address (`127.0.0.1`), preventing mobile devices, tablets, or external computers from accessing the Web console. This plugin uses **access control middleware** and **request isolation** to securely open up **Tailscale Private Network** and **Local Area Network (LAN / Wi-Fi)** access, complete with RSA transmission encryption, QR code pairing, persistent password auth, and automated brute-force defense.
+By default, DSH strictly listens only to the local loopback address (`127.0.0.1`), preventing mobile devices, tablets, or external computers from accessing the Web console. This plugin uses **access control middleware** and **request isolation** to securely open up **Tailscale Private Network** and **Local Area Network (LAN / Wi-Fi)** access, complete with RSA-encrypted login credentials, QR code pairing, persistent password auth, and automated brute-force defense. The plugin does not provide full TLS; use Tailscale or an outer HTTPS proxy for complete transport encryption.
 
 When accessed from a phone, the plugin also adapts the DSH interface for **mobile styles**: a collapsible sidebar drawer with a draggable floating toggle, compatibility with the official 3-column Grid layout & right sidebar, a centered/scaled settings dialog, and dense conversation typography — so the mobile experience feels closer to the desktop.
 
@@ -57,7 +57,7 @@ When accessed from a phone, the plugin also adapts the DSH interface for **mobil
 
 * 🚀 **Break Network Barriers with Desktop-Grade Workspace**: For accessing DSH Web over LAN / Tailscale. On mobile devices, **common desktop operations such as creating / switching workspaces and running terminal commands are supported**.
 * 📱 **Dedicated Mobile Adaptations & Same-Origin Reuse**: Directly reuses the official DSH Web frontend (the very same UI as desktop) and the wider plugin ecosystem (sidebars, task boards, terminal panels, etc.) without maintaining a separate mobile backend. Includes out-of-the-box mobile adaptations (sidebar drawer toggle, centered settings modal, and compact chat font scaling for higher information density), alongside a built-in **Style Snippet Override system** to toggle presets or inject custom CSS snippets on demand.
-* 🛡️ **Secure Access Proxy & Transport Encryption**: Built-in client-side RSA asymmetric public key encryption, `scrypt` salted slow-hashing password persistence, and automated IP lockout upon consecutive brute-force failures, blocking unauthorized access over public/LAN networks.
+* 🛡️ **Secure Access Proxy & Credential Encryption**: Login credentials use client-side RSA asymmetric encryption, `scrypt` salted slow-hashing password persistence, and automated IP lockout upon consecutive brute-force failures, blocking unauthorized access over public/LAN networks.
 * 📲 **Quick QR Pairing**: Auto-detects Tailscale CGNAT and LAN IP addresses to generate dedicated pairing QR codes. Scan the code to authenticate and obtain persistent credentials.
 * 🔄 **SSE Real-Time Push**: Device connection, reconnection, revocation, and security alert events are pushed in real time via Server-Sent Events without polling.
 * 🤝 **Generic Plugin Coexistence Protection**: Starts safely alongside other remote/Web access plugins by automatically yielding the shared service; the settings panel shows a conflict banner with a one-click copyable diagnosis & fix report.
@@ -81,13 +81,13 @@ dsh plugin --profile web add dsh-remote-mobile
 ---
 
 <span id="config"></span>
-### 2. Configuration (Zero-Config for New Installs; Migration for Existing Users)
+### 2. Configuration (No webserver Config for New Installs; Migration for Existing Users)
 
 > [!TIP]
-> **🚀 DSH 0.2.1+ Architecture Update (Zero Configuration)**:
+> **🚀 DSH 0.2.1+ Architecture Update (No webserver Configuration)**:
 > Starting from DSH 0.2.1+, the host `webserver` strictly disallows binding directly to wildcard addresses (`0.0.0.0`) for security.
 > This plugin now includes a built-in **Smart Adaptive Secure Access Proxy**:
-> - **DSH 0.2.1+ (latest, after removing the old `0.0.0.0` config)**: **No `webserver` config is needed**! DSH remains safely bound to `127.0.0.1:3080`, and this plugin launches a standalone secure proxy on `0.0.0.0:3081` by default. Mobile QR codes use `3081` (it auto-increments on port conflicts; always trust the QR shown in settings), while desktop stays on `3080`, avoiding startup failures caused by wildcard-host validation.
+> - **DSH 0.2.1+ (latest, after removing the old `0.0.0.0` config)**: **No `webserver` config is needed**! DSH remains safely bound to `127.0.0.1:3080`, and this plugin launches a standalone secure proxy on `0.0.0.0:3081` by default. Mobile QR codes use `3081` (it auto-increments on port conflicts; always trust the QR shown in settings), while desktop is recommended to use `3080`; `3081` is also available for verifying the proxy chain, avoiding startup failures caused by wildcard-host validation.
 > - **DSH 0.1.7 ~ 0.2.0 (Legacy)**: If `host: '0.0.0.0'` is still present in `cordis.patch.yml`, the plugin automatically falls back to `direct` mode, preserving legacy direct access. For custom domains or public IPs, configure `trustedHosts` below.
 
 > [!IMPORTANT]
@@ -131,7 +131,7 @@ If you have installed other plugins that might conflict, we recommend disabling 
 dsh web --no-open
 ```
 
-Open the DSH Web Console in your browser, navigate to **Settings ⚙️ -> Remote & Mobile Access**, and scan the QR code with your mobile camera or WeChat to start using DSH on mobile!
+Open the DSH Web Console in your browser, navigate to **Settings ⚙️ -> Remote & Mobile Access**, and scan the QR code with your mobile camera or WeChat to open the pairing/login page. After authorization, DSH is ready on mobile.
 
 ---
 
@@ -225,7 +225,7 @@ Common mistake: rewriting Host to `127.0.0.1` and stripping all `X-Forwarded-*` 
 ## 🌟 Features
 
 ### 1. Network Access
-- **Tailscale Private Network**: Automatically detects local Tailscale IP (`100.64.0.0/10` CGNAT subnet), creates pairing QR codes, and supports direct passwordless bypass (transport encryption guaranteed by Tailscale WireGuard tunnels).
+- **Tailscale Private Network**: Automatically detects local Tailscale IP (`100.64.0.0/10` CGNAT subnet), creates pairing QR codes, and supports direct passwordless bypass (transport encryption provided by Tailscale's WireGuard tunnel).
 - **Local Area Network (LAN / Wi-Fi)**: Automatically detects RFC 1918 private IPs (`192.168.x.x`, `10.x.x.x`, `172.16-31.x.x`), generates LAN pairing QR codes with direct link previews and prominent high-risk security warnings.
 - **Instant QR Pairing**: Scan QR codes directly with any mobile camera or scanner app to authenticate.
 
@@ -236,25 +236,27 @@ Common mistake: rewriting Host to `127.0.0.1` and stripping all `X-Forwarded-*` 
 - **Device Session Management**: Real-time inspection of connected device types, OS, browser, source IP, and last active timestamp, with single-device revocation and one-click bulk revocation.
 
 ### 3. Security & Cryptography
-- **Transport RSA Asymmetric Encryption**: The login endpoint encrypts on the client first, so sensitive passwords and pairing codes travel the network only in ciphertext.
+- **Application-Layer Login Credential Encryption**: The login endpoint encrypts on the client first, so sensitive passwords and pairing codes travel the network only in ciphertext.
   - **Secure contexts (HTTPS)**: prioritizes native Web Crypto `RSA-OAEP-SHA256`;
-  - **DSH default HTTP LAN/Tailscale access (non-secure context)**: falls back to a pure JS shim using `crypto.getRandomValues()` for cryptographically secure random padding.
+  - **DSH default HTTP LAN/Tailscale access (browser non-secure context; Tailscale's WireGuard tunnel is still encrypted)**: falls back to a pure JS shim using `crypto.getRandomValues()` for cryptographically secure random padding.
+
+  > The plugin does not provide TLS itself; page/API/WebSocket traffic needs Tailscale or an outer HTTPS proxy for full transport encryption.
 - **scrypt Slow Hash Storage**: Server persists passwords with `scrypt` salted slow-hashing (`scrypt:${salt}:${hash}`). Verification uses `crypto.timingSafeEqual` constant-time comparison to prevent timing side-channel attacks.
 - **Brute-Force Defense & Rate Limiting**:
   - Automatically locks out IPs for 15 minutes after reaching consecutive failed attempt thresholds (default: 5), returning HTTP 429;
   - Sliding-window rate limiting (default: 60 visits/min) to prevent high-frequency brute-force scraping;
   - Audit logs and lockout states persist to disk and restore across restarts;
   - Administrators can manually unlock blocked IPs with one click in the panel.
-- **Intelligent Static Asset Whitelisting**: The authentication gate automatically allows verified frontend asset extensions (`.js`, `.css`, `.png`, `.svg`, `.woff2`, etc., 20 types) while blocking extensionless or dynamic API routes (e.g. `/plugins/xxx/admin`), ensuring smooth third-party plugin rendering without manual whitelist configuration. (The DSH core static directory `/assets/` is an official resource and is allowed unconditionally.)
+- **Intelligent Static Asset Whitelisting**: The authentication gate allows known frontend asset extensions (`.js`, `.css`, `.png`, `.svg`, `.woff2`, etc., 20 types) while blocking extensionless or dynamic API routes (e.g. `/plugins/xxx/admin`), reducing the exposed dynamic-API surface while remaining compatible with third-party frontend assets, without manual whitelist configuration. (The DSH core static directory `/assets/` is an official resource and is allowed unconditionally.)
 - **Resilient Atomic Persistence & Debounce**: Millisecond-level debounce write-throttling to safeguard disk I/O (500ms for session data, 300ms for style snippets), coupled with `beforeExit` process flush hooks and atomic temporary file replacement (`renameSync`) for `settings.json` and `style-snippets.json`.
 - **Source IP Extraction**: By default only the underlying Socket address is trusted; when a request is recognized as a trusted reverse proxy (via Host / `X-Forwarded-*`), the first valid `X-Forwarded-For` IP is used instead, balancing real-source attribution with anti-spoofing.
-- **Cross-Site Write Defense**: All non-GET/HEAD requests validate browser same-origin signals (`Origin` / `Sec-Fetch-Site`). Cross-site writes driven by malicious webpages against `127.0.0.1` are rejected outright; non-browser clients (curl / local scripts) are unaffected. Note: this policy also blocks cross-origin webhooks / OAuth callbacks from third-party plugins and legacy WebViews that send `Origin: null`; validate compatibility before using such integrations.
+- **Cross-Site Write Defense**: All write requests carrying browser same-origin signals validate (`Origin` / `Sec-Fetch-Site`). Cross-site writes driven by malicious webpages against `127.0.0.1` are rejected outright; non-browser clients (curl / local scripts) are not subject to this check. Note: this policy also blocks cross-origin webhooks / OAuth callbacks from third-party plugins and legacy WebViews that send `Origin: null`; validate compatibility before using such integrations.
 - **Context & Proxy Boundary**: Same-origin/local-variant Host and Origin are normalized as a pair, while malicious cross-site Origins are preserved for downstream CSRF checks. A same-host `127.0.0.1` proxy is recognized via an external Host, and a LAN/Tailscale proxy via `X-Forwarded-*`, so neither is mistaken for a passwordless local client; they must authenticate with the plugin token. The plugin's own trusted proxy is exempted via an internal secret. Loopback requests carrying the plugin's own 127-valued Forwarded headers are recognized as internal and do not break the local 3080 root connection auth. The SSE event stream accepts same-origin connections only, with no cross-origin reads.
 
 ### 4. Real-Time Sync & Internationalization
 - **SSE Real-Time Push**: Push notifications for new device pairing, reconnections, revocations, and security alerts via Server-Sent Events, with bidirectional close listeners and idempotent cleanup.
 - **Adaptive Bilingual UI**: Automatically switches between English and Simplified Chinese based on DSH settings and browser language preferences.
-- **Non-HTTPS Compatibility Patch**: Injects `crypto.randomUUID` and `navigator.clipboard` Polyfills into HTML templates to fix missing native Web Crypto / Clipboard APIs in HTTP non-secure mobile browser contexts (the clipboard polyfill keeps copy and snippet-copy working in non-secure contexts).
+- **Non-HTTPS Compatibility Patch**: Injects `crypto.randomUUID` and `navigator.clipboard` Polyfills into HTML templates to address missing native Web Crypto / Clipboard APIs in HTTP non-secure mobile browser contexts (the clipboard polyfill provides copy and snippet-copy support in non-secure contexts).
 
 ### 5. Mobile Style Snippets (style mini-plugins)
 
@@ -271,7 +273,7 @@ The DSH web UI still carries many desktop-oriented styles on phones. This plugin
 
 ### 6. Generic Plugin Coexistence Protection
 
-- **Conflict-free startup**: when the shared pairing service `remoteWebUiPairing` is already registered by another remote/Web access plugin, this plugin yields automatically (deferred arbitration: it waits until the activation window settles, then checks who owns the service name), avoiding the whole-tree rollback caused by service-name collisions — installing from the plugin market works out of the box with zero manual configuration;
+- **Automatic coexistence yield**: when the shared pairing service `remoteWebUiPairing` is already registered by another remote/Web access plugin, this plugin yields automatically (deferred arbitration: it waits until the activation window settles, then checks who owns the service name), avoiding the whole-tree rollback caused by service-name collisions — installing from the plugin market usually works without manually disabling the other plugin;
 - **Visible coexistence status**: when a conflict is detected, a dismissible warning banner (Chinese/English) appears at the top of the settings panel, explaining the yield behavior and the "keep only one" recommendation; refresh after resolving and it disappears;
 - **One-click diagnosis report**: the **"📋 Copy diagnosis & fix"** button in the banner copies a full report — the conflicting plugin's package name and loader entry id are auto-detected at runtime, and the report includes line-exact fix configuration and commands (disable the other / remove this one), ready to paste to an AI assistant.
 
@@ -437,6 +439,8 @@ Custom snippets (style mini-plugins) and their enabled states are persisted in `
 | `~/.dsh/remote-mobile/rsa-keys.json` | Server RSA keypair (public & private) | Local storage, `0o600` (Restricted to current user) |
 | `~/.dsh/remote-mobile/style-snippets.json` | Mobile style snippets (built-in toggles + custom CSS mini-plugins) | Local persistent storage |
 
+> `0o600` is a POSIX permission; Windows uses user-directory ACLs instead of POSIX mode bits.
+
 ---
 
 <span id="faq"></span>
@@ -479,8 +483,8 @@ If your log instead shows `service "remoteWebUiPairing" has been registered`, pl
 <summary><b>Q2: What is the difference between Tailscale Bypass and LAN Bypass?</b></summary>
 
 **Answer**:
-* **Tailscale Bypass**: Highly secure. Tailscale operates over an encrypted WireGuard overlay where only devices logged into your account can connect.
-* **LAN Bypass**: Inherent risks. Anyone connected to your Wi-Fi (including guests or unauthorized devices) can control your workspace. **Never enable this on untrusted networks**.
+* **Tailscale Bypass**: Reasonably secure. Tailscale operates over an encrypted WireGuard overlay; by default, only devices in the same tailnet or explicitly authorized by ACL/sharing can connect.
+* **LAN Bypass**: Inherent risks. When enabled, any LAN device that can reach the gateway port (including guests or unauthorized devices) may control your workspace; guest-network isolation or a firewall may block it, but do not treat that as a security boundary. **Never enable this on untrusted networks**.
 </details>
 
 <details>
