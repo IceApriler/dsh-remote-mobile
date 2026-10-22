@@ -55,6 +55,7 @@ export function TailscaleMobileSection(props) {
     pairingBridgeMode: 'pending',
     pairingBridgeConflict: '',
     pairingBridgeConflictId: '',
+    proxy: null,
   });
 
   const [secretInput, setSecretInput] = useState('');
@@ -139,6 +140,7 @@ export function TailscaleMobileSection(props) {
           pairingBridgeMode: data.pairingBridgeMode || 'pending',
           pairingBridgeConflict: data.pairingBridgeConflict || '',
           pairingBridgeConflictId: data.pairingBridgeConflictId || '',
+          proxy: data.proxy || null,
           loading: false,
         }));
       })

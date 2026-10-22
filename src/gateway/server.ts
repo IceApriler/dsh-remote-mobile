@@ -1,10 +1,10 @@
 /**
- * DSH 移动端远程独立安全网关服务 (GatewayServer)
+ * DSH 移动端远程独立安全接入代理服务 (GatewayServer)
  *
  * 架构定位：
  * 解决 DSH 0.2.1+ 底层强行禁止 0.0.0.0 监听的问题。
  * DSH 官方 WebServer 继续保持纯粹、安全的 127.0.0.1:3080 本地回环监听（零外部暴露风险）；
- * 由本服务在 0.0.0.0:3081 启动专用安全反代网关，接纳局域网与 Tailscale 流量，
+ * 由本服务在 0.0.0.0:3081 启动专用安全接入代理，接纳局域网与 Tailscale 流量，
  * 执行端到端 RSA 加密、扫码配对、慢哈希密码认证与防暴力破解 IP 熔断，
  * 并将合法的流量全双工代理至底座核心服务，彻底解决换 Wi-Fi 崩溃、无法兼顾多网卡与本机回环失效的痛点。
  */
@@ -23,9 +23,9 @@ import {
 import { getGatewaySecret } from './secret.js'
 
 export interface GatewayServerOptions {
-  /** 网关监听端口，默认 3081 */
+  /** 安全接入代理监听端口，默认 3081 */
   port?: number
-  /** 网关监听网络地址，默认 0.0.0.0 */
+  /** 安全接入代理监听网络地址，默认 0.0.0.0 */
   host?: string
   /** DSH 宿主核心服务端口，默认 3080 */
   corePort: number
@@ -78,7 +78,7 @@ export class GatewayServer {
     this.logger = logger
   }
 
-  /** 获取网关当前运行状态契约 */
+  /** 获取安全接入代理当前运行状态契约 */
   public getStatus(): GatewayServerStatus {
     return this.status
   }
@@ -88,12 +88,12 @@ export class GatewayServer {
     return this.lastError
   }
 
-  /** 获取网关实际生效绑定的端口 */
+  /** 获取安全接入代理实际生效绑定的端口 */
   public getBoundPort(): number {
     return this.boundPort
   }
 
-  /** 获取网关监听的 host */
+  /** 获取安全接入代理监听的 host */
   public getHost(): string {
     return this.host
   }
@@ -157,7 +157,7 @@ export class GatewayServer {
   }
 
   /**
-   * 启动网关服务（带端口冲突自愈探测与状态机落定）
+   * 启动安全接入代理服务（带端口冲突自愈探测与状态机落定）
    */
   public async start(): Promise<{ port: number; host: string }> {
     if (this.server && this.status === 'running') {
@@ -202,7 +202,7 @@ export class GatewayServer {
         this.boundPort = addr && typeof addr === 'object' ? addr.port : currentPort
         this.status = 'running'
         this.logger?.info?.(
-          `[dsh-remote-mobile] 独立安全反向代理网关已就绪: http://${this.host}:${this.boundPort} -> 127.0.0.1:${this.corePort}`
+          `[dsh-remote-mobile] 安全接入代理已就绪: http://${this.host}:${this.boundPort} -> ${this.coreHost}:${this.corePort}`
         )
         return { port: this.boundPort, host: this.host }
       } catch (err: any) {
@@ -220,11 +220,11 @@ export class GatewayServer {
 
     this.status = 'error'
     this.lastError = `尝试端口均被占用 (${this.configuredPort} ~ ${currentPort})`
-    throw new Error(`[dsh-remote-mobile] 启动安全网关失败：${this.lastError}`)
+    throw new Error(`[dsh-remote-mobile] 启动安全接入代理失败：${this.lastError}`)
   }
 
   /**
-   * 优雅关闭网关服务，立即释放端口与所有客户端 Socket
+   * 优雅关闭安全接入代理，立即释放端口与所有客户端 Socket
    */
   public async close(): Promise<void> {
     if (!this.server) {
@@ -277,7 +277,7 @@ export class GatewayServer {
     }
 
     // 网关已完成 Host 白名单校验，通知共享门禁跳过重复 Host 校验
-    // （gatewayHost 可能是自定义域名，不属于核心的 trustedHosts / 网卡 IP）
+    // （proxyHost 可能是自定义域名，不属于核心的 trustedHosts / 网卡 IP）
     ;(req as any).__dsh_rm_host_allowed__ = true
 
     // 2. 门禁中间件校验与原因标记获取

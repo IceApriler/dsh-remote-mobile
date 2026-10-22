@@ -2,7 +2,7 @@
 
 # dsh-remote-mobile
 
-**DeepSeek Harness (DSH) Remote & Mobile Security Guard Plugin**
+**DeepSeek Harness (DSH) Remote & Mobile Secure Access Proxy Plugin**
 
 [![npm version](https://img.shields.io/npm/v/dsh-remote-mobile.svg?style=flat-square&color=3b82f6)](https://www.npmjs.com/package/dsh-remote-mobile)
 [![npm downloads](https://img.shields.io/npm/dm/dsh-remote-mobile.svg?style=flat-square&color=22c55e)](https://www.npmjs.com/package/dsh-remote-mobile)
@@ -56,7 +56,7 @@ When accessed from a phone, the plugin also adapts the DSH interface for **mobil
 
 * 🚀 **Break Network Barriers with Desktop-Grade Workspace**: For accessing DSH Web over LAN / Tailscale. On mobile devices, **common desktop operations such as creating / switching workspaces and running terminal commands are supported**.
 * 📱 **Dedicated Mobile Adaptations & Same-Origin Reuse**: Directly reuses the official DSH Web frontend (the very same UI as desktop) and the wider plugin ecosystem (sidebars, task boards, terminal panels, etc.) without maintaining a separate mobile backend. Includes out-of-the-box mobile adaptations (sidebar drawer toggle, centered settings modal, and compact chat font scaling for higher information density), alongside a built-in **Style Snippet Override system** to toggle presets or inject custom CSS snippets on demand.
-* 🛡️ **Security Gateway & Transport Encryption**: Built-in client-side RSA asymmetric public key encryption, `scrypt` salted slow-hashing password persistence, and automated IP lockout upon consecutive brute-force failures, blocking unauthorized access over public/LAN networks.
+* 🛡️ **Secure Access Proxy & Transport Encryption**: Built-in client-side RSA asymmetric public key encryption, `scrypt` salted slow-hashing password persistence, and automated IP lockout upon consecutive brute-force failures, blocking unauthorized access over public/LAN networks.
 * 📲 **Quick QR Pairing**: Auto-detects Tailscale CGNAT and LAN IP addresses to generate dedicated pairing QR codes. Scan the code to authenticate and obtain persistent credentials.
 * 🔄 **SSE Real-Time Push**: Device connection, reconnection, revocation, and security alert events are pushed in real time via Server-Sent Events without polling.
 * 🤝 **Generic Plugin Coexistence Protection**: Starts safely alongside other remote/Web access plugins by automatically yielding the shared service; the settings panel shows a conflict banner with a one-click copyable diagnosis & fix report.
@@ -85,9 +85,9 @@ dsh plugin --profile web add dsh-remote-mobile
 > [!TIP]
 > **🚀 DSH 0.2.1+ Architecture Update (Zero Configuration)**:
 > Starting from DSH 0.2.1+, the host `webserver` strictly disallows binding directly to wildcard addresses (`0.0.0.0`) for security.
-> This plugin now includes a built-in **Smart Adaptive Safe Reverse Proxy Gateway**:
-> - **DSH 0.2.1+ (latest, after removing the old `0.0.0.0` config)**: **No `webserver` config is needed**! DSH remains safely bound to `127.0.0.1:3080`, and this plugin launches a standalone secure gateway on `0.0.0.0:3081` by default. Mobile QR codes use `3081` (it auto-increments on port conflicts; always trust the QR shown in settings), while desktop stays on `3080`, avoiding startup failures caused by wildcard-host validation.
-> - **DSH 0.1.7 ~ 0.2.0 (Legacy)**: If `host: '0.0.0.0'` is still present in `cordis.patch.yml`, the plugin detects it and switches to `direct` mode, preserving legacy direct access. For custom domains or public IPs, configure `trustedHosts` below.
+> This plugin now includes a built-in **Smart Adaptive Secure Access Proxy**:
+> - **DSH 0.2.1+ (latest, after removing the old `0.0.0.0` config)**: **No `webserver` config is needed**! DSH remains safely bound to `127.0.0.1:3080`, and this plugin launches a standalone secure proxy on `0.0.0.0:3081` by default. Mobile QR codes use `3081` (it auto-increments on port conflicts; always trust the QR shown in settings), while desktop stays on `3080`, avoiding startup failures caused by wildcard-host validation.
+> - **DSH 0.1.7 ~ 0.2.0 (Legacy)**: If `host: '0.0.0.0'` is still present in `cordis.patch.yml`, the plugin automatically falls back to `direct` mode, preserving legacy direct access. For custom domains or public IPs, configure `trustedHosts` below.
 
 > [!IMPORTANT]
 > **⚠️ Upgrade Notice for Existing Users Upgrading to DSH 0.2.1+**:
@@ -100,10 +100,10 @@ dsh plugin --profile web add dsh-remote-mobile
 > #   host: '0.0.0.0'
 >
 > # ✅ Correct setup: Leave webserver unconfigured; DSH naturally binds to 127.0.0.1:3080.
-> # This plugin automatically spins up the standalone gateway on 0.0.0.0:3081 for mobile access.
+> # This plugin automatically starts the standalone secure proxy on 0.0.0.0:3081 for mobile access.
 > ```
 >
-> **Security Considerations**: The gateway binds to `0.0.0.0:3081` by default without built-in TLS. In untrusted or public Wi-Fi networks, using Tailscale (WireGuard encrypted tunnel) or enforcing strong passwords and IP rate-limiting is strongly recommended.
+> **Security Considerations**: The secure proxy binds to `0.0.0.0:3081` by default without built-in TLS. In untrusted or public Wi-Fi networks, using Tailscale (WireGuard encrypted tunnel) or enforcing strong passwords and IP rate-limiting is strongly recommended.
 
 If you have installed other plugins that might conflict, we recommend disabling them in `~/.dsh/profiles/web/cordis.patch.yml` (on Windows: `%USERPROFILE%\.dsh\profiles\web\cordis.patch.yml`):
 
@@ -183,7 +183,7 @@ Open the DSH Web Console in your browser, navigate to **Settings ⚙️ -> Remot
 - **Resilient Atomic Persistence & Debounce**: Millisecond-level debounce write-throttling to safeguard disk I/O (500ms for session data, 300ms for style snippets), coupled with `beforeExit` process flush hooks and atomic temporary file replacement (`renameSync`) for `settings.json` and `style-snippets.json`.
 - **Source IP Extraction**: By default only the underlying Socket address is trusted; when a request is recognized as a trusted reverse proxy (via Host / `X-Forwarded-*`), the first valid `X-Forwarded-For` IP is used instead, balancing real-source attribution with anti-spoofing.
 - **Cross-Site Write Defense**: All non-GET/HEAD requests validate browser same-origin signals (`Origin` / `Sec-Fetch-Site`). Cross-site writes driven by malicious webpages against `127.0.0.1` are rejected outright; non-browser clients (curl / local scripts) are unaffected. Note: this policy also blocks cross-origin webhooks / OAuth callbacks from third-party plugins and legacy WebViews that send `Origin: null`; validate compatibility before using such integrations.
-- **Context & Proxy Boundary**: Same-origin/local-variant Host and Origin are normalized as a pair, while malicious cross-site Origins are preserved for downstream CSRF checks. A same-host `127.0.0.1` proxy is recognized via an external Host, and a LAN/Tailscale proxy via `X-Forwarded-*`, so neither is mistaken for a passwordless local client; they must authenticate with the plugin token. The plugin's own trusted gateway is exempted via an internal secret. Loopback requests carrying the plugin's own 127-valued Forwarded headers are recognized as internal and do not break the local 3080 root connection auth. The SSE event stream accepts same-origin connections only, with no cross-origin reads.
+- **Context & Proxy Boundary**: Same-origin/local-variant Host and Origin are normalized as a pair, while malicious cross-site Origins are preserved for downstream CSRF checks. A same-host `127.0.0.1` proxy is recognized via an external Host, and a LAN/Tailscale proxy via `X-Forwarded-*`, so neither is mistaken for a passwordless local client; they must authenticate with the plugin token. The plugin's own trusted proxy is exempted via an internal secret. Loopback requests carrying the plugin's own 127-valued Forwarded headers are recognized as internal and do not break the local 3080 root connection auth. The SSE event stream accepts same-origin connections only, with no cross-origin reads.
 
 ### 4. Real-Time Sync & Internationalization
 - **SSE Real-Time Push**: Push notifications for new device pairing, reconnections, revocations, and security alerts via Server-Sent Events, with bidirectional close listeners and idempotent cleanup.
@@ -297,7 +297,7 @@ dsh plugin --profile web remove dsh-remote-mobile
 <span id="advanced"></span>
 ## ⚙️ Advanced Configuration
 
-Configurations persist in the plugin-owned file `~/.dsh/remote-mobile/settings.json`; adjust them in the Web UI or edit the file directly:
+Configurations persist in the plugin-owned file `~/.dsh/remote-mobile/settings.json`. Bypass toggles, the persistent password, and rate-limit/lockout settings can be changed in the Web settings page; `proxyPort`, `proxyHost`, `mode`, and `trustedHosts` currently require editing this file and restarting DSH:
 
 ```jsonc
 {
@@ -307,18 +307,20 @@ Configurations persist in the plugin-owned file `~/.dsh/remote-mobile/settings.j
   "maxVisitsPerMinute": 60,    // number, default 60: max login page visits per minute per IP
   "maxFailedAttempts": 5,      // number, default 5: max consecutive failed attempts before IP lockout
   "lockDurationMs": 900000,    // number, default 900000 (15 mins): IP lockout duration in ms
-  "gatewayPort": 3081,         // number, default 3081: standalone secure gateway port
-  "gatewayHost": "0.0.0.0",    // string, default 0.0.0.0: gateway listen address
-  "mode": "auto",              // auto | gateway | direct: auto is recommended
+  "proxyPort": 3081,           // number, default 3081: secure proxy port
+  "proxyHost": "0.0.0.0",      // string, default 0.0.0.0: secure proxy listen address
+  "mode": "proxy",             // proxy | direct: proxy is the default (recommended)
   "trustedHosts": [            // string[], default []: trusted domain whitelist (e.g. Tailscale MagicDNS or reverse proxy domain)
     "my-device.tailnet.ts.net"
   ]
 }
 ```
 
-> **About `trustedHosts`**: If accessing DSH via Tailscale MagicDNS (e.g. `xxx.tailnet.ts.net`) or an external reverse proxy domain, add bare hostnames to this array. Both the gateway and core will accept them in the host whitelist and plugin trust fences, preventing 400 or 403 errors. The same whitelist applies to **direct mode**: when accessing via a custom domain, public IP, or a non-local hostname, the actual Host must be listed here; local NIC IPs and loopback are recognized automatically.
+> **Terminology**: In this document, “Secure Access Proxy” refers to the reverse-proxy entry point provided by this plugin on port `3081`; it handles authentication, Host/Origin validation, and request forwarding. It is **not** a network default gateway.
 >
-> **About `gatewayPort` / `gatewayHost` / `mode`**: defaults are usually sufficient. `mode: 'gateway'` requires the core to be reachable via loopback; forcing a **concrete LAN IP** falls back to `direct` with a warning; using `0.0.0.0` / `::` starts the gateway but explicitly warns that core port 3080 remains exposed. Restart DSH after changing these advanced options.
+> **About `trustedHosts`**: If accessing DSH via Tailscale MagicDNS (e.g. `xxx.tailnet.ts.net`) or an external reverse proxy domain, add bare hostnames to this array. Both the secure proxy and core will accept them in the host whitelist and plugin trust fences, preventing 400 or 403 errors. The same whitelist applies to **direct mode**: when accessing via a custom domain, public IP, or a non-local hostname, the actual Host must be listed here; local NIC IPs and loopback are recognized automatically.
+>
+> **About `proxyPort` / `proxyHost` / `mode`**: defaults are usually sufficient. `mode: 'proxy'` is the default and requires the core to listen on loopback; if the core is externally bound (legacy `0.0.0.0` or a concrete NIC IP), the plugin automatically falls back to `direct` with a warning. `mode: 'direct'` starts no secure proxy and requires the core to be externally reachable; with a loopback core, `direct` only works behind a same-host reverse proxy and phones cannot connect directly. Restart DSH after changing these advanced options.
 >
 > **HTTPS reverse proxy note**: When using Nginx/Caddy/Tailscale Serve with HTTPS, make sure to:
 > 1. **Preserve the external Host** (Nginx: `proxy_set_header Host $host`; do not rewrite it to `127.0.0.1`);
@@ -364,7 +366,7 @@ Custom snippets (style mini-plugins) and their enabled states are persisted in `
 
 | Path | Description | Security Level |
 |---|---|---|
-| `~/.dsh/remote-mobile/settings.json` | Plugin config: bypass toggles, persistent-password hash, rate-limit & lockout policy | Local storage, `0o600` (Restricted to current user) |
+| `~/.dsh/remote-mobile/settings.json` | Plugin config: bypass toggles, persistent-password hash, rate-limit & lockout policy, access mode and proxy listener settings | Local storage, `0o600` (Restricted to current user) |
 | `~/.dsh/remote-mobile/devices.json` | Authorized devices, sessions & IP audit statistics (contains long-lived tokens, `0o600`) | Local storage, restricted to current user |
 | `~/.dsh/remote-mobile/rsa-keys.json` | Server RSA keypair (public & private) | Local storage, `0o600` (Restricted to current user) |
 | `~/.dsh/remote-mobile/style-snippets.json` | Mobile style snippets (built-in toggles + custom CSS mini-plugins) | Local persistent storage |
@@ -377,7 +379,7 @@ Custom snippets (style mini-plugins) and their enabled states are persisted in `
 <details>
 <summary><b>Q0: Startup fails with <code>listen EADDRINUSE: address already in use 0.0.0.0:3080 / :3081</code>?</b></summary>
 
-**Answer**: This means **port 3080 (DSH core) or 3081 (plugin gateway) is held by another process** (in most cases a previous `dsh web` instance has not fully exited — e.g. a hidden instance launched by a desktop shortcut, or overlapping old/new processes during restart). It is **unrelated to which plugins are installed**. Troubleshooting:
+**Answer**: This means **port 3080 (DSH core) or 3081 (plugin secure proxy) is held by another process** (in most cases a previous `dsh web` instance has not fully exited — e.g. a hidden instance launched by a desktop shortcut, or overlapping old/new processes during restart). It is **unrelated to which plugins are installed**. Troubleshooting:
 
 1. **Find the process holding the port**:
    * **macOS / Linux**: `lsof -nP -iTCP:3080` / `lsof -nP -iTCP:3081`
@@ -395,16 +397,16 @@ If your log instead shows `service "remoteWebUiPairing" has been registered`, pl
 <summary><b>Q1: Getting "Connection Refused" or cannot open page when scanning on mobile?</b></summary>
 
 **Answer**: Please verify the following items step by step:
-1. **Configuration**: On DSH 0.2.1+, do **not** set `host: '0.0.0.0'` in `cordis.patch.yml` (it will fail to start). Keep DSH's default `127.0.0.1:3080`; the plugin starts the `3081` gateway automatically. Only legacy DSH (0.1.7 ~ 0.2.0, where `0.0.0.0` is still allowed) or an explicit `direct` mode (concrete NIC IP) needs a listen address. Restart DSH after any config change.
+1. **Configuration**: On DSH 0.2.1+, do **not** set `host: '0.0.0.0'` in `cordis.patch.yml` (it will fail to start). Keep DSH's default `127.0.0.1:3080`; the plugin starts the `3081` secure proxy automatically. Only legacy DSH (0.1.7 ~ 0.2.0, where `0.0.0.0` is still allowed) or an explicit `direct` mode (concrete NIC IP) needs a listen address. Restart DSH after any config change.
 2. **Same Network**: For LAN access, ensure your mobile phone and computer are connected to the exact same Wi-Fi router, and disable standalone VPN/proxy apps on your phone.
 3. **Windows Defender Firewall (Common for Windows users)**:
    * When prompted by the Windows Firewall popup on startup, ensure both **"Private networks"** and **"Public networks"** are checked before allowing access;
-   * If you missed the prompt or still cannot connect, run the following command in **PowerShell as Administrator** to allow the gateway port (default `3081`; use `3080` if you are in `direct` mode):
+   * If you missed the prompt or still cannot connect, run the following command in **PowerShell as Administrator** to allow the proxy port (default `3081`; use `3080` if you are in `direct` mode):
      ```powershell
-     New-NetFirewallRule -DisplayName "DSH Remote Gateway 3081" -Direction Inbound -LocalPort 3081 -Protocol TCP -Action Allow
+     New-NetFirewallRule -DisplayName "DSH Remote Proxy 3081" -Direction Inbound -LocalPort 3081 -Protocol TCP -Action Allow
      ```
    * **Check Wi-Fi Network Profile**: Under Windows "Settings -> Network & Internet -> Wi-Fi", make sure your current Wi-Fi profile is set to **"Private network"** (Windows "Public network" blocks inbound LAN connections by default);
-4. **Virtual / WSL Network Adapters**: If WSL2 or Hyper-V is installed on Windows, virtual network adapters (e.g. `172.x.x.x`) may be present. Make sure you use the physical WLAN / Wi-Fi LAN IP or the Tailscale QR code shown in the plugin settings panel. If the gateway port auto-incremented, use the actual port shown in the settings panel / terminal banner.
+4. **Virtual / WSL Network Adapters**: If WSL2 or Hyper-V is installed on Windows, virtual network adapters (e.g. `172.x.x.x`) may be present. Make sure you use the physical WLAN / Wi-Fi LAN IP or the Tailscale QR code shown in the plugin settings panel. If the proxy port auto-incremented, use the actual port shown in the settings panel / terminal banner.
 </details>
 
 <details>
@@ -418,7 +420,7 @@ If your log instead shows `service "remoteWebUiPairing" has been registered`, pl
 <details>
 <summary><b>Q3: Does mobile support creating and switching workspaces normally?</b></summary>
 
-**Answer**: **Supported.** The plugin uses request isolation so that mobile devices get the same workspace management and execution capabilities as the desktop Web interface.
+**Answer**: **Supported.** The plugin uses request isolation so that mobile devices get the same workspace management and execution capabilities as the desktop Web interface. If tapping "Select folder" opens the dialog on the PC instead of the phone, see [Q12](#q12).
 </details>
 
 <details>
@@ -431,7 +433,7 @@ If your log instead shows `service "remoteWebUiPairing" has been registered`, pl
 <details>
 <summary><b>Q5: What does the yellow banner "⚠️ Another remote-access plugin detected" at the top of the settings panel mean?</b></summary>
 
-**Answer**: It means another remote/Web access plugin is enabled alongside this one and registered the shared pairing service first. To keep startup safe, this plugin has **automatically yielded** that service (its own security gateway and remote access are unaffected), but running two remote-access features side by side may cause duplicated entries. Keeping only one is recommended:
+**Answer**: It means another remote/Web access plugin is enabled alongside this one and registered the shared pairing service first. To keep startup safe, this plugin has **automatically yielded** that service (its own secure proxy and remote access are unaffected), but running two remote-access features side by side may cause duplicated entries. Keeping only one is recommended:
 
 1. Click **"📋 Copy diagnosis & fix"** in the banner and paste the report to an AI assistant (the report already identifies the conflicting plugin's package name and entry id, with exact fix configuration);
 2. To keep this plugin: follow the report to append the `disabled: true` lines for the other plugin at the end of `~/.dsh/profiles/web/cordis.patch.yml`, then restart DSH;
@@ -466,7 +468,7 @@ If your log instead shows `service "remoteWebUiPairing" has been registered`, pl
    * By default the plugin trusts the physical socket only. A **same-host `127.0.0.1` proxy carrying an external Host**, or **any proxy carrying `X-Forwarded-*`**, is recognized as **proxied traffic** and no longer receives `loopback` / `allowLan` / `allowTailscale` passwordless access; it must authenticate with the plugin token (pairing code or persistent password).
    * Make sure the reverse proxy **preserves the external Host** (do not rewrite it to `127.0.0.1`) and forwards `X-Forwarded-For`, `X-Forwarded-Host`, and `X-Forwarded-Proto: https`. Caddy / Tailscale Serve usually handle this automatically; Nginx requires explicit configuration. If Host is rewritten to `127.0.0.1` with no Forwarded headers, the plugin cannot distinguish a local browser from a same-host proxy.
    * If you want the plugin pairing code/password enforced even through an external unified domain, configure the proxy as above so the plugin can identify the real source and apply token auth. Do not rely on the NAS/host gateway login as a replacement for plugin authentication.
-   * If you do not need gateway mode, you may use `direct` mode with a concrete NIC IP; on DSH 0.2.1+ a wildcard `0.0.0.0` is not allowed.
+   * If you do not need proxy mode, you may use `direct` mode with a concrete NIC IP; on DSH 0.2.1+ a wildcard `0.0.0.0` is not allowed.
 </details>
 
 <details>
@@ -482,11 +484,11 @@ If your log instead shows `service "remoteWebUiPairing" has been registered`, pl
 <details>
 <summary><b>Q9: DSH 0.2.1+ fails to start with <code>host "0.0.0.0" is an unspecified (wildcard) address</code>?</b></summary>
 
-**Answer**: This is DSH 0.2.1+'s official security restriction, not a plugin issue. The error happens before the plugin loads, so the gateway cannot take over yet; you must fix it manually:
+**Answer**: This is DSH 0.2.1+'s official security restriction, not a plugin issue. The error happens before the plugin loads, so the secure proxy cannot take over yet; you must fix it manually:
 
 1. Open `~/.dsh/profiles/web/cordis.patch.yml` (Windows: `%USERPROFILE%\.dsh\profiles\web\cordis.patch.yml`);
 2. Remove or comment out the `webserver.host: '0.0.0.0'` line added previously for remote access (if the whole `- id: webserver ... host: '0.0.0.0'` block exists only for this, remove the block);
-3. Restart `dsh web --no-open`. DSH returns to `127.0.0.1:3080`, this plugin starts the `0.0.0.0:3081` gateway automatically, and mobile devices can scan the QR code from the settings panel.
+3. Restart `dsh web --no-open`. DSH returns to `127.0.0.1:3080`, this plugin starts the `0.0.0.0:3081` secure proxy automatically, and mobile devices can scan the QR code from the settings panel.
 </details>
 
 <details>
@@ -497,12 +499,12 @@ If your log instead shows `service "remoteWebUiPairing" has been registered`, pl
 - `http://127.0.0.1:3080/api/remote-mobile/status` returns 200;
 - `http://127.0.0.1:3081/` returns 200;
 
-then the plugin is loaded and the gateway is active, but the current process's connection auth is still not allowing the local root request. The common cause is that a **hot reload/hot update did not reload the plugin code**, or an older build is running.
+then the plugin is loaded and the secure proxy is active, but the current process's connection auth is still not allowing the local root request. The common cause is that a **hot reload/hot update did not reload the plugin code**, or an older build is running.
 
 Steps:
 
 1. Confirm the installed plugin is **1.10.0+**, then **fully stop and restart** `dsh web` (refreshing the browser is not enough);
-2. As a temporary workaround, use `http://127.0.0.1:3081/` (the plugin gateway), or open the `?token=...` URL printed by `dsh web` once to set the official cookie;
+2. As a temporary workaround, use `http://127.0.0.1:3081/` (the plugin secure proxy), or open the `?token=...` URL printed by `dsh web` once to set the official cookie;
 3. If using a reverse proxy, preserve the external Host and forward `X-Forwarded-*` as described in Q7;
 4. If it persists after restart, report the DSH version, plugin version, and startup logs.
 
@@ -520,6 +522,34 @@ Steps:
 - a real iPhone Safari User-Agent is a long `Mozilla/5.0 (iPhone; ...) ... Safari/...` string, not just `iPhone`.
 
 1.10.0 adds test isolation: tests now use a temporary `/tmp/dsh-rm-test-devices-*.json` by default, so they no longer pollute the real device file. Existing fake sessions can be removed with "Revoke all devices" followed by re-pairing the current devices, or by stopping DSH and removing the matching entries from `devices.json` after taking a backup.
+</details>
+
+<details id="q12">
+<summary><b>Q12: Why does tapping "Select folder" on a phone over Tailscale / 3081 open a dialog on the PC instead of the phone?</b></summary>
+
+**Answer**: This is not Tailscale or the phone browser. It is caused by DSH's official directory-picker "local vs remote" detection:
+
+1. **The workspace directory lives on the PC**: DSH's "Select folder" chooses a directory on the machine running DSH, not on the phone. A phone browser cannot open the PC's native file chooser.
+2. **Auto decides only from the boot environment**: `dsh-host-directory-picker-auto` checks `webServer.host` at startup. With a `127.0.0.1` core, no SSH launch, and a desktop session, it selects `native`, which opens the PC's macOS / Windows folder chooser.
+3. **The secure proxy makes remote requests look local**: this plugin keeps the DSH core on `127.0.0.1:3080` and serves remote clients through the `0.0.0.0:3081` secure proxy. When a phone reaches 3081 over Tailscale, the core still sees a loopback request, so auto assumes the operator is sitting at the PC and opens the native chooser there. The phone cannot render that host-side window and simply waits.
+
+**Fix**: pin the in-app `browse` picker. Append to `~/.dsh/profiles/web/cordis.patch.yml` (Windows: `%USERPROFILE%\.dsh\profiles\web\cordis.patch.yml`):
+
+```yaml
+- id: directory-picker
+  disabled: true
+- insert:
+    - id: directory-picker-browse
+      name: '@deepseek-ai/dsh-host-directory-picker-browse'
+    - id: ui-directory-picker-browse
+      name: '@deepseek-ai/dsh-client-ui-directory-picker-browse'
+```
+
+> **Note**: In DSH's patch layer, `name` asserts an existing plugin name; it does not rename. Do not simply change `directory-picker`'s `name` to browse, or the patch will be skipped. Disable auto first, then use an id-less root `insert` to add the browse backend and browser UI.
+
+Save the file. DSH with HMR usually reloads automatically; otherwise fully restart `dsh web`. Hard-refresh the phone page, then "Select folder" opens the in-app directory browser (breadcrumbs, directory list, create subdirectory); both phone and PC use the web picker.
+
+**Trade-off**: The PC also loses the native chooser. If you want native on the PC and browse on the phone, use a separate remote profile or a custom hybrid picker; DSH's auto picker does not switch per client. The browse picker still requires the existing DSH / plugin authentication and does not bypass it.
 </details>
 
 ---

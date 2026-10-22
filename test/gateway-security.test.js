@@ -18,38 +18,36 @@ test('DSH 独立安全网关与双层体系安全测试套件', async (t) => {
   // 用例 1: 模式判定测试 (Mode Detection)
   // --------------------------------------------------------------------------
   await t.test('用例 1: detectServerMode 判定顺序与模式裁决', () => {
-    // 1.1 coreHost 为 0.0.0.0 时，auto 模式下严格保持 direct（保障旧版兼容，绝不因规范化被误切成 gateway）
-    const r1 = detectServerMode({ webServer: { config: { host: '0.0.0.0', port: 3080 } } }, 'auto')
+    // 1.1 coreHost 为 0.0.0.0 时，默认 proxy 自动回退 direct（兼容旧版配置）
+    const r1 = detectServerMode({ webServer: { config: { host: '0.0.0.0', port: 3080 } } })
     assert.equal(r1.mode, 'direct')
     assert.equal(r1.isLoopback, false)
 
-    // 1.2 coreHost 为 :: 时，auto 模式下保持 direct
-    const r2 = detectServerMode({ webServer: { config: { host: '::', port: 3080 } } }, 'auto')
+    // 1.2 coreHost 为 :: 时，默认 proxy 自动回退 direct
+    const r2 = detectServerMode({ webServer: { config: { host: '::', port: 3080 } } })
     assert.equal(r2.mode, 'direct')
     assert.equal(r2.isLoopback, false)
 
-    // 1.3 coreHost 为 127.0.0.1 或 localhost 时，auto 模式下拉起 gateway
-    const r3 = detectServerMode({ webServer: { config: { host: '127.0.0.1', port: 3080 } } }, 'auto')
-    assert.equal(r3.mode, 'gateway')
+    // 1.3 coreHost 为 127.0.0.1 或 localhost 时，默认 proxy
+    const r3 = detectServerMode({ webServer: { config: { host: '127.0.0.1', port: 3080 } } })
+    assert.equal(r3.mode, 'proxy')
     assert.equal(r3.isLoopback, true)
     assert.equal(r3.coreHost, '127.0.0.1')
 
-    const r4 = detectServerMode({ webServer: { config: { host: 'localhost', port: 3080 } } }, 'auto')
-    assert.equal(r4.mode, 'gateway')
+    const r4 = detectServerMode({ webServer: { config: { host: 'localhost', port: 3080 } } })
+    assert.equal(r4.mode, 'proxy')
     assert.equal(r4.coreHost, '127.0.0.1') // proxyTarget 规范化为 127.0.0.1
 
-    // 1.4 显式配置强制指定
+    // 1.4 显式 direct 覆盖
     const r5 = detectServerMode({ webServer: { config: { host: '127.0.0.1', port: 3080 } } }, 'direct')
     assert.equal(r5.mode, 'direct')
 
-    const r6 = detectServerMode({ webServer: { config: { host: '0.0.0.0', port: 3080 } } }, 'gateway')
-    assert.equal(r6.mode, 'gateway')
+    // 1.5 显式 proxy 但核心已对外监听时，回退 direct
+    const r6 = detectServerMode({ webServer: { config: { host: '0.0.0.0', port: 3080 } } }, 'proxy')
+    assert.equal(r6.mode, 'direct')
 
-    // 1.5 当用户显式指定 mode: 'gateway' 但 coreHost 为具体非回环外部 IP 时，必须友好抛错阻断
-    assert.throws(
-      () => detectServerMode({ webServer: { config: { host: '192.168.1.5', port: 3080 } } }, 'gateway'),
-      /无法在具体外部 IP/
-    )
+    const r7 = detectServerMode({ webServer: { config: { host: '192.168.1.5', port: 3080 } } }, 'proxy')
+    assert.equal(r7.mode, 'direct')
   })
 
   // --------------------------------------------------------------------------
@@ -711,7 +709,7 @@ test('DSH 独立安全网关与双层体系安全测试套件', async (t) => {
 
     // 模拟网关端口冲突启动失败
     store.setActiveGatewayInfo(
-      'gateway',
+      'proxy',
       3081,
       3080,
       false,
@@ -724,7 +722,7 @@ test('DSH 独立安全网关与双层体系安全测试套件', async (t) => {
     assert.equal(status.port, 3081)
 
     // 恢复正常运行状态
-    store.setActiveGatewayInfo('gateway', 3081, 3080, true, null)
+    store.setActiveGatewayInfo('proxy', 3081, 3080, true, null)
     const runningStatus = store.getGatewayStatus()
     assert.equal(runningStatus.running, true)
     assert.equal(runningStatus.error, null)

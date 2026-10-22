@@ -19,7 +19,7 @@ export function QrPairingCard({
   copyDirectLink,
   lang,
 }) {
-  const port = (status && status.gateway && status.gateway.activePort) || (typeof window !== 'undefined' && window.location.port) || '3080';
+  const port = (status && status.proxy && status.proxy.activePort) || (typeof window !== 'undefined' && window.location.port) || '3080';
   const isExpired = timeLeft <= 0;
   const currentHost =
     selectedTab === 'lan' && status.lanIp
@@ -61,8 +61,8 @@ export function QrPairingCard({
         {t('pairingCardDesc', lang)}
       </div>
 
-      {/* 网关未就绪或端口冲突错误横幅 */}
-      {status?.gateway?.mode === 'gateway' && status.gateway.running === false ? (
+      {/* 安全接入代理未就绪或端口冲突错误横幅 */}
+      {status?.proxy?.mode === 'proxy' && status.proxy.running === false ? (
         <div
           style={{
             background: 'rgba(239, 68, 68, 0.12)',
@@ -76,20 +76,20 @@ export function QrPairingCard({
             textAlign: 'left',
           }}
         >
-          <strong>⚠️ {lang === 'en' ? 'Standalone Gateway Error' : '安全反向代理网关未就绪'}</strong>
+          <strong>⚠️ {lang === 'en' ? 'Secure Proxy Error' : '安全接入代理未就绪'}</strong>
           <div style={{ marginTop: '4px', fontSize: '12px' }}>
-            {status.gateway.error
-              ? `${lang === 'en' ? 'Failure reason: ' : '启动失败：'}${status.gateway.error}`
-              : (lang === 'en' ? 'Gateway is initializing or port binding failed. External devices cannot connect currently.' : '网关正在启动或端口绑定失败，外部手机设备暂时无法扫码连接。')}
+            {status.proxy.error
+              ? `${lang === 'en' ? 'Failure reason: ' : '启动失败：'}${status.proxy.error}`
+              : (lang === 'en' ? 'Secure proxy is initializing or port binding failed. External devices cannot connect currently.' : '安全接入代理正在启动或端口绑定失败，外部手机设备暂时无法扫码连接。')}
           </div>
           <div style={{ marginTop: '4px', fontSize: '11px', color: 'var(--dsw-alias-label-tertiary, #888)' }}>
-            {lang === 'en' ? 'Tip: Check if port 3081 is in use or inspect background logs.' : '排查建议：请检查 3081 端口是否被其他进程占用，或检查后台终端日志。'}
+            {lang === 'en' ? 'Tip: Check whether the secure proxy port (default 3081) is in use or inspect background logs.' : '排查建议：请检查安全接入代理端口（默认 3081）是否被其他进程占用，或检查后台终端日志。'}
           </div>
         </div>
       ) : null}
 
-      {/* 1. 二维码展示区（仅在网关正常运行时允许展开显示） */}
-      {showQr && !(status?.gateway?.mode === 'gateway' && status.gateway.running === false) ? (
+      {/* 1. 二维码展示区（仅在安全接入代理正常运行时允许展开显示） */}
+      {showQr && !(status?.proxy?.mode === 'proxy' && status.proxy.running === false) ? (
         <div
           style={{
             background: 'var(--dsw-alias-bg-layer-2, rgba(128,128,128,0.06))',
@@ -252,14 +252,14 @@ export function QrPairingCard({
             fontSize: '32px',
             fontWeight: '800',
             letterSpacing: showCode ? '6px' : '4px',
-            color: (status?.gateway?.mode === 'gateway' && status.gateway.running === false) || isExpired
+            color: (status?.proxy?.mode === 'proxy' && status.proxy.running === false) || isExpired
               ? 'var(--dsw-alias-label-error, #ef4444)'
               : 'var(--dsw-alias-brand-primary, #3b82f6)',
             fontFamily: 'monospace',
             userSelect: 'all',
           }}
         >
-          {status?.gateway?.mode === 'gateway' && status.gateway.running === false
+          {status?.proxy?.mode === 'proxy' && status.proxy.running === false
             ? (lang === 'en' ? 'DISABLED' : '已停用')
             : isExpired
             ? (lang === 'en' ? 'EXPIRED' : '已过期')
@@ -271,19 +271,19 @@ export function QrPairingCard({
         {/* 眼睛显隐按钮 */}
         <button
           type="button"
-          disabled={status?.gateway?.mode === 'gateway' && status.gateway.running === false}
+          disabled={status?.proxy?.mode === 'proxy' && status.proxy.running === false}
           onClick={() => setShowCode(!showCode)}
           title={showCode ? t('clickToHide', lang) : t('clickToReveal', lang)}
           style={{
             background: 'transparent',
             border: 'none',
             color: 'var(--dsw-alias-label-secondary, #888)',
-            cursor: status?.gateway?.mode === 'gateway' && status.gateway.running === false ? 'not-allowed' : 'pointer',
+            cursor: status?.proxy?.mode === 'proxy' && status.proxy.running === false ? 'not-allowed' : 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             padding: '4px',
-            opacity: status?.gateway?.mode === 'gateway' && status.gateway.running === false ? 0.4 : 1,
+            opacity: status?.proxy?.mode === 'proxy' && status.proxy.running === false ? 0.4 : 1,
           }}
         >
           {showCode ? (
@@ -302,7 +302,7 @@ export function QrPairingCard({
       <div
         style={{
           fontSize: '12px',
-          color: (status?.gateway?.mode === 'gateway' && status.gateway.running === false) || isExpired
+          color: (status?.proxy?.mode === 'proxy' && status.proxy.running === false) || isExpired
             ? 'var(--dsw-alias-label-error, #ef4444)'
             : 'var(--dsw-alias-label-secondary, #888)',
           margin: '4px 0 16px 0',
@@ -318,11 +318,11 @@ export function QrPairingCard({
             width: '8px',
             height: '8px',
             borderRadius: '50%',
-            background: (status?.gateway?.mode === 'gateway' && status.gateway.running === false) || isExpired ? '#ef4444' : '#10b981',
+            background: (status?.proxy?.mode === 'proxy' && status.proxy.running === false) || isExpired ? '#ef4444' : '#10b981',
           }}
         />
-        {status?.gateway?.mode === 'gateway' && status.gateway.running === false
-          ? `⚠️ ${lang === 'en' ? 'Gateway Service Error' : '网关服务异常'}`
+        {status?.proxy?.mode === 'proxy' && status.proxy.running === false
+          ? `⚠️ ${lang === 'en' ? 'Proxy Service Error' : '安全接入代理服务异常'}`
           : isExpired
           ? `⚠️ ${t('codeExpired', lang)}`
           : `${t('codeValidUntil', lang)}${formatCountdown(timeLeft, lang)}`}
@@ -339,7 +339,7 @@ export function QrPairingCard({
       >
         <button
           type="button"
-          disabled={status?.gateway?.mode === 'gateway' && status.gateway.running === false}
+          disabled={status?.proxy?.mode === 'proxy' && status.proxy.running === false}
           onClick={() => setShowQr(!showQr)}
           style={{
             padding: '7px 16px',
@@ -353,8 +353,8 @@ export function QrPairingCard({
             borderRadius: '8px',
             fontSize: '13px',
             fontWeight: '600',
-            cursor: status?.gateway?.mode === 'gateway' && status.gateway.running === false ? 'not-allowed' : 'pointer',
-            opacity: status?.gateway?.mode === 'gateway' && status.gateway.running === false ? 0.4 : 1,
+            cursor: status?.proxy?.mode === 'proxy' && status.proxy.running === false ? 'not-allowed' : 'pointer',
+            opacity: status?.proxy?.mode === 'proxy' && status.proxy.running === false ? 0.4 : 1,
             whiteSpace: 'nowrap',
             flexShrink: 0,
           }}
@@ -363,7 +363,7 @@ export function QrPairingCard({
         </button>
         <button
           type="button"
-          disabled={status?.gateway?.mode === 'gateway' && status.gateway.running === false}
+          disabled={status?.proxy?.mode === 'proxy' && status.proxy.running === false}
           onClick={refreshStatusAndCode}
           style={{
             padding: '7px 16px',
@@ -373,8 +373,8 @@ export function QrPairingCard({
             borderRadius: '8px',
             fontSize: '13px',
             fontWeight: '600',
-            cursor: status?.gateway?.mode === 'gateway' && status.gateway.running === false ? 'not-allowed' : 'pointer',
-            opacity: status?.gateway?.mode === 'gateway' && status.gateway.running === false ? 0.4 : 1,
+            cursor: status?.proxy?.mode === 'proxy' && status.proxy.running === false ? 'not-allowed' : 'pointer',
+            opacity: status?.proxy?.mode === 'proxy' && status.proxy.running === false ? 0.4 : 1,
             whiteSpace: 'nowrap',
             flexShrink: 0,
           }}

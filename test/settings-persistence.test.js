@@ -23,6 +23,10 @@ test('插件配置持久化与旧版 settings.yaml 迁移 (settings-persistence)
       maxFailedAttempts: 8,
       lockDurationMs: 1200000,
       maxVisitsPerMinute: 40,
+      proxyPort: 3091,
+      proxyHost: '127.0.0.1',
+      mode: 'proxy',
+      trustedHosts: ['dsh.example.com'],
     }, file)
     assert.equal(ok, true)
 
@@ -33,6 +37,10 @@ test('插件配置持久化与旧版 settings.yaml 迁移 (settings-persistence)
     assert.equal(parsed.maxFailedAttempts, 8)
     assert.equal(parsed.lockDurationMs, 1200000)
     assert.equal(parsed.maxVisitsPerMinute, 40)
+    assert.equal(parsed.proxyPort, 3091)
+    assert.equal(parsed.proxyHost, '127.0.0.1')
+    assert.equal(parsed.mode, 'proxy')
+    assert.deepEqual(parsed.trustedHosts, ['dsh.example.com'])
 
     // 仅当前用户可读写
     assert.equal(statSync(file).mode & 0o777, 0o600)
@@ -55,6 +63,12 @@ test('插件配置持久化与旧版 settings.yaml 迁移 (settings-persistence)
     assert.equal(parsed.maxFailedAttempts, undefined)
     assert.equal(parsed.secretHash, undefined)
     rmSync(badTypes, { force: true })
+
+    // 1.10 之前的过渡值 auto 归一化为默认 proxy
+    const legacyAuto = `/tmp/dsh-rm-auto-${Date.now()}.json`
+    writeFileSync(legacyAuto, JSON.stringify({ mode: 'auto' }), 'utf8')
+    assert.equal(readPluginSettingsJson(legacyAuto).mode, 'proxy')
+    rmSync(legacyAuto, { force: true })
   })
 
   await t.test('readLegacyDshSettings 合并 settings.yaml 与 settings.yaml.imported（live 优先）', () => {

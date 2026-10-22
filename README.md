@@ -2,7 +2,7 @@
 
 # dsh-remote-mobile
 
-**DeepSeek Harness (DSH) 远程与移动端安全网关插件**
+**DeepSeek Harness (DSH) 远程与移动端安全接入代理插件**
 
 [![npm version](https://img.shields.io/npm/v/dsh-remote-mobile.svg?style=flat-square&color=3b82f6)](https://www.npmjs.com/package/dsh-remote-mobile)
 [![npm downloads](https://img.shields.io/npm/dm/dsh-remote-mobile.svg?style=flat-square&color=22c55e)](https://www.npmjs.com/package/dsh-remote-mobile)
@@ -85,9 +85,9 @@ dsh plugin --profile web add dsh-remote-mobile
 > [!TIP]
 > **🚀 DSH 0.2.1+ 架构升级说明（零配置开箱即用）**：
 > 官方在 DSH 0.2.1+ 中出于安全考虑禁止将底座 `webserver` 直接监听在通配地址 `0.0.0.0` 上。
-> 本插件内置了**智能自适应安全反向代理网关**：
-> - **DSH 0.2.1+（新版，且已删除旧的 `0.0.0.0` 配置）**：**无需再配置 `webserver`**！DSH 保持官方安全的 `127.0.0.1:3080`，插件默认在 `0.0.0.0:3081` 开启独立安全网关。手机扫码默认连接 `3081`（端口被占用时会自动递增，以设置页二维码为准），电脑本机依然使用 `3080`，避免因通配地址校验导致的启动失败。
-> - **DSH 0.1.7 ~ 0.2.0（旧版）**：若 `cordis.patch.yml` 中保留了 `host: '0.0.0.0'`，插件会自动探测并进入 `direct` 模式，保持旧版直连行为；若通过自定义域名/公网 IP 访问，请按下方 `trustedHosts` 配置。
+> 本插件内置了**智能自适应安全接入代理**：
+> - **DSH 0.2.1+（新版，且已删除旧的 `0.0.0.0` 配置）**：**无需再配置 `webserver`**！DSH 保持官方安全的 `127.0.0.1:3080`，插件默认在 `0.0.0.0:3081` 开启独立安全接入代理。手机扫码默认连接 `3081`（端口被占用时会自动递增，以设置页二维码为准），电脑本机依然使用 `3080`，避免因通配地址校验导致的启动失败。
+> - **DSH 0.1.7 ~ 0.2.0（旧版）**：若 `cordis.patch.yml` 中保留了 `host: '0.0.0.0'`，插件会自动回退 `direct` 模式，保持旧版直连行为；若通过自定义域名/公网 IP 访问，请按下方 `trustedHosts` 配置。
 
 > [!IMPORTANT]
 > **⚠️ 老用户升级到 DSH 0.2.1+ 必看**：
@@ -100,10 +100,10 @@ dsh plugin --profile web add dsh-remote-mobile
 > #   host: '0.0.0.0'
 >
 > # ✅ 正确姿势：完全无需配置 webserver，底座自然监听 127.0.0.1:3080。
-> # 本插件会自动启动 0.0.0.0:3081 独立网关转发，手机访问 3081 即可。
+> # 本插件会自动启动 0.0.0.0:3081 安全接入代理转发，手机访问 3081 即可。
 > ```
 >
-> **安全权衡说明**：网关默认监听 `0.0.0.0:3081`（暂不含 TLS）。若在公共 Wi-Fi 或未经保护的网络下使用，强烈建议配合 Tailscale（WireGuard 隧道天然加密）或通过自定义高强度长期密码与 IP 锁定机制保障安全。
+> **安全权衡说明**：安全接入代理默认监听 `0.0.0.0:3081`（暂不含 TLS）。若在公共 Wi-Fi 或未经保护的网络下使用，强烈建议配合 Tailscale（WireGuard 隧道天然加密）或通过自定义高强度长期密码与 IP 锁定机制保障安全。
 
 如果您安装了其他可能产生冲突的插件，推荐在 `~/.dsh/profiles/web/cordis.patch.yml`（Windows 对应 `%USERPROFILE%\.dsh\profiles\web\cordis.patch.yml`）中禁用冲突项：
 
@@ -184,7 +184,7 @@ dsh web --no-open
 - **高可靠原子持久化与防抖**：采用毫秒级写盘防抖节流保护磁盘 I/O（会话数据 500ms、样式片段 300ms），配合 `beforeExit` 进程退出 Flush 保证数据不丢失；`settings.json` 与 `style-snippets.json` 采用临时文件原子替换（`renameSync`），防止异常中断损坏数据。
 - **真实 IP 安全提取**：默认仅信任底层 Socket 真实连接地址；当请求被识别为受信反向代理（Host / `X-Forwarded-*`）时，才采用 `X-Forwarded-For` 首个合法 IP，兼顾真实来源与防伪造。
 - **跨站写请求防御**：所有非 GET/HEAD 请求都会校验浏览器同源信号（`Origin` / `Sec-Fetch-Site`），恶意网页驱使浏览器向 `127.0.0.1` 发起的跨站写请求会被直接拒绝；curl / 本机脚本等无浏览器信号的客户端不受影响。注意：该策略也会拦截第三方插件的跨域 webhook / OAuth callback，以及发送 `Origin: null` 的旧 WebView；使用此类集成时请先做兼容性验证。
-- **上下文化与反代边界**：同源/本地变体 Host、Origin 成对规范化；恶意跨站 Origin 原样保留供下游 CSRF 检查。同机 127 反代通过外部 Host、LAN/Tailscale 反代通过 `X-Forwarded-*` 识别为代理流量，不再被误判为免密客户端，必须通过插件 Token 鉴权；受信 Gateway 通过内部 Secret 例外。插件自身为 loopback 请求注入的 127 Forwarded 头会被识别为内部头，不会误伤本机 3080 根路径的 connection 鉴权。SSE 事件流仅限同源连接，不开放跨域读取。
+- **上下文化与反代边界**：同源/本地变体 Host、Origin 成对规范化；恶意跨站 Origin 原样保留供下游 CSRF 检查。同机 127 反代通过外部 Host、LAN/Tailscale 反代通过 `X-Forwarded-*` 识别为代理流量，不再被误判为免密客户端，必须通过插件 Token 鉴权；受信代理通过内部 Secret 例外。插件自身为 loopback 请求注入的 127 Forwarded 头会被识别为内部头，不会误伤本机 3080 根路径的 connection 鉴权。SSE 事件流仅限同源连接，不开放跨域读取。
 
 ### 4. 实时状态同步与国际化
 - **SSE 实时事件推送**：基于 Server-Sent Events 实现新设备接入、设备重连、会话撤销及安全告警的实时通知，内置连接双向关闭监听与幂等清理。
@@ -298,7 +298,7 @@ dsh plugin --profile web remove dsh-remote-mobile
 <span id="advanced"></span>
 ## ⚙️ 高级配置
 
-配置持久化于插件自有文件 `~/.dsh/remote-mobile/settings.json`，可在 Web 界面中直观调整，也可直接编辑该文件：
+配置持久化于插件自有文件 `~/.dsh/remote-mobile/settings.json`。免密开关、长期密码与限频/锁定参数可在 Web 设置页调整；`proxyPort`、`proxyHost`、`mode`、`trustedHosts` 目前需直接编辑该文件并重启 DSH：
 
 ```jsonc
 {
@@ -308,18 +308,20 @@ dsh plugin --profile web remove dsh-remote-mobile
   "maxVisitsPerMinute": 60,    // number，默认 60：单 IP 每分钟最大访问登录页次数
   "maxFailedAttempts": 5,      // number，默认 5：触发封禁的连续认证失败最大次数
   "lockDurationMs": 900000,    // number，默认 900000 (15分钟)：IP 锁定持续时间（毫秒）
-  "gatewayPort": 3081,         // number，默认 3081：独立安全网关端口
-  "gatewayHost": "0.0.0.0",    // string，默认 0.0.0.0：独立安全网关监听地址
-  "mode": "auto",              // auto | gateway | direct：auto 自适应（推荐）
+  "proxyPort": 3081,           // number，默认 3081：安全接入代理端口
+  "proxyHost": "0.0.0.0",      // string，默认 0.0.0.0：安全接入代理监听地址
+  "mode": "proxy",             // proxy | direct：proxy 默认（推荐）
   "trustedHosts": [            // string[]，默认 []：受信任域名白名单（如 Tailscale MagicDNS 或自定义反代域名）
     "my-device.tailnet.ts.net"
   ]
 }
 ```
 
-> **关于 `trustedHosts` 受信任域名**：若您通过 Tailscale MagicDNS 域名（如 `xxx.tailnet.ts.net`）或外部反向代理域名访问 DSH，请在该数组中添加裸域名。网关与底座会自动将其纳入受信任白名单，防止被网关 Host 检查或第三方插件安全围栏拦截（报 400 或 403）。该白名单同样适用于 **direct 模式**：通过自定义域名、公网 IP 或非本机网卡地址访问时，必须把实际 Host 加入 `trustedHosts`；通过本机网卡 IP / 回环访问会自动识别。
+> **术语说明**：本文中的“安全接入代理（Proxy）”指插件在 `3081` 提供的反向代理入口，负责认证、Host/Origin 校验与请求转发，**不是**网络默认网关。
 >
-> **`gatewayPort` / `gatewayHost` / `mode` 说明**：通常保持默认即可。`mode: 'gateway'` 要求底座可回环访问；强制指定**具体 LAN IP** 时会回退 `direct` 并输出警告；指定 `0.0.0.0` / `::` 会启动网关，但会明确提示核心 3080 仍处于暴露状态。修改这些高级配置后需重启 DSH。
+> **关于 `trustedHosts` 受信任域名**：若您通过 Tailscale MagicDNS 域名（如 `xxx.tailnet.ts.net`）或外部反向代理域名访问 DSH，请在该数组中添加裸域名。安全接入代理与底座会自动将其纳入受信任白名单，防止被代理 Host 检查或第三方插件安全围栏拦截（报 400 或 403）。该白名单同样适用于 **direct 模式**：通过自定义域名、公网 IP 或非本机网卡地址访问时，必须把实际 Host 加入 `trustedHosts`；通过本机网卡 IP / 回环访问会自动识别。
+>
+> **`proxyPort` / `proxyHost` / `mode` 说明**：通常保持默认即可。`mode: 'proxy'` 是默认值，要求底座监听在回环地址；如果检测到核心已对外监听（旧版 `0.0.0.0` 或具体网卡 IP），会自动回退 `direct` 并输出警告。`mode: 'direct'` 不启动安全接入代理，要求核心本身可被外部访问；若核心是回环地址，`direct` 仅适合同机反向代理，外部手机无法直连。修改这些高级配置后需重启 DSH。
 >
 > **反向代理 HTTPS 注意**：若通过 Nginx/Caddy/Tailscale Serve 等反代以 HTTPS 访问，请确保：
 > 1. **保留外部 Host**（Nginx 使用 `proxy_set_header Host $host`，不要把 Host 改写成 `127.0.0.1`）；
@@ -365,7 +367,7 @@ dsh plugin --profile web remove dsh-remote-mobile
 
 | 文件路径 | 说明 | 安全级别 |
 |---|---|---|
-| `~/.dsh/remote-mobile/settings.json` | 插件配置：免密开关、长期密码哈希与限频/锁定策略 | 本地落盘，权限 `0o600`（仅当前用户可读写） |
+| `~/.dsh/remote-mobile/settings.json` | 插件配置：免密开关、长期密码哈希、限频/锁定策略、接入模式与代理监听参数 | 本地落盘，权限 `0o600`（仅当前用户可读写） |
 | `~/.dsh/remote-mobile/devices.json` | 已授权设备会话、IP 访问计数与安全审计数据（内含长效 Token，权限 `0o600`） | 本地落盘，仅当前用户可读写 |
 | `~/.dsh/remote-mobile/rsa-keys.json` | 服务端 RSA 密钥对文件（含公钥与私钥） | 本地落盘，权限 `0o600`（仅当前用户可读写） |
 | `~/.dsh/remote-mobile/style-snippets.json` | 移动端样式片段（内置预设启停状态 + 用户自定义 CSS 小插件） | 本地落盘持久化 |
@@ -378,7 +380,7 @@ dsh plugin --profile web remove dsh-remote-mobile
 <details>
 <summary><b>Q0: 启动报错 <code>listen EADDRINUSE: address already in use 0.0.0.0:3080 / :3081</code>？</b></summary>
 
-**答**：这是 **3080（DSH 核心）或 3081（插件网关）端口被其他进程占用**（绝大多数是上一个 `dsh web` 实例尚未完全退出，例如桌面快捷方式拉起的隐藏实例、或重启时新旧进程交叠），**与安装了哪个插件无关**。排查步骤：
+**答**：这是 **3080（DSH 核心）或 3081（插件安全接入代理）端口被其他进程占用**（绝大多数是上一个 `dsh web` 实例尚未完全退出，例如桌面快捷方式拉起的隐藏实例、或重启时新旧进程交叠），**与安装了哪个插件无关**。排查步骤：
 
 1. **查找占用端口的进程**：
    * **macOS / Linux**：`lsof -nP -iTCP:3080` / `lsof -nP -iTCP:3081`
@@ -396,16 +398,16 @@ dsh plugin --profile web remove dsh-remote-mobile
 <summary><b>Q1: 手机扫码后提示「连接被拒绝」或无法打开页面？</b></summary>
 
 **答**：请按以下步骤逐一排查：
-1. **配置检查**：DSH 0.2.1+ **不要**在 `cordis.patch.yml` 中配置 `host: '0.0.0.0'`（会启动失败）；保持 DSH 默认的 `127.0.0.1:3080`，插件会自动启动 `3081` 网关。若你是旧版 DSH（0.1.7 ~ 0.2.0，可使用 `0.0.0.0`）或显式使用 `direct` 模式（需具体网卡 IP），才需要配置监听地址。修改配置后必须重启 DSH。
+1. **配置检查**：DSH 0.2.1+ **不要**在 `cordis.patch.yml` 中配置 `host: '0.0.0.0'`（会启动失败）；保持 DSH 默认的 `127.0.0.1:3080`，插件会自动启动 `3081` 安全接入代理。若你是旧版 DSH（0.1.7 ~ 0.2.0，可使用 `0.0.0.0`）或显式使用 `direct` 模式（需具体网卡 IP），才需要配置监听地址。修改配置后必须重启 DSH。
 2. **同一局域网**：局域网访问时，确保手机与电脑连接在同一个 Wi-Fi / 路由器下，且未开启手机端的独立代理/VPN（避免流量绕过局域网）。
 3. **Windows 防火墙排查（Windows 用户常见原因）**：
    * 启动 DSH 时如弹出「Windows Defender 防火墙」警报，请务必勾选 **「专用网络」** 和 **「公用网络」** 并允许访问；
-   * 若错过弹窗或依然无法连通，可使用**管理员权限打开 PowerShell** 放行网关端口（默认 `3081`；若使用 `direct` 模式则放行核心端口 `3080`）：
+   * 若错过弹窗或依然无法连通，可使用**管理员权限打开 PowerShell** 放行代理端口（默认 `3081`；若使用 `direct` 模式则放行核心端口 `3080`）：
      ```powershell
-     New-NetFirewallRule -DisplayName "DSH Remote Gateway 3081" -Direction Inbound -LocalPort 3081 -Protocol TCP -Action Allow
+     New-NetFirewallRule -DisplayName "DSH Remote Proxy 3081" -Direction Inbound -LocalPort 3081 -Protocol TCP -Action Allow
      ```
    * **检查 Wi-Fi 网络类型**：在 Windows「设置 -> 网络和 Internet -> Wi-Fi」中，确保当前 Wi-Fi 网络配置文件类型已设为 **「专用网络」**（若为「公用网络」，Windows 防火墙会默认拦截局域网入站请求）。
-4. **多网卡环境（WSL / 虚拟机）**：Windows 如安装了 WSL2 或 Hyper-V，可能会生成虚拟网卡 IP（如 `172.x.x.x`）。请在插件设置面板中确认使用的是物理无线网卡（WLAN / Wi-Fi）对应的局域网 IP 或 Tailscale 二维码；若网关端口曾自动递增，以设置页/终端 Banner 显示的实际端口为准。
+4. **多网卡环境（WSL / 虚拟机）**：Windows 如安装了 WSL2 或 Hyper-V，可能会生成虚拟网卡 IP（如 `172.x.x.x`）。请在插件设置面板中确认使用的是物理无线网卡（WLAN / Wi-Fi）对应的局域网 IP 或 Tailscale 二维码；若代理端口曾自动递增，以设置页/终端 Banner 显示的实际端口为准。
 </details>
 
 <details>
@@ -419,7 +421,7 @@ dsh plugin --profile web remove dsh-remote-mobile
 <details>
 <summary><b>Q3: 手机端切换或新建工作区能正常使用吗？</b></summary>
 
-**答**：**支持**。本插件通过请求隔离技术，使手机端与 PC 桌面端拥有一致的工作区管理与执行能力。
+**答**：**支持**。本插件通过请求隔离技术，使手机端与 PC 桌面端拥有一致的工作区管理与执行能力。若点“选择文件夹”时弹窗出现在 PC 而不是手机，这是 DSH 目录选择器的 auto 判定问题，见 [Q12](#q12)。
 </details>
 
 <details>
@@ -467,7 +469,7 @@ dsh plugin --profile web remove dsh-remote-mobile
    * 插件默认仅信任底层物理 Socket；**同机 `127.0.0.1` 反代携带外部 Host**，或**任意反代携带 `X-Forwarded-*`** 时，会被识别为**代理流量**，不再走 `loopback` / `allowLan` / `allowTailscale` 免密，必须使用插件 Token（动态配对码或长期密码）鉴权。
    * 请确保反向代理**保留外部 Host**（不要改写为 `127.0.0.1`），并透传 `X-Forwarded-For`、`X-Forwarded-Host`、`X-Forwarded-Proto: https`；Caddy / Tailscale Serve 通常会自动处理，Nginx 需显式配置。若 Host 被改写为 `127.0.0.1` 且没有任何 Forwarded 头，插件无法区分“本机浏览器”与“同机反代”。
    * 若希望外部统一域名访问时仍强制要求输入本插件的配对码/密码，请按上述方式配置反代，让插件能够识别真实来源并执行 Token 鉴权；不要依赖 NAS/宿主网关自身的登录来替代插件认证。
-   * 若你不需要网关模式，也可以使用 `direct` 模式绑定具体网卡 IP；但 DSH 0.2.1+ 下不能使用 `0.0.0.0` 通配地址。
+   * 若你不需要 proxy 模式，也可以使用 `direct` 模式绑定具体网卡 IP；但 DSH 0.2.1+ 下不能使用 `0.0.0.0` 通配地址。
 </details>
 
 <details>
@@ -483,11 +485,11 @@ dsh plugin --profile web remove dsh-remote-mobile
 <details>
 <summary><b>Q9: DSH 0.2.1+ 启动失败：<code>host "0.0.0.0" is an unspecified (wildcard) address</code>？</b></summary>
 
-**答**：这是 DSH 0.2.1+ 的官方安全限制，和插件版本无关。该错误发生在插件加载之前，插件网关此时还没有机会接管，因此必须手动处理：
+**答**：这是 DSH 0.2.1+ 的官方安全限制，和插件版本无关。该错误发生在插件加载之前，插件安全接入代理此时还没有机会接管，因此必须手动处理：
 
 1. 打开 `~/.dsh/profiles/web/cordis.patch.yml`（Windows：`%USERPROFILE%\.dsh\profiles\web\cordis.patch.yml`）；
 2. 删除或注释掉之前为远程访问添加的 `webserver.host: '0.0.0.0'`（如整段 `- id: webserver ... host: '0.0.0.0'` 仅用于该配置，可整段删除）；
-3. 重启 `dsh web --no-open`。DSH 会恢复 `127.0.0.1:3080`，本插件自动启动 `0.0.0.0:3081` 网关，手机按设置页二维码访问即可。
+3. 重启 `dsh web --no-open`。DSH 会恢复 `127.0.0.1:3080`，本插件自动启动 `0.0.0.0:3081` 安全接入代理，手机按设置页二维码访问即可。
 </details>
 
 <details>
@@ -498,12 +500,12 @@ dsh plugin --profile web remove dsh-remote-mobile
 - `http://127.0.0.1:3080/api/remote-mobile/status` 返回 200；
 - `http://127.0.0.1:3081/` 返回 200；
 
-说明插件已加载、网关已生效，但当前进程里的 connection 鉴权仍未放行本机根路径。常见原因是 **热重载/热更新没有重新加载插件代码**，或运行的是旧构建。
+说明插件已加载、安全接入代理已生效，但当前进程里的 connection 鉴权仍未放行本机根路径。常见原因是 **热重载/热更新没有重新加载插件代码**，或运行的是旧构建。
 
 处理步骤：
 
 1. 确认安装的是 **1.10.0+**，然后**完整停止并重新启动** `dsh web`（仅刷新浏览器页面不够）；
-2. 临时可先用 `http://127.0.0.1:3081/`（插件安全网关）访问，或打开 `dsh web` 启动时打印的带 `?token=...` 的 URL 一次，让官方写入 cookie；
+2. 临时可先用 `http://127.0.0.1:3081/`（插件安全接入代理）访问，或打开 `dsh web` 启动时打印的带 `?token=...` 的 URL 一次，让官方写入 cookie；
 3. 若使用反向代理，请按 Q7 保留外部 Host 并透传 `X-Forwarded-*`；
 4. 如果重启后仍然出现，请附上 DSH 版本、插件版本与启动日志反馈。
 
@@ -521,6 +523,34 @@ dsh plugin --profile web remove dsh-remote-mobile
 - 真实 iPhone Safari 的 User-Agent 会是很长的 `Mozilla/5.0 (iPhone; ...) ... Safari/...`，不会只有 `iPhone`。
 
 1.10.0 已增加测试隔离：测试环境默认使用临时 `/tmp/dsh-rm-test-devices-*.json`，不会再污染真实设备文件。已有的假 session 可以通过“一键撤销所有设备”后重新配对当前设备清理，或停止 DSH 后从 `devices.json` 中删除对应条目；操作前建议先备份该文件。
+</details>
+
+<details id="q12">
+<summary><b>Q12: 手机通过 Tailscale / 3081 访问，点“选择文件夹”为什么在 PC 上弹窗，手机没有弹窗？</b></summary>
+
+**答**：这不是 Tailscale 或手机浏览器的问题，而是 DSH 官方目录选择器的“本机/远程”判定导致的：
+
+1. **工作区目录在 PC 上**：DSH 的“选择文件夹”选的是运行 DSH 的电脑上的目录，不是手机本地目录。手机浏览器无法直接弹出 PC 的系统文件选择器。
+2. **auto 只按启动环境判定**：`dsh-host-directory-picker-auto` 在启动时检查 `webServer.host`。当核心绑定 `127.0.0.1`、非 SSH 启动且系统有桌面时，它判定为 `native`，调用 PC 的 macOS / Windows 原生目录选择器。
+3. **安全接入代理让远程请求看起来像本机**：本插件让 DSH 核心保持 `127.0.0.1:3080`，由 `0.0.0.0:3081` 安全接入代理对外服务。手机通过 Tailscale 访问 3081 时，核心收到的仍是回环请求，auto 误判“操作者就坐在 PC 前”，于是把 native 窗口弹在 PC 上；手机端不会渲染这个系统窗口，只会等待。
+
+**修复**：固定使用应用内 `browse` 目录选择器。编辑 `~/.dsh/profiles/web/cordis.patch.yml`（Windows：`%USERPROFILE%\.dsh\profiles\web\cordis.patch.yml`），在末尾追加：
+
+```yaml
+- id: directory-picker
+  disabled: true
+- insert:
+    - id: directory-picker-browse
+      name: '@deepseek-ai/dsh-host-directory-picker-browse'
+    - id: ui-directory-picker-browse
+      name: '@deepseek-ai/dsh-client-ui-directory-picker-browse'
+```
+
+> **注意**：DSH 的 patch 层里 `name` 是校验已有插件名，不是重命名。不能只把 `directory-picker` 的 `name` 改成 browse，否则该 patch 会被跳过。必须先 `disabled: true`，再用无 id 的根层 `insert` 插入 browse 后端和浏览器端 UI。
+
+保存后，启用了 HMR 的 DSH 通常会自动重载；否则完整重启 `dsh web`。手机端强制刷新页面后，点“选择文件夹”会出现应用内目录浏览器（面包屑、目录列表、新建子目录），手机和 PC 都会使用网页选择器。
+
+**取舍**：这样 PC 本地也不再弹原生窗口。如果希望 PC 用 native、手机用 browse，需要单独建一个 remote profile 或自定义混合选择器；DSH 的 auto 不支持按客户端切换。browse 仍受现有 DSH / 插件鉴权保护，不会绕过认证。
 </details>
 
 ---

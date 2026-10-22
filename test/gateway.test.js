@@ -26,28 +26,33 @@ test('DSH 独立安全网关与模式探测测试 (gateway)', async (t) => {
     assert.equal(isLoopbackHost('10.0.0.1'), false)
   })
 
-  await t.test('detectServerMode 自适应模式裁决', () => {
-    // 1. DSH 0.2.1+ 默认安全状态（仅 127.0.0.1）-> 自适应激活网关模式
+  await t.test('detectServerMode 默认 proxy 与旧配置回退裁决', () => {
+    // 1. DSH 0.2.1+ 默认安全状态（仅 127.0.0.1）-> 默认 proxy
     const res1 = detectServerMode({ webServer: { config: { host: '127.0.0.1', port: 3080 } } })
-    assert.equal(res1.mode, 'gateway')
+    assert.equal(res1.mode, 'proxy')
     assert.equal(res1.corePort, 3080)
     assert.equal(res1.isLoopback, true)
 
-    // 2. 无 host 属性（缺省）-> 自适应激活网关模式
+    // 2. 无 host 属性（缺省）-> 默认 proxy
     const res2 = detectServerMode({ webServer: { port: 3080 } })
-    assert.equal(res2.mode, 'gateway')
+    assert.equal(res2.mode, 'proxy')
 
-    // 3. 旧版 DSH 已配置 0.0.0.0 -> 自适应激活直连模式
+    // 3. 旧版 DSH 已配置 0.0.0.0 -> 自动回退 direct
     const res3 = detectServerMode({ webServer: { config: { host: '0.0.0.0', port: 3080 } } })
     assert.equal(res3.mode, 'direct')
     assert.equal(res3.isLoopback, false)
 
-    // 4. 用户显式强制配置覆盖
+    // 4. 用户显式 direct 覆盖
     const res4 = detectServerMode({ webServer: { config: { host: '127.0.0.1' } } }, 'direct')
     assert.equal(res4.mode, 'direct')
 
-    const res5 = detectServerMode({ webServer: { config: { host: '0.0.0.0' } } }, 'gateway')
-    assert.equal(res5.mode, 'gateway')
+    // 5. 显式 proxy 但核心已对外监听 -> 回退 direct
+    const res5 = detectServerMode({ webServer: { config: { host: '0.0.0.0' } } }, 'proxy')
+    assert.equal(res5.mode, 'direct')
+
+    // 6. 显式 proxy + 具体外部 IP -> 同样回退 direct
+    const res6 = detectServerMode({ webServer: { config: { host: '192.168.1.5' } } }, 'proxy')
+    assert.equal(res6.mode, 'direct')
   })
 
   await t.test('GatewayServer 生命周期与 HTTP 代理转发集成测试', async () => {

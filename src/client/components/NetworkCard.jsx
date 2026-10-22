@@ -7,7 +7,7 @@ import { t } from '../i18n.js';
 export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang }) {
   const tsHost = status.tailscaleIp || '100.x.y.z';
   const lanHost = status.lanIp || '127.0.0.1';
-  const port = (status && status.gateway && status.gateway.activePort) || (typeof window !== 'undefined' && window.location.port) || '3080';
+  const port = (status && status.proxy && status.proxy.activePort) || (typeof window !== 'undefined' && window.location.port) || '3080';
 
   return (
     <div
@@ -38,8 +38,8 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
         {t('netCardDesc', lang)}
       </div>
 
-      {/* 网关未就绪或端口冲突错误横幅 */}
-      {status?.gateway?.mode === 'gateway' && status.gateway.running === false ? (
+      {/* 安全接入代理未就绪或端口冲突错误横幅 */}
+      {status?.proxy?.mode === 'proxy' && status.proxy.running === false ? (
         <div
           style={{
             background: 'rgba(239, 68, 68, 0.12)',
@@ -53,11 +53,11 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
             textAlign: 'left',
           }}
         >
-          <strong>⚠️ {lang === 'en' ? 'Gateway Service Not Ready' : '安全反向代理网关未就绪'}</strong>
+          <strong>⚠️ {lang === 'en' ? 'Secure Proxy Not Ready' : '安全接入代理未就绪'}</strong>
           <div>
-            {status.gateway.error
-              ? `${lang === 'en' ? 'Failure reason: ' : '启动失败：'}${status.gateway.error}`
-              : (lang === 'en' ? 'Gateway is initializing or failed to bind port. External devices cannot connect currently.' : '网关正在启动或端口绑定失败，外部手机设备当前暂时无法连接。')}
+            {status.proxy.error
+              ? `${lang === 'en' ? 'Failure reason: ' : '启动失败：'}${status.proxy.error}`
+              : (lang === 'en' ? 'Secure proxy is initializing or failed to bind port. External devices cannot connect currently.' : '安全接入代理正在启动或端口绑定失败，外部手机设备当前暂时无法连接。')}
           </div>
         </div>
       ) : null}

@@ -280,7 +280,7 @@ export function createGlobalAuthGate(store: SessionStore) {
 
     // 1.5 非回环请求必须先通过 Host 白名单（DNS-Rebinding / 恶意 Host 防御）。
     // GatewayServer 在转发前已经用自己的 Host 白名单校验过，并打上 __dsh_rm_host_allowed__，
-    // 这里避免对同一请求重复校验（尤其是 gatewayHost 为自定义域名时）。
+    // 这里避免对同一请求重复校验（尤其是 proxyHost 为自定义域名时）。
     if (
       req.headers.host &&
       !(req as any).__dsh_rm_host_allowed__ &&

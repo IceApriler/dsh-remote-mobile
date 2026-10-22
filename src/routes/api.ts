@@ -90,11 +90,12 @@ export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore
           pairingBridgeMode: bridgeState.mode,
           pairingBridgeConflict: bridgeState.conflictWith || '',
           pairingBridgeConflictId: bridgeState.conflictEntryId || '',
-          // 独立安全网关运行状态
-          gateway: {
+          // 安全接入代理运行状态
+          proxy: {
             ...store.getGatewayStatus(),
             activePort: store.getActivePort(),
-            gatewayPort: opts.gatewayPort || 3081,
+            proxyPort: opts.proxyPort || 3081,
+            proxyHost: opts.proxyHost || '0.0.0.0',
           },
         })
       },

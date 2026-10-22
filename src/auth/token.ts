@@ -171,9 +171,11 @@ export function readPluginSettingsJson(filePath = SETTINGS_FILE): Partial<Sessio
     if (typeof data.maxFailedAttempts === 'number' && data.maxFailedAttempts > 0) result.maxFailedAttempts = data.maxFailedAttempts
     if (typeof data.lockDurationMs === 'number' && data.lockDurationMs > 0) result.lockDurationMs = data.lockDurationMs
     if (typeof data.maxVisitsPerMinute === 'number' && data.maxVisitsPerMinute > 0) result.maxVisitsPerMinute = data.maxVisitsPerMinute
-    if (typeof data.gatewayPort === 'number' && data.gatewayPort > 0) result.gatewayPort = data.gatewayPort
-    if (typeof data.gatewayHost === 'string' && data.gatewayHost) result.gatewayHost = data.gatewayHost
-    if (data.mode === 'auto' || data.mode === 'gateway' || data.mode === 'direct') result.mode = data.mode
+    if (typeof data.proxyPort === 'number' && data.proxyPort > 0) result.proxyPort = data.proxyPort
+    if (typeof data.proxyHost === 'string' && data.proxyHost) result.proxyHost = data.proxyHost
+    if (data.mode === 'proxy' || data.mode === 'direct') result.mode = data.mode
+    // 1.10 之前的过渡值 auto 归一化为默认 proxy；核心非回环时会自动按 direct 运行。
+    else if (data.mode === 'auto') result.mode = 'proxy'
     if (Array.isArray(data.trustedHosts)) {
       result.trustedHosts = data.trustedHosts.filter((h: any) => typeof h === 'string' && h.trim())
     }
@@ -200,9 +202,9 @@ export function writePluginSettingsJson(options: SessionStoreOptions, filePath =
       maxFailedAttempts: options.maxFailedAttempts || 5,
       lockDurationMs: options.lockDurationMs || 900000,
       maxVisitsPerMinute: options.maxVisitsPerMinute || 60,
-      gatewayPort: options.gatewayPort || 3081,
-      gatewayHost: options.gatewayHost || '0.0.0.0',
-      mode: options.mode || 'auto',
+      proxyPort: options.proxyPort || 3081,
+      proxyHost: options.proxyHost || '0.0.0.0',
+      mode: options.mode === 'direct' ? 'direct' : 'proxy',
       trustedHosts: Array.isArray(options.trustedHosts) ? options.trustedHosts : [],
     }
     writeFileSync(tmpPath, JSON.stringify(payload, null, 2), { encoding: 'utf8', mode: 0o600 })
@@ -272,9 +274,9 @@ export function resolveInitialStoreOptions(
     maxFailedAttempts: merged.maxFailedAttempts ?? 5,
     lockDurationMs: merged.lockDurationMs ?? 15 * 60 * 1000,
     maxVisitsPerMinute: merged.maxVisitsPerMinute ?? 60,
-    gatewayPort: merged.gatewayPort ?? 3081,
-    gatewayHost: merged.gatewayHost ?? '0.0.0.0',
-    mode: merged.mode ?? 'auto',
+    proxyPort: merged.proxyPort ?? 3081,
+    proxyHost: merged.proxyHost ?? '0.0.0.0',
+    mode: merged.mode === 'direct' ? 'direct' : 'proxy',
     trustedHosts: Array.isArray(merged.trustedHosts) ? merged.trustedHosts : [],
   }
 }
@@ -321,9 +323,9 @@ export interface SessionStoreOptions {
   maxFailedAttempts?: number // 连续失败阈值，默认 5 次
   lockDurationMs?: number    // 锁定时间，默认 15 分钟
   maxVisitsPerMinute?: number // 每分钟打开 auth 页面上限，默认 60 次
-  gatewayPort?: number       // 独立安全网关监听端口，默认 3081
-  gatewayHost?: string       // 独立安全网关监听地址，默认 0.0.0.0
-  mode?: 'auto' | 'gateway' | 'direct' // 运行模式：auto 自适应 / gateway 强制网关 / direct 强制直连
+  proxyPort?: number       // 安全接入代理监听端口，默认 3081
+  proxyHost?: string       // 安全接入代理监听地址，默认 0.0.0.0
+  mode?: 'proxy' | 'direct' // 运行模式：proxy 默认安全接入代理 / direct 直连核心（旧版或高级配置）
   trustedHosts?: string[]    // 静态受信任域名与主机白名单（如 Tailscale MagicDNS xxx.tailnet.ts.net）
 }
 
@@ -373,9 +375,9 @@ export class SessionStore extends EventEmitter {
   public readonly persistPath: string
   public readonly settingsFilePath: string | null
 
-  /** 网关运行时状态契约 */
+  /** 安全接入代理运行时状态契约 */
   private gatewayStatus = {
-    mode: 'direct' as 'gateway' | 'direct',
+    mode: 'direct' as 'proxy' | 'direct',
     running: true,
     port: 3080,
     corePort: 3080,
@@ -423,9 +425,9 @@ export class SessionStore extends EventEmitter {
     return { ...this.options }
   }
 
-  /** 设置网关当前生效的运行时参数与状态契约 */
+  /** 设置安全接入代理当前生效的运行时参数与状态契约 */
   setActiveGatewayInfo(
-    mode: 'gateway' | 'direct',
+    mode: 'proxy' | 'direct',
     activePort: number,
     corePort: number,
     running = true,
@@ -440,13 +442,13 @@ export class SessionStore extends EventEmitter {
     }
   }
 
-  /** 获取网关完整运行状态对象 (供 /api/remote-mobile/status 消费) */
-  getGatewayStatus(): { mode: 'gateway' | 'direct'; running: boolean; port: number; corePort: number; error: string | null } {
+  /** 获取安全接入代理完整运行状态对象 (供 /api/remote-mobile/status 消费) */
+  getGatewayStatus(): { mode: 'proxy' | 'direct'; running: boolean; port: number; corePort: number; error: string | null } {
     return { ...this.gatewayStatus }
   }
 
-  /** 获取当前实际对外提供访问的模式 (gateway | direct) */
-  getActiveMode(): 'gateway' | 'direct' {
+  /** 获取当前实际对外提供访问的模式 (proxy | direct) */
+  getActiveMode(): 'proxy' | 'direct' {
     return this.gatewayStatus.mode
   }
 

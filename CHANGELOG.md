@@ -7,15 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.10.0] - 2026-10-21
 
-### Added & Fixed (解决 Issue #8 · 适配 DSH 0.2.1+ 核心禁止监听 0.0.0.0，内置智能自适应安全反向代理网关)
+### Added & Fixed (解决 Issue #8 · 适配 DSH 0.2.1+ 核心禁止监听 0.0.0.0，内置智能自适应安全接入代理)
 
-- **双层体系解耦与网关握手 Secret 闭环（修复真实 IP 丢失与防暴破失效）**：
-  - **根本矛盾解耦**：彻底拆分物理 Socket IP（`getPhysicalSocketIp`）与业务有效客户端 IP（网关转发头 / 底座补丁内计算）。网关到底座物理 Socket 恒为 `127.0.0.1`，底座补丁绝不因网关携带外部真实 IP 而误判物理 Socket 逃逸回环、杜绝二次无条件洗白抵消安全策略；
+- **命名与模式调整**：`mode` 的 `gateway` 改为 `proxy`，`gatewayPort` / `gatewayHost` 改为 `proxyPort` / `proxyHost`；`auto` 模式移除，默认 `proxy`，核心已对外监听时回退 `direct`。用户可见文案统一为“安全接入代理（Proxy）”，避免与网络网关混淆。内部 `GatewayServer` 类名保持不变。
+- **双层体系解耦与代理握手 Secret 闭环（修复真实 IP 丢失与防暴破失效）**：
+  - **根本矛盾解耦**：彻底拆分物理 Socket IP（`getPhysicalSocketIp`）与业务有效客户端 IP（代理转发头 / 底座补丁内计算）。代理到底座物理 Socket 恒为 `127.0.0.1`，底座补丁绝不因代理携带外部真实 IP 而误判物理 Socket 逃逸回环、杜绝二次无条件洗白抵消安全策略；
   - **Secret 进程级安全握手**：新增 `src/gateway/secret.ts`，基于 `crypto.randomBytes(32)` 生成高强度内部密钥，通过 `WeakMap<server, secret>` 深度支持 Cordis 插件热重载与多实例隔离；
   - **三头强制净化与同步**：底座补丁在物理 Socket 为回环且 Secret 恒定时间比对（`crypto.timingSafeEqual`）一致时，才采纳有效真实 IP，并同步覆盖 `x-dsh-real-ip`、`x-real-ip` 与 `x-forwarded-for`，随后安全抹除私密 Secret 头；客户端伪造头被一律纠正为物理 Socket IP，防暴破与审计精准绑定外部真实客户端。
 - **模式判定顺序保护与动态 Host 白名单（修复 0.0.0.0 模式误切与 DNS-Rebinding）**：
-  - **模式判定顺序严格化**：`detectServerMode` 严格基于**原始 host**进行模式裁决，`0.0.0.0` 在 `auto` 下恒走 `direct` 模式，保障旧版 DSH 向下兼容；仅当确认生效为 `gateway` 模式时，才将内部 proxyTarget 规范化为回环地址；
-  - **动态 Host 白名单校验 (`isHostAllowed`)**：网关在接收请求第一步严格校验 Host 主机名（本机网卡 IP 短缓存 + Tailscale CGNAT + 回环 + 静态 trustedHosts），未知域名直接 400 阻断，杜绝 DNS-Rebinding 攻击；外部端口不参与信任判定，以兼容反向代理、TLS 终结与端口映射。
+  - **proxy-first 模式判定**：`detectServerMode` 默认 `proxy`；核心回环时启用安全接入代理，检测到 `0.0.0.0` 或具体网卡 IP 时自动回退 `direct`，兼容旧版 DSH；仅当确认生效为 `proxy` 时，才将内部 proxyTarget 规范化为回环地址；
+  - **动态 Host 白名单校验 (`isHostAllowed`)**：安全接入代理在接收请求第一步严格校验 Host 主机名（本机网卡 IP 短缓存 + Tailscale CGNAT + 回环 + 静态 trustedHosts），未知域名直接 400 阻断，杜绝 DNS-Rebinding 攻击；外部端口不参与信任判定，以兼容反向代理、TLS 终结与端口映射。
 - **Host 与 Origin 成对虚拟化决策矩阵（解决 /auth 登录错位 403 与生态插件拦截）**：
   - **固定执行顺序**：`Host 白名单校验 -> 门禁鉴权与 gateResult 标记 -> 跨站写拦截 (在虚拟化之前执行) -> 成对虚拟化 -> 注入 Secret 与 real-ip -> 转发`；
   - **跨站写请求全量拦截**：非 GET/HEAD 请求不论回环还是外部，若携带恶意 `Origin`、不透明 `Origin: null` 或无 Origin 但携带 `Sec-Fetch-Site: cross-site`，一律在虚拟化改写前 403 阻断；
@@ -26,21 +27,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **握手超时保护**：握手阶段设置超时守护（默认 10s），协议升级为 101 成功后立即清除超时，保障长连接 WebSocket 不被误杀；
   - **非 101 状态透明透传**：捕获底座的 403 / 401 等 HTTP 响应头与 Body 并原样返回给客户端；CSWSH 跨站拦截前置阻断。
 - **状态机与前端卡片联动**：
-  - `SessionStore` 提供标准的网关状态机（`stopped | starting | running | error`）；
-  - `/api/remote-mobile/status` 返回 `gateway.running` 与 `gateway.error` 完整契约；前端卡片在网关未就绪或端口冲突时展示友好警示横幅。
+  - `SessionStore` 提供标准的安全接入代理状态机（`stopped | starting | running | error`）；
+  - `/api/remote-mobile/status` 返回 `proxy.running` 与 `proxy.error` 完整契约；前端卡片在安全接入代理未就绪或端口冲突时展示友好警示横幅。
 - **direct 模式与反向代理场景加固（复审补丁）**：
   - **direct 模式 Host/WS 白名单**：非回环请求必须先通过 Host 静态白名单（本机网卡 IP / 回环 / 静态 `trustedHosts`），否则 403；WebSocket Upgrade 增加 Host + Origin 同源校验，阻断 direct 模式下的 DNS-Rebinding 与 CSWSH；
-  - **反向代理/端口映射兼容**：Host 白名单只校验主机名，不再强制外部端口等于网关 `boundPort`；`isSameOriginOrLocalEquivalent` 在协议一致的前提下兼容 80/443 默认端口；`X-Forwarded-Proto` 与 302 `Location` 保留外部 HTTPS，避免反代场景降级或 400/403；
-  - **反代回环/LAN 免密绕过修复**：同机 127 反代通过外部 Host、LAN/Tailscale 反代通过 `X-Forwarded-*` 识别为代理流量，不再走 `isLoopbackRequest` / `allowLan` / `allowTailscale` 免密；受信 Gateway 通过内部 Secret 打标例外，并优先使用 `X-Forwarded-For` 首个合法 IP 作为真实来源；WebSocket Upgrade 同样覆盖；
-  - **配置错误兜底**：`detectServerMode` 遇到 “gateway + 具体 LAN IP” 配置错误时由 `apply` 捕获并回退 direct，同时输出 Banner 警告；`printReadyBanner` 在等待网关后重新检查 `disposed`，避免 dispose 后重新注入 Secret/补丁；
+  - **反向代理/端口映射兼容**：Host 白名单只校验主机名，不再强制外部端口等于代理 `boundPort`；`isSameOriginOrLocalEquivalent` 在协议一致的前提下兼容 80/443 默认端口；`X-Forwarded-Proto` 与 302 `Location` 保留外部 HTTPS，避免反代场景降级或 400/403；
+  - **反代回环/LAN 免密绕过修复**：同机 127 反代通过外部 Host、LAN/Tailscale 反代通过 `X-Forwarded-*` 识别为代理流量，不再走 `isLoopbackRequest` / `allowLan` / `allowTailscale` 免密；受信代理通过内部 Secret 打标例外，并优先使用 `X-Forwarded-For` 首个合法 IP 作为真实来源；WebSocket Upgrade 同样覆盖；
+  - **配置错误兜底**：`detectServerMode` 遇到 “proxy + 具体 LAN IP” 配置错误时由 `apply` 捕获并回退 direct，同时输出 Banner 警告；`printReadyBanner` 在等待安全接入代理后重新检查 `disposed`，避免 dispose 后重新注入 Secret/补丁；
   - **本机 3080 根路径回归修复**：`isLoopbackRequest` 现在只把**外部值**的 `X-Forwarded-For` / `X-Real-IP` / `X-Forwarded-Host` 或 `X-Forwarded-Proto` 当作反向代理信号，插件自身为 loopback 请求注入的 `127.0.0.1` 头不再误伤；修复“3080 根路径被 DSH 官方 401 拦截，但 3081 正常”的回归；
   - **测试隔离修复**：`SessionStore` 在测试环境且未显式指定 `devicesFile` 时自动使用 `/tmp/dsh-rm-test-devices-*.json`，不再写入真实的 `~/.dsh/remote-mobile/devices.json`；修复反复运行 `npm test` 会持续产生 `127.0.0.1 / iPhone` 假设备的问题，并新增隔离回归测试；
-  - **测试补充**：新增 direct 模式 DNS-Rebinding/CSWSH、反向代理端口/默认端口/HTTPS Location、网关外部来源真实 IP 注入、内部 127 Forwarded 头回归等用例。`npm test` 会先构建 server/client；在 Node 20.12 / OpenSSL 3 下，全量 155 项中 154 项通过，1 项（PKCS#1 v1.5 legacy）因 CVE-2023-46809 自动跳过，OAEP 主路径正常通过。
+  - **测试补充**：新增 direct 模式 DNS-Rebinding/CSWSH、反向代理端口/默认端口/HTTPS Location、代理外部来源真实 IP 注入、内部 127 Forwarded 头回归等用例。`npm test` 会先构建 server/client；在 Node 20.12 / OpenSSL 3 下，全量 155 项中 154 项通过，1 项（PKCS#1 v1.5 legacy）因 CVE-2023-46809 自动跳过，OAEP 主路径正常通过。
   - **反代部署要求**：反向代理必须保留外部 Host，并透传 `X-Forwarded-For` / `X-Forwarded-Host` / `X-Forwarded-Proto`。若 Host 被改写为 `127.0.0.1` 且没有任何 Forwarded 头，插件无法区分本机浏览器与同机反代；LAN/Tailscale 反代若缺少 Forwarded 头也可能被误判为真实局域网客户端。
 - **测试覆盖与基础设施**：
   - 新增专用安全测试套件 `test/gateway-security.test.js`，包含模式判定、防暴破锁定真实 IP、Secret 伪造防御与 WeakMap 热重载、Drive-by 跨站拦截、本地变体等价放行、换 Wi-Fi 动态 IP 注入测试钩子（`setMockNetworkIps` / `clearNetworkIpCache`）、真实 DSH 0.2.1 风格 `/auth` + `/verify` 登录链路、WebSocket 代理闭环、direct 模式 DNS-Rebinding/CSWSH、反向代理端口与外部来源真实 IP 注入等核心用例。
 - **文档更新**：
-  - 更新中英文 README，提供老用户升级至 DSH 0.2.1+ 的 YAML 配置对比示例，新增 `trustedHosts` / 反向代理 Host、XFF、XFP 配置说明，并明确网关默认绑定 `0.0.0.0:3081` 的安全权衡与直连模式注意事项。
+  - 更新中英文 README，提供老用户升级至 DSH 0.2.1+ 的 YAML 配置对比示例，新增 `trustedHosts` / 反向代理 Host、XFF、XFP 配置说明，并明确安全接入代理默认绑定 `0.0.0.0:3081` 的安全权衡与直连模式注意事项。
 
 ---
 

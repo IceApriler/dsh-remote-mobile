@@ -1,6 +1,6 @@
 /**
  * 前端 API 交互层
- * 支持网关子路径 / baseURI 前缀自适应
+ * 支持统一网关子路径 / baseURI 前缀自适应
  */
 
 export const RM_API_BASE = (function () {

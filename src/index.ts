@@ -188,35 +188,40 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
     } catch {}
   }
 
-  // 6. 探测 DSH 底座网络暴露姿态，自适应裁决是否拉起独立安全反向代理网关
-  // 配置错误（如 mode: 'gateway' + 具体 LAN IP）不能把整个插件 apply 抛崩；
-  // 捕获后回退到 direct 模式，让用户仍可通过 3080 本机/局域网访问并修改配置。
+  // 6. 探测 DSH 底座网络暴露姿态：默认 proxy；核心已对外监听时回退 direct。
+  // 检测逻辑本身不抛错，异常时仍保留兜底，避免插件 apply 崩溃。
   let modeFallbackError = ''
   let detection: ReturnType<typeof detectServerMode>
   try {
     detection = detectServerMode(ctx, store.getOptions().mode, ctx.webServer?.port ?? 3080)
   } catch (err: any) {
     modeFallbackError = err?.message || String(err)
-    ctx.logger?.error?.('[dsh-remote-mobile] 网关模式不可用，已回退 direct 模式:', err)
+    ctx.logger?.error?.('[dsh-remote-mobile] 安全接入代理配置不可用，已回退 direct 模式:', err)
     detection = detectServerMode(ctx, 'direct', ctx.webServer?.port ?? 3080)
   }
 
-  // 强制 gateway 且底座已监听通配地址时，输出安全提醒：核心 3080 仍暴露，
-  // 网关只是附加入口，不能替代核心侧的 Host/Origin 防护。
-  const modeWarning =
-    detection.mode === 'gateway' && !detection.isLoopback
-      ? `底座本身已监听 ${detection.rawCoreHost}，3080 仍是对外入口；网关 3081 为附加入口，建议优先恢复 127.0.0.1 监听。`
+  // proxy 是默认模式，但核心已对外监听时会回退 direct：
+  // - 旧版 webserver 配置（0.0.0.0 / 具体网卡 IP）继续可用；
+  // - direct + 回环核心时，外部手机无法直连，仅适合同机反向代理。
+  const requestedMode = store.getOptions().mode ?? 'proxy'
+  const legacyDirectFallback =
+    requestedMode === 'proxy' && detection.mode === 'direct' && !detection.isLoopback
+  const directLoopbackWarning = detection.mode === 'direct' && detection.isLoopback
+  const modeWarning = legacyDirectFallback
+    ? `检测到底座监听 ${detection.rawCoreHost}，已自动使用 direct 模式；3080 直接对外，如需 proxy 请恢复 127.0.0.1 监听。`
+    : directLoopbackWarning
+      ? 'direct 模式 + 回环核心：外部手机无法直连，仅适合同机反向代理。'
       : ''
 
   let gatewayServer: GatewayServer | null = null
   let gatewayReadyPromise: Promise<number> | null = null
 
-  if (detection.mode === 'gateway') {
+  if (detection.mode === 'proxy') {
     const opts = store.getOptions()
     gatewayServer = new GatewayServer(
       {
-        port: opts.gatewayPort ?? 3081,
-        host: opts.gatewayHost ?? '0.0.0.0',
+        port: opts.proxyPort ?? 3081,
+        host: opts.proxyHost ?? '0.0.0.0',
         corePort: detection.corePort,
         coreHost: detection.coreHost,
       },
@@ -226,19 +231,19 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
     )
 
     // 初始标记为正在启动中
-    store.setActiveGatewayInfo('gateway', opts.gatewayPort ?? 3081, detection.corePort, false)
+    store.setActiveGatewayInfo('proxy', opts.proxyPort ?? 3081, detection.corePort, false)
 
     gatewayReadyPromise = gatewayServer.start().then(({ port }) => {
       if (gatewayServer?.getServer()) {
         setGatewaySecret(gatewayServer.getServer(), gatewaySecret)
       }
-      store.setActiveGatewayInfo('gateway', port, detection.corePort, true)
+      store.setActiveGatewayInfo('proxy', port, detection.corePort, true)
       syncTrustedHosts()
       return port
     }).catch((err) => {
-      store.setActiveGatewayInfo('gateway', opts.gatewayPort ?? 3081, detection.corePort, false, err?.message || String(err))
-      ctx.logger?.error?.('[dsh-remote-mobile] 独立安全反向代理网关启动失败:', err)
-      return opts.gatewayPort ?? 3081
+      store.setActiveGatewayInfo('proxy', opts.proxyPort ?? 3081, detection.corePort, false, err?.message || String(err))
+      ctx.logger?.error?.('[dsh-remote-mobile] 安全接入代理启动失败:', err)
+      return opts.proxyPort ?? 3081
     })
   } else {
     store.setActiveGatewayInfo('direct', detection.corePort, detection.corePort, true)
@@ -272,7 +277,7 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
     if (disposed || printed) return
     printed = true
 
-    // 等待网关就绪以获得准确的对外端口（避免端口自增探测竞态）
+    // 等待安全接入代理就绪以获得准确的对外端口（避免端口自增探测竞态）
     try {
       if (gatewayReadyPromise) {
         await Promise.race([
@@ -305,23 +310,25 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
       const activePort = store.getActivePort()
       const activeMode = store.getActiveMode()
       const corePort = store.getCorePort()
+      const coreHost = detection.coreHost
       const opts = store.getOptions()
-      const gwStatus = store.getGatewayStatus()
+      const proxyHost = opts.proxyHost ?? '0.0.0.0'
+      const proxyStatus = store.getGatewayStatus()
 
       const divider = '─'.repeat(72)
       console.log(`\n┌${divider}`)
       console.log(`│ [dsh-remote-mobile] 官方临时 Token 鉴权已接管，PC/移动端访问无需携带官方token`)
       if (modeFallbackError) {
-        console.log(`│ ⚠️ 网关配置不可用，已回退 direct 模式: ${modeFallbackError}`)
+        console.log(`│ ⚠️ 安全接入代理配置不可用，已回退 direct 模式: ${modeFallbackError}`)
       }
       if (modeWarning) {
         console.log(`│ ⚠️ ${modeWarning}`)
       }
 
-      if (activeMode === 'gateway') {
-        if (gwStatus.running) {
-          console.log(`│ 独立安全反代网关已激活 (0.0.0.0:${activePort} -> 127.0.0.1:${corePort})`)
-          console.log(`│ 手机/远程设备请访问安全网关地址:`)
+      if (activeMode === 'proxy') {
+        if (proxyStatus.running) {
+          console.log(`│ 安全接入代理已激活 (${proxyHost}:${activePort} -> ${coreHost}:${corePort})`)
+          console.log(`│ 手机/远程设备请访问安全接入代理地址:`)
           if (lanIp && lanIp !== '127.0.0.1') {
             console.log(`│   • 局域网:     http://${lanIp}:${activePort} (同 Wi-Fi 局域网直连)`)
           }
@@ -331,13 +338,13 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
           console.log(`│ 电脑本机浏览器访问控制台:`)
           console.log(`│   • 本机回环:   http://127.0.0.1:${corePort}`)
         } else {
-          console.log(`│ ⚠️ 独立安全反代网关未成功启动: ${gwStatus.error || '端口占用'}`)
-          console.log(`│ 外部手机设备当前暂时无法连接，请检查 3081 端口占用`)
+          console.log(`│ ⚠️ 安全接入代理未成功启动: ${proxyStatus.error || '端口占用'}`)
+          console.log(`│ 外部手机设备当前暂时无法连接，请检查 ${opts.proxyPort ?? 3081} 端口占用`)
           console.log(`│ 电脑本机浏览器仍可直接访问:`)
           console.log(`│   • 本机回环:   http://127.0.0.1:${corePort}`)
         }
       } else {
-        console.log(`│ 远程安全网关已就绪，支持手机浏览器访问:`)
+        console.log(`│ 直连模式已启用（无独立安全接入代理），支持手机浏览器访问:`)
         console.log(`│   • 本机回环:   http://127.0.0.1:${corePort}`)
         if (lanIp && lanIp !== '127.0.0.1') {
           console.log(`│   • 局域网:     http://${lanIp}:${corePort} (同 Wi-Fi 局域网直连)`)
@@ -351,6 +358,8 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
       console.log(`│   - 手机/远程设备打开对应地址即可直接访问`)
       console.log(`│   - 在本机打开 Web 界面 ->「设置」->「远程与移动端」进行安全管理:`)
       console.log(`│     可开启免密直连(局域网/Tailscale)、查看 6 位临时配对码或设置长期密码`)
+      console.log(`│   - 高级接入参数: settings.json 中的 mode / proxyPort / proxyHost / trustedHosts`)
+      console.log(`│     修改后需要重启 DSH`)
       console.log(`│   - 项目文档:   https://github.com/IceApriler/dsh-remote-mobile`)
       console.log(`└${divider}\n`)
 
