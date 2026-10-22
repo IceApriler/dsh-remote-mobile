@@ -13,6 +13,7 @@
  *    启动时一次性兼容迁移旧 settings.yaml / settings.yaml.imported 中的配置。
  */
 
+import { createRequire } from 'node:module'
 import { SessionStore, type SessionStoreOptions } from './auth/token.js'
 import { createGlobalAuthGate } from './auth/gate.js'
 import { createRoutes } from './routes/api.js'
@@ -31,6 +32,13 @@ import { generateGatewaySecret, setGatewaySecret, clearGatewaySecret } from './g
 
 /** Cordis 插件名称标识 */
 export const name = 'dsh-remote-mobile'
+
+/** 服务端 Banner 使用的插件版本（从安装包 package.json 读取，避免与客户端版本常量重复维护） */
+let pluginVersion = ''
+try {
+  const require = createRequire(import.meta.url)
+  pluginVersion = String(require('../package.json').version || '')
+} catch {}
 
 /** DSH 设置命名空间 */
 export const REMOTE_MOBILE_SETTINGS_NAMESPACE = 'dsh-remote-mobile'
@@ -141,10 +149,16 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
    * takeOverConnectionAuth 内部通过 __dsh_rm_auth_takeover__ 标记保证幂等，
    * 同一 connection 实例不会被重复接管。
    */
-  const attachConnectionAuth = (conn: any) => {
-    if (conn) {
+  let connectionAuthAttached = false
+  const attachConnectionAuth = (conn: any): boolean => {
+    if (!conn) return false
+    try {
       takeOverConnectionAuth(conn, store)
+      connectionAuthAttached = Boolean((conn as any).__dsh_rm_auth_takeover__)
+    } catch {
+      connectionAuthAttached = false
     }
+    return connectionAuthAttached
   }
 
   // 1) 优先通过 ctx.get 安全获取（未注入时不抛错返回 undefined）
@@ -315,9 +329,24 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
       const proxyHost = opts.proxyHost ?? '0.0.0.0'
       const proxyStatus = store.getGatewayStatus()
 
+      const versionLabel = pluginVersion ? `v${pluginVersion}` : 'unknown'
+      const coreLabel = detection.isLoopback ? '回环' : '对外监听'
+      const modeLabel =
+        activeMode === 'proxy'
+          ? 'proxy（默认）'
+          : legacyDirectFallback
+            ? 'direct（旧配置回退）'
+            : 'direct（显式配置）'
+
       const divider = '─'.repeat(72)
       console.log(`\n┌${divider}`)
-      console.log(`│ [dsh-remote-mobile] 官方临时 Token 鉴权已接管，PC/移动端访问无需携带官方token`)
+      console.log(
+        connectionAuthAttached
+          ? `│ [dsh-remote-mobile] ${versionLabel} 官方临时 Token 鉴权已接管，PC/移动端访问无需携带官方token`
+          : `│ [dsh-remote-mobile] ${versionLabel} ⚠️ 官方临时 Token 鉴权接管未完成，请检查 DSH 版本或启动日志`
+      )
+      console.log(`│ DSH 核心: ${detection.rawCoreHost}:${corePort} (${coreLabel})`)
+      console.log(`│ 运行模式: ${modeLabel}`)
       if (modeFallbackError) {
         console.log(`│ ⚠️ 安全接入代理配置不可用，已回退 direct 模式: ${modeFallbackError}`)
       }

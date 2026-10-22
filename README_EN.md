@@ -27,6 +27,7 @@ English Documentation · [简体中文](./README.md)
   <a href="#about">About</a> •
   <a href="#advantages">Key Advantages</a> •
   <a href="#quick-start">Quick Start</a> •
+  <a href="#modes">Access Modes</a> •
   <a href="#config">Configuration</a> •
   <a href="#preview">UI Preview</a> •
   <a href="#features">Features</a> •
@@ -131,6 +132,24 @@ dsh web --no-open
 ```
 
 Open the DSH Web Console in your browser, navigate to **Settings ⚙️ -> Remote & Mobile Access**, and scan the QR code with your mobile camera or WeChat to start using DSH on mobile!
+
+---
+
+<span id="modes"></span>
+## 🧭 Version & Access Modes
+
+The default is `proxy`; new installations do not need any `webserver` configuration:
+
+| Scenario | DSH core listener | Effective mode | Phone access |
+|---|---|---|---|
+| DSH 0.2.1+ (new install) | `127.0.0.1:3080` | `proxy` | `3081` |
+| DSH 0.1.7 ~ 0.2.0 (legacy config) | `0.0.0.0:3080` | `direct` (automatic fallback) | `3080` |
+| DSH 0.2.1+ with concrete NIC IP | `10.x.x.x:3080` | `direct` | `3080` |
+| Same-host reverse proxy | `127.0.0.1:3080` + explicit `direct` | `direct` | Proxy entry |
+
+- **`proxy`**: recommended; the core stays on loopback and the plugin provides auth/forwarding on `3081`.
+- **`direct`**: no proxy; the core itself must be externally reachable. Intended for legacy or advanced deployments.
+- **`direct` + loopback core**: phones cannot connect directly; only a same-host reverse proxy can reach it.
 
 ---
 
