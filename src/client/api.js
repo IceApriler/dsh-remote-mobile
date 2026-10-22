@@ -58,6 +58,14 @@ export function updateAdvancedSecurityOptions(payload) {
   });
 }
 
+export function updateProxyConfig(payload) {
+  return safeFetchJson(RM_API_BASE + 'update-options', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
 export function updateSecret(secret) {
   return safeFetchJson(RM_API_BASE + 'set-secret', {
     method: 'POST',

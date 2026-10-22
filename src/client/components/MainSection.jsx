@@ -4,6 +4,7 @@ import {
   generatePairCode,
   updateBypassConfig,
   updateAdvancedSecurityOptions,
+  updateProxyConfig,
   updateSecret,
   clearSecretApi,
   revokeDeviceApi,
@@ -19,6 +20,7 @@ import { DeviceListCard } from './DeviceListCard.jsx';
 import { SecurityCard } from './SecurityCard.jsx';
 import { StorageCard } from './StorageCard.jsx';
 import { ConfigCard } from './ConfigCard.jsx';
+import { ProxyConfigCard } from './ProxyConfigCard.jsx';
 import { StylesCard } from './StylesCard.jsx';
 import { PLUGIN_VERSION, BUILD_TIME } from '../version.js';
 import { t, resolveLocale } from '../i18n.js';
@@ -68,6 +70,11 @@ export function TailscaleMobileSection(props) {
   const [maxVisitsInput, setMaxVisitsInput] = useState('60');
   const [maxFailedInput, setMaxFailedInput] = useState('5');
   const [lockDurationMinsInput, setLockDurationMinsInput] = useState('15');
+  const [modeInput, setModeInput] = useState('proxy');
+  const [proxyPortInput, setProxyPortInput] = useState('3081');
+  const [proxyHostInput, setProxyHostInput] = useState('0.0.0.0');
+  const [trustedHostsInput, setTrustedHostsInput] = useState('');
+  const proxyConfigLoadedRef = useRef(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showVersionTip, setShowVersionTip] = useState(false);
   const [currentLang, setCurrentLang] = useState(resolveLocale(ctx, status));
@@ -118,6 +125,14 @@ export function TailscaleMobileSection(props) {
           setLockDurationMinsInput(String(Math.round(data.lockDurationMs / 60000)));
         if (data.locale) {
           setCurrentLang(resolveLocale(ctx, data));
+        }
+
+        if (!proxyConfigLoadedRef.current && data.proxy) {
+          setModeInput(data.proxy.configuredMode === 'direct' ? 'direct' : 'proxy');
+          setProxyPortInput(String(data.proxy.proxyPort || 3081));
+          setProxyHostInput(data.proxy.proxyHost || '0.0.0.0');
+          setTrustedHostsInput(Array.isArray(data.proxy.trustedHosts) ? data.proxy.trustedHosts.join('\n') : '');
+          proxyConfigLoadedRef.current = true;
         }
 
         setStatus((prev) => ({
@@ -521,6 +536,75 @@ export function TailscaleMobileSection(props) {
         setIsSaving(false);
         showToast((currentLang === 'en' ? 'Reset failed: ' : '重置失败：') + (err?.message || err), 'danger', 3500);
       });
+  };
+
+  const persistProxyConfig = (mode, port, host, hosts) => {
+    setIsSaving(true);
+    updateProxyConfig({
+      mode,
+      proxyPort: port,
+      proxyHost: host,
+      trustedHosts: hosts,
+    })
+      .then((data) => {
+        setIsSaving(false);
+        if (data.success) {
+          setStatus((prev) => ({
+            ...prev,
+            proxy: prev.proxy
+              ? {
+                  ...prev.proxy,
+                  configuredMode: data.mode,
+                  proxyPort: data.proxyPort,
+                  proxyHost: data.proxyHost,
+                  trustedHosts: data.trustedHosts || [],
+                  mode: data.activeMode || prev.proxy.mode,
+                  activePort: data.activePort || prev.proxy.activePort,
+                }
+              : prev.proxy,
+          }));
+          refreshStatusOnly();
+          showToast(t('proxySavedToast', currentLang), 'success', 5000);
+        } else {
+          showToast((currentLang === 'en' ? 'Save failed: ' : '保存失败：') + (data.reason || ''), 'danger', 3500);
+        }
+      })
+      .catch((err) => {
+        setIsSaving(false);
+        showToast((currentLang === 'en' ? 'Save failed: ' : '保存失败：') + (err?.message || err), 'danger', 3500);
+      });
+  };
+
+  const saveProxyConfig = () => {
+    const port = parseInt(proxyPortInput, 10);
+    const host = proxyHostInput.trim();
+    const hosts = trustedHostsInput
+      .split(/\r?\n/)
+      .map((h) => h.trim())
+      .filter(Boolean);
+
+    if (!Number.isInteger(port) || port < 1 || port > 65535 || !host) {
+      alert(t('proxySaveFailTip', currentLang));
+      return;
+    }
+
+    if (!confirm(t('proxySaveConfirm', currentLang))) {
+      return;
+    }
+
+    persistProxyConfig(modeInput === 'direct' ? 'direct' : 'proxy', port, host, hosts);
+  };
+
+  const resetProxyConfigDefaults = () => {
+    if (!confirm(t('proxyResetConfirm', currentLang))) {
+      return;
+    }
+
+    setModeInput('proxy');
+    setProxyPortInput('3081');
+    setProxyHostInput('0.0.0.0');
+    setTrustedHostsInput('');
+    persistProxyConfig('proxy', 3081, '0.0.0.0', []);
   };
 
   const copyDirectLink = () => {
@@ -929,6 +1013,21 @@ export function TailscaleMobileSection(props) {
           toggleTailscale={toggleTailscale}
           toggleLan={toggleLan}
           copyText={copyText}
+          lang={currentLang}
+        />
+        <ProxyConfigCard
+          status={status}
+          modeInput={modeInput}
+          setModeInput={setModeInput}
+          proxyPortInput={proxyPortInput}
+          setProxyPortInput={setProxyPortInput}
+          proxyHostInput={proxyHostInput}
+          setProxyHostInput={setProxyHostInput}
+          trustedHostsInput={trustedHostsInput}
+          setTrustedHostsInput={setTrustedHostsInput}
+          saveProxyConfig={saveProxyConfig}
+          resetProxyConfigDefaults={resetProxyConfigDefaults}
+          isSaving={isSaving}
           lang={currentLang}
         />
         <QrPairingCard

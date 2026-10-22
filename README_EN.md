@@ -58,8 +58,8 @@ When accessed from a phone, the plugin also adapts the DSH interface for **mobil
 * 🚀 **Break Network Barriers with Desktop-Grade Workspace**: For accessing DSH Web over LAN / Tailscale. On mobile devices, **common desktop operations such as creating / switching workspaces and running terminal commands are supported**.
 * 📱 **Dedicated Mobile Adaptations & Same-Origin Reuse**: Directly reuses the official DSH Web frontend (the very same UI as desktop) and the wider plugin ecosystem (sidebars, task boards, terminal panels, etc.) without maintaining a separate mobile backend. Includes out-of-the-box mobile adaptations (sidebar drawer toggle, centered settings modal, and compact chat font scaling for higher information density), alongside a built-in **Style Snippet Override system** to toggle presets or inject custom CSS snippets on demand.
 * 🛡️ **Secure Access Proxy & Credential Encryption**: Login credentials use client-side RSA asymmetric encryption, `scrypt` salted slow-hashing password persistence, and automated IP lockout upon consecutive brute-force failures, blocking unauthorized access over public/LAN networks.
-* 📲 **Quick QR Pairing**: Auto-detects Tailscale CGNAT and LAN IP addresses to generate dedicated pairing QR codes. Scan the code to authenticate and obtain persistent credentials.
-* 🔄 **SSE Real-Time Push**: Device connection, reconnection, revocation, and security alert events are pushed in real time via Server-Sent Events without polling.
+* 📲 **Quick QR Pairing**: Auto-detects Tailscale CGNAT and LAN IP addresses to generate dedicated pairing QR codes. Scan to open a pre-filled login page; confirm to complete authorization.
+* 🔄 **SSE Real-Time Push**: Device connection, reconnection, revocation, and IP-lock events are pushed via SSE; the settings page retains low-frequency polling as a fallback.
 * 🤝 **Generic Plugin Coexistence Protection**: Starts safely alongside other remote/Web access plugins by automatically yielding the shared service; the settings panel shows a conflict banner with a one-click copyable diagnosis & fix report.
 
 ---
@@ -236,7 +236,7 @@ Common mistake: rewriting Host to `127.0.0.1` and stripping all `X-Forwarded-*` 
 - **Device Session Management**: Real-time inspection of connected device types, OS, browser, source IP, and last active timestamp, with single-device revocation and one-click bulk revocation.
 
 ### 3. Security & Cryptography
-- **Application-Layer Login Credential Encryption**: The login endpoint encrypts on the client first, so sensitive passwords and pairing codes travel the network only in ciphertext.
+- **Application-Layer Login Credential Encryption**: The Web login page encrypts credentials on the client before submitting them, so sensitive passwords and pairing codes are sent as ciphertext. If encryption fails, submission stops with an error instead of falling back to plaintext.
   - **Secure contexts (HTTPS)**: prioritizes native Web Crypto `RSA-OAEP-SHA256`;
   - **DSH default HTTP LAN/Tailscale access (browser non-secure context; Tailscale's WireGuard tunnel is still encrypted)**: falls back to a pure JS shim using `crypto.getRandomValues()` for cryptographically secure random padding.
 
@@ -365,7 +365,17 @@ dsh plugin --profile web remove dsh-remote-mobile
 <span id="advanced"></span>
 ## ⚙️ Advanced Configuration
 
-Configurations persist in the plugin-owned file `~/.dsh/remote-mobile/settings.json`. Bypass toggles, the persistent password, and rate-limit/lockout settings can be changed in the Web settings page; `proxyPort`, `proxyHost`, `mode`, and `trustedHosts` currently require editing this file and restarting DSH:
+Configurations persist in the plugin-owned file `~/.dsh/remote-mobile/settings.json`. In the Web settings page:
+
+| Configuration | Location | Apply |
+|---|---|---|
+| `mode` / `proxyPort` / `proxyHost` / `trustedHosts` | Access → Access Proxy Configuration | Restart DSH |
+| Tailscale / LAN bypass switches | Access → Network Access & Bypass Management | Immediate |
+| Persistent access password | Access → Configure Persistent Password (Optional) | Immediate |
+| Rate limit / failure threshold / lockout | Devices & Security → Global Security Policy Configuration | Immediate |
+| Style snippets | Style Overrides | Next page load |
+
+You can also edit `settings.json` directly. Restart DSH after changing the access mode or listener settings:
 
 ```jsonc
 {

@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import { isIP } from 'node:net'
 import { AUTH_COOKIE_NAME, readGlobalLocale, type SessionStore } from '../auth/token.js'
 import { getLocalTailscaleIp, getLocalLanIp, getAllNetworkIps, getClientIp, isTailscaleIp, isLanIp } from '../auth/tailscale.js'
 import { getPublicKeyPem, decryptWithPrivateKey, validateSecretStrength, RSA_KEY_FILE } from '../auth/crypto.js'
@@ -94,8 +95,10 @@ export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore
           proxy: {
             ...store.getGatewayStatus(),
             activePort: store.getActivePort(),
+            configuredMode: opts.mode,
             proxyPort: opts.proxyPort || 3081,
             proxyHost: opts.proxyHost || '0.0.0.0',
+            trustedHosts: opts.trustedHosts,
           },
         })
       },
@@ -216,7 +219,49 @@ export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore
           maxVisitsPerMinute: number
           maxFailedAttempts: number
           lockDurationMs: number
+          mode: 'proxy' | 'direct'
+          proxyPort: number
+          proxyHost: string
+          trustedHosts: string[]
         }> = {}
+
+        if (body.mode !== undefined) {
+          if (body.mode !== 'proxy' && body.mode !== 'direct') {
+            return jsonResponse(res, 400, { success: false, reason: 'mode 必须为 proxy 或 direct' })
+          }
+          updates.mode = body.mode
+        }
+
+        if (body.proxyPort !== undefined) {
+          const port = Number(body.proxyPort)
+          if (!Number.isInteger(port) || port < 1 || port > 65535) {
+            return jsonResponse(res, 400, { success: false, reason: 'proxyPort 必须是 1-65535 的整数' })
+          }
+          updates.proxyPort = port
+        }
+
+        if (body.proxyHost !== undefined) {
+          const host = String(body.proxyHost || '').trim()
+          const bareHost = host.replace(/^\[/, '').replace(/\]$/, '')
+          if (!host || host.length > 255 || (bareHost !== 'localhost' && isIP(bareHost) === 0)) {
+            return jsonResponse(res, 400, { success: false, reason: 'proxyHost 必须是有效 IP 地址或 localhost' })
+          }
+          updates.proxyHost = host
+        }
+
+        if (body.trustedHosts !== undefined) {
+          if (!Array.isArray(body.trustedHosts)) {
+            return jsonResponse(res, 400, { success: false, reason: 'trustedHosts 必须是字符串数组' })
+          }
+          const hosts = body.trustedHosts
+            .filter((h: any) => typeof h === 'string')
+            .map((h: string) => h.trim())
+            .filter(Boolean)
+          if (hosts.some((h: string) => h.length > 255 || /[\s]/.test(h))) {
+            return jsonResponse(res, 400, { success: false, reason: 'trustedHosts 中包含无效域名' })
+          }
+          updates.trustedHosts = Array.from(new Set(hosts))
+        }
 
         if (typeof body.allowTailscale === 'boolean') {
           updates.allowTailscale = body.allowTailscale
@@ -237,6 +282,12 @@ export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore
           updates.lockDurationMs = Math.floor(body.lockDurationMs)
         }
 
+        const restartRequired =
+          updates.mode !== undefined ||
+          updates.proxyPort !== undefined ||
+          updates.proxyHost !== undefined ||
+          updates.trustedHosts !== undefined
+
         store.updateOptions(updates)
         const opts = store.getOptions()
         jsonResponse(res, 200, {
@@ -246,6 +297,13 @@ export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore
           maxVisitsPerMinute: opts.maxVisitsPerMinute,
           maxFailedAttempts: opts.maxFailedAttempts,
           lockDurationMs: opts.lockDurationMs,
+          mode: opts.mode,
+          proxyPort: opts.proxyPort,
+          proxyHost: opts.proxyHost,
+          trustedHosts: opts.trustedHosts,
+          activeMode: store.getActiveMode(),
+          activePort: store.getActivePort(),
+          restartRequired,
         })
       },
     },

@@ -13,10 +13,13 @@ export function getLoginPageHtml(publicKeyPem?: string, lang: 'zh' | 'en' = 'zh'
     headerDesc: isEn ? 'Enter 6-digit dynamic pairing code or persistent password' : '请输入 6 位动态配对码或长期访问密码',
     placeholder: isEn ? '6-digit code or password' : '6 位临时配对码 / 长期密码',
     submitBtn: isEn ? 'Authorize & Connect' : '立即授权连接',
-    footerSecurity: isEn ? '🔒 Protected by 2048-bit RSA encryption' : '🔒 全程受 2048 位 RSA 加密保护',
+    footerSecurity: isEn ? '🔒 Login credentials encrypted with 2048-bit RSA' : '🔒 登录凭证使用 2048 位 RSA 加密',
     verifying: isEn ? '🔐 Encrypting & verifying...' : '🔐 正在 RSA 加密与验证...',
     success: isEn ? 'Authorization successful! Entering workspace...' : '授权成功！正在进入工作区...',
     networkErr: isEn ? 'Network connection error, please try again' : '网络连接异常，请检查网络',
+    cryptoErr: isEn
+      ? 'Secure encryption is unavailable. Refresh the page or use another browser.'
+      : '当前环境无法安全加密，请刷新页面或更换浏览器。',
   }
 
   return `<!DOCTYPE html>
@@ -324,7 +327,8 @@ export function getLoginPageHtml(publicKeyPem?: string, lang: 'zh' | 'en' = 'zh'
         return { encryptedCredential: pureB64 };
       } catch (err) {
         console.error('RSA encrypt error:', err);
-        return { credential: plainText };
+        // 加密失败时绝不回退明文；调用方会提示用户更换浏览器或刷新页面。
+        throw new Error('ENCRYPTION_UNAVAILABLE');
       }
     }
 
@@ -406,7 +410,9 @@ export function getLoginPageHtml(publicKeyPem?: string, lang: 'zh' | 'en' = 'zh'
         }
       } catch (err) {
         statusMsg.className = 'status-msg error';
-        statusMsg.innerText = ${JSON.stringify(i18n.networkErr)};
+        statusMsg.innerText = err && err.message === 'ENCRYPTION_UNAVAILABLE'
+          ? ${JSON.stringify(i18n.cryptoErr)}
+          : ${JSON.stringify(i18n.networkErr)};
         statusMsg.style.display = 'block';
         submitBtn.disabled = false;
         submitBtn.innerText = ${JSON.stringify(i18n.submitBtn)};

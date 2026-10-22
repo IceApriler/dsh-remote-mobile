@@ -106,8 +106,10 @@ test('API 路由处理器功能与安全集成测试 (api.ts)', async (t) => {
     assert.ok(result.publicKey)
     assert.ok(result.proxy)
     assert.ok(result.proxy.mode === 'proxy' || result.proxy.mode === 'direct')
+    assert.equal(result.proxy.configuredMode, 'proxy')
     assert.equal(result.proxy.proxyPort, 3081)
     assert.equal(result.proxy.proxyHost, '0.0.0.0')
+    assert.ok(Array.isArray(result.proxy.trustedHosts))
   })
 
   await t.test('POST /api/remote-mobile/verify 使用 RSA 密文成功验证并派发 Set-Cookie', async () => {
