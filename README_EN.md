@@ -81,30 +81,45 @@ dsh plugin --profile web add dsh-remote-mobile
 ---
 
 <span id="config"></span>
-### 2. Configuration (No webserver Config for New Installs; Migration for Existing Users)
+### 2. Configuration (Plugin 1.10.0+ Requires No webserver Config)
 
-> [!TIP]
-> **🚀 DSH 0.2.1+ Architecture Update (No webserver Configuration)**:
-> Starting from DSH 0.2.1+, the host `webserver` strictly disallows binding directly to wildcard addresses (`0.0.0.0`) for security.
-> This plugin now includes a built-in **Smart Adaptive Secure Access Proxy**:
-> - **DSH 0.2.1+ (latest, after removing the old `0.0.0.0` config)**: **No `webserver` config is needed**! DSH remains safely bound to `127.0.0.1:3080`, and this plugin launches a standalone secure proxy on `0.0.0.0:3081` by default. Mobile QR codes use `3081` (it auto-increments on port conflicts; always trust the QR shown in settings), while desktop is recommended to use `3080`; `3081` is also available for verifying the proxy chain, avoiding startup failures caused by wildcard-host validation.
-> - **DSH 0.1.7 ~ 0.2.0 (Legacy)**: If `host: '0.0.0.0'` is still present in `cordis.patch.yml`, the plugin automatically falls back to `direct` mode, preserving legacy direct access. For custom domains or public IPs, configure `trustedHosts` below.
+Plugin 1.10.0+ does not require changes to `webserver` or `cordis.patch.yml`:
 
-> [!IMPORTANT]
-> **⚠️ Upgrade Notice for Existing Users Upgrading to DSH 0.2.1+**:
-> If you previously configured `webserver.host: '0.0.0.0'` in `cordis.patch.yml` for remote access, DSH 0.2.1+ will crash on launch due to the official wildcard ban.
-> **Please remove that line from your configuration** to restore default loopback listening:
->
-> ```yaml
-> # ❌ Remove this line when upgrading to 0.2.1+ (otherwise the core rejects to boot):
-> # - id: webserver
-> #   host: '0.0.0.0'
->
-> # ✅ Correct setup: Leave webserver unconfigured; DSH naturally binds to 127.0.0.1:3080.
-> # This plugin automatically starts the standalone secure proxy on 0.0.0.0:3081 for mobile access.
-> ```
->
-> **Security Considerations**: The secure proxy binds to `0.0.0.0:3081` by default without built-in TLS. In untrusted or public Wi-Fi networks, using Tailscale (WireGuard encrypted tunnel) or enforcing strong passwords and IP rate-limiting is strongly recommended.
+- DSH 0.2.1+ keeps the default `127.0.0.1:3080`;
+- this plugin starts the `3081` secure access proxy automatically;
+- phones connect via QR pairing or the persistent password.
+
+> This section applies to plugin 1.10.0+.
+
+> **Security Considerations**: The secure access proxy binds to `0.0.0.0:3081` by default without built-in TLS. In public or untrusted networks, use Tailscale (WireGuard encryption) or an outer HTTPS proxy.
+
+<details>
+<summary><b>Migration for configurations created before plugin 1.9.0 (DSH 0.2.1+)</b></summary>
+
+Configurations created before plugin 1.9.0, or configurations that manually set `webserver.host: 0.0.0.0`, require the migration below. Plugin 1.10.0+ can skip this section.
+
+DSH 0.2.1+ rejects `0.0.0.0` and fails before plugins load. Remove or comment out the entire `webserver` block:
+
+```yaml
+# ❌ This fails to start on DSH 0.2.1+
+# - id: webserver
+#   host: '0.0.0.0'
+
+# ✅ Keep the default loopback listener:
+# no webserver config is needed; DSH uses 127.0.0.1:3080
+# and dsh-remote-mobile uses the 3081 secure access proxy.
+```
+
+If unsure about the current config:
+
+```bash
+grep -n -A5 'id: webserver' ~/.dsh/profiles/web/cordis.patch.yml
+```
+
+If `host: '0.0.0.0'` is present, remove that block; otherwise no action is needed.
+
+DSH 0.1.7 ~ 0.2.0 may keep `0.0.0.0` and the plugin falls back to `direct` mode; for custom domains or public IPs, configure `trustedHosts`.
+</details>
 
 If you have installed other plugins that might conflict, we recommend disabling them in `~/.dsh/profiles/web/cordis.patch.yml` (on Windows: `%USERPROFILE%\.dsh\profiles\web\cordis.patch.yml`):
 
@@ -138,17 +153,17 @@ Open the DSH Web Console in your browser, navigate to **Settings ⚙️ -> Remot
 <span id="modes"></span>
 ## 🧭 Version & Access Modes
 
-The default is `proxy`; new installations do not need any `webserver` configuration:
+Plugin 1.10.0+ uses `proxy` by default and does not require `webserver` configuration:
 
 | Scenario | DSH core listener | Effective mode | Phone access |
 |---|---|---|---|
-| DSH 0.2.1+ (new install) | `127.0.0.1:3080` | `proxy` | `3081` |
-| DSH 0.1.7 ~ 0.2.0 (legacy config) | `0.0.0.0:3080` | `direct` (automatic fallback) | `3080` |
-| DSH 0.2.1+ with concrete NIC IP | `192.x.x.x:3080` | `direct` | `3080` |
+| DSH 0.2.1+ + plugin 1.10.0+ | `127.0.0.1:3080` | `proxy` | `3081` |
+| DSH 0.1.7 ~ 0.2.0 + `0.0.0.0` config | `0.0.0.0:3080` | `direct` (automatic fallback) | `3080` |
+| DSH 0.2.1+ + concrete NIC IP | `192.x.x.x:3080` | `direct` | `3080` |
 | Same-host reverse proxy | `127.0.0.1:3080` + explicit `direct` | `direct` | Proxy entry |
 
 - **`proxy`**: recommended; the core stays on loopback and the plugin provides auth/forwarding on `3081`.
-- **`direct`**: no proxy; the core itself must be externally reachable. Intended for legacy or advanced deployments.
+- **`direct`**: no proxy; the core itself must be externally reachable. Intended for DSH 0.1.7 ~ 0.2.0 `0.0.0.0` configurations or advanced deployments.
 - **`direct` + loopback core**: DSH only listens on `127.0.0.1`, so phones cannot reach it directly. It only makes sense when a same-host Nginx / Caddy / Tailscale Serve reverse proxy forwards to `3080`; otherwise it is local-only.
 
 #### Access Path & Authentication
@@ -398,7 +413,7 @@ You can also edit `settings.json` directly. Restart DSH after changing the acces
 >
 > **About `trustedHosts`**: If accessing DSH via Tailscale MagicDNS (e.g. `xxx.tailnet.ts.net`) or an external reverse proxy domain, add bare hostnames to this array. Both the secure proxy and core will accept them in the host whitelist and plugin trust fences, preventing 400 or 403 errors. The same whitelist applies to **direct mode**: when accessing via a custom domain, public IP, or a non-local hostname, the actual Host must be listed here; local NIC IPs and loopback are recognized automatically.
 >
-> **About `proxyPort` / `proxyHost` / `mode`**: defaults are usually sufficient. `mode: 'proxy'` is the default and requires the core to listen on loopback; if the core is externally bound (legacy `0.0.0.0` or a concrete NIC IP), the plugin automatically falls back to `direct` with a warning. `mode: 'direct'` starts no secure proxy and requires the core to be externally reachable; with a loopback core, `direct` only works behind a same-host reverse proxy and phones cannot connect directly. Restart DSH after changing these advanced options.
+> **About `proxyPort` / `proxyHost` / `mode`**: defaults are usually sufficient. `mode: 'proxy'` is the default and requires the core to listen on loopback; if the core is externally bound (`0.0.0.0` or a concrete NIC IP), the plugin automatically falls back to `direct` with a warning. `mode: 'direct'` starts no secure proxy and requires the core to be externally reachable; with a loopback core, `direct` only works behind a same-host reverse proxy and phones cannot connect directly. Restart DSH after changing these advanced options.
 >
 > **HTTPS reverse proxy note**: When using Nginx/Caddy/Tailscale Serve with HTTPS, make sure to:
 > 1. **Preserve the external Host** (Nginx: `proxy_set_header Host $host`; do not rewrite it to `127.0.0.1`);
@@ -477,7 +492,7 @@ If your log instead shows `service "remoteWebUiPairing" has been registered`, pl
 <summary><b>Q1: Getting "Connection Refused" or cannot open page when scanning on mobile?</b></summary>
 
 **Answer**: Please verify the following items step by step:
-1. **Configuration**: On DSH 0.2.1+, do **not** set `host: '0.0.0.0'` in `cordis.patch.yml` (it will fail to start). Keep DSH's default `127.0.0.1:3080`; the plugin starts the `3081` secure proxy automatically. Only legacy DSH (0.1.7 ~ 0.2.0, where `0.0.0.0` is still allowed) or an explicit `direct` mode (concrete NIC IP) needs a listen address. Restart DSH after any config change.
+1. **Configuration**: On DSH 0.2.1+, do **not** set `host: '0.0.0.0'` in `cordis.patch.yml` (it will fail to start). Keep DSH's default `127.0.0.1:3080`; the plugin starts the `3081` secure proxy automatically. DSH 0.1.7 ~ 0.2.0 may use `0.0.0.0`; an explicit `direct` mode requires a concrete NIC IP. Restart DSH after any config change.
 2. **Same Network**: For LAN access, ensure your mobile phone and computer are connected to the exact same Wi-Fi router, and disable standalone VPN/proxy apps on your phone.
 3. **Windows Defender Firewall (Common for Windows users)**:
    * When prompted by the Windows Firewall popup on startup, ensure both **"Private networks"** and **"Public networks"** are checked before allowing access;
@@ -569,6 +584,8 @@ If your log instead shows `service "remoteWebUiPairing" has been registered`, pl
 1. Open `~/.dsh/profiles/web/cordis.patch.yml` (Windows: `%USERPROFILE%\.dsh\profiles\web\cordis.patch.yml`);
 2. Remove or comment out the `webserver.host: '0.0.0.0'` line added previously for remote access (if the whole `- id: webserver ... host: '0.0.0.0'` block exists only for this, remove the block);
 3. Restart `dsh web --no-open`. DSH returns to `127.0.0.1:3080`, this plugin starts the `0.0.0.0:3081` secure proxy automatically, and mobile devices can scan the QR code from the settings panel.
+
+> 1.10.0+ appends a `[dsh-remote-mobile] startup hint` after the wildcard-address exit, including the exact config file path and remediation. Other startup errors do not trigger it.
 </details>
 
 <details>

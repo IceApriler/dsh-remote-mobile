@@ -14,6 +14,7 @@
  */
 
 import { createRequire } from 'node:module'
+import { installStartupFailureHint } from './startup-hint.js'
 import { SessionStore, type SessionStoreOptions } from './auth/token.js'
 import { createGlobalAuthGate } from './auth/gate.js'
 import { createRoutes } from './routes/api.js'
@@ -29,6 +30,9 @@ import {
 import { detectServerMode } from './gateway/detector.js'
 import { GatewayServer } from './gateway/server.js'
 import { generateGatewaySecret, setGatewaySecret, clearGatewaySecret } from './gateway/secret.js'
+
+// 该 hook 必须在模块顶层注册，才能捕获 webserver 在插件 apply 前的启动失败。
+installStartupFailureHint()
 
 /** Cordis 插件名称标识 */
 export const name = 'dsh-remote-mobile'

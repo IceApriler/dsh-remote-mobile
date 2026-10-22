@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **命名与模式调整**：`mode` 的 `gateway` 改为 `proxy`，`gatewayPort` / `gatewayHost` 改为 `proxyPort` / `proxyHost`；`auto` 模式移除，默认 `proxy`，核心已对外监听时回退 `direct`。用户可见文案统一为“安全接入代理（Proxy）”，避免与网络网关混淆。内部 `GatewayServer` 类名保持不变。
 - **设置页接入配置**：新增「接入代理配置」卡片，可编辑 `mode` / `proxyPort` / `proxyHost` / `trustedHosts`；保存后提示需重启 DSH 生效。
+- **启动失败友好提示**：精确匹配 DSH 的 `webserver` 通配地址错误，在进程退出后追加配置文件路径与处理步骤；其他启动错误不会触发。
 - **双层体系解耦与代理握手 Secret 闭环（修复真实 IP 丢失与防暴破失效）**：
   - **根本矛盾解耦**：彻底拆分物理 Socket IP（`getPhysicalSocketIp`）与业务有效客户端 IP（代理转发头 / 底座补丁内计算）。代理到底座物理 Socket 恒为 `127.0.0.1`，底座补丁绝不因代理携带外部真实 IP 而误判物理 Socket 逃逸回环、杜绝二次无条件洗白抵消安全策略；
   - **Secret 进程级安全握手**：新增 `src/gateway/secret.ts`，基于 `crypto.randomBytes(32)` 生成高强度内部密钥，通过 `WeakMap<server, secret>` 深度支持 Cordis 插件热重载与多实例隔离；
