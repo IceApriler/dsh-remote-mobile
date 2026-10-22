@@ -365,7 +365,12 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
             console.log(`│   • 虚拟私网:   http://${tsIp}:${activePort} (Tailscale 私网异地直连)`)
           }
           console.log(`│ 电脑本机浏览器访问控制台:`)
-          console.log(`│   • 本机回环:   http://127.0.0.1:${corePort}`)
+          console.log(`│   • 核心直连:   http://127.0.0.1:${corePort}`)
+          if (proxyHost === '0.0.0.0' || proxyHost === '::' || proxyHost === '127.0.0.1' || proxyHost === 'localhost') {
+            const localProxyHost = proxyHost === '::' ? '[::1]' : '127.0.0.1'
+            console.log(`│   • 代理入口:   http://${localProxyHost}:${activePort}`)
+            console.log(`│     本机直连不校验配对码/长期密码`)
+          }
         } else {
           console.log(`│ ⚠️ 安全接入代理未成功启动: ${proxyStatus.error || '端口占用'}`)
           console.log(`│ 外部手机设备当前暂时无法连接，请检查 ${opts.proxyPort ?? 3081} 端口占用`)

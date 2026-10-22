@@ -144,12 +144,59 @@ The default is `proxy`; new installations do not need any `webserver` configurat
 |---|---|---|---|
 | DSH 0.2.1+ (new install) | `127.0.0.1:3080` | `proxy` | `3081` |
 | DSH 0.1.7 ~ 0.2.0 (legacy config) | `0.0.0.0:3080` | `direct` (automatic fallback) | `3080` |
-| DSH 0.2.1+ with concrete NIC IP | `10.x.x.x:3080` | `direct` | `3080` |
+| DSH 0.2.1+ with concrete NIC IP | `192.x.x.x:3080` | `direct` | `3080` |
 | Same-host reverse proxy | `127.0.0.1:3080` + explicit `direct` | `direct` | Proxy entry |
 
 - **`proxy`**: recommended; the core stays on loopback and the plugin provides auth/forwarding on `3081`.
 - **`direct`**: no proxy; the core itself must be externally reachable. Intended for legacy or advanced deployments.
-- **`direct` + loopback core**: phones cannot connect directly; only a same-host reverse proxy can reach it.
+- **`direct` + loopback core**: DSH only listens on `127.0.0.1`, so phones cannot reach it directly. It only makes sense when a same-host Nginx / Caddy / Tailscale Serve reverse proxy forwards to `3080`; otherwise it is local-only.
+
+#### Access Path & Authentication
+
+The decision cannot rely on the TCP source IP (socket address) alone: Host and `X-Forwarded-*` also affect the result. `socket IP` is the TCP peer address seen by the server; it is neither Host nor `X-Forwarded-For`.
+
+| Access path | Path | Decision | Plugin login |
+|---|---|---|---|
+| A Local direct | PC → `127.0.0.1:3081` | Local loopback (loopback) | Not required |
+| B Phone direct | Phone → `192.x.x.x:3081` / `100.x.x.x:3081` | External direct (external) | Required (can enable `allowLan`/`allowTailscale` bypass) |
+| C Same-host reverse proxy | Phone → Nginx → `127.0.0.1:3081` | Reverse proxy (reverse-proxy) | Required (no bypass) |
+
+“Reverse proxy” here means user-side Nginx / Caddy / Tailscale Serve, not the plugin's `3081` secure access proxy.
+
+`127.0.0.1` skips plugin login only for a local direct request with no external Host/Forwarded headers; **there is no switch for this**. Only plugin login is skipped; Host/Origin/CSRF checks still apply. LAN/Tailscale require auth by default, unless `allowLan` / `allowTailscale` is enabled; reverse-proxy traffic does not receive these bypasses.
+
+<details>
+<summary><b>Expand: request headers, Nginx config, and common mistakes</b></summary>
+
+Header examples (A/B/C as in the table):
+
+- A: `Host: 127.0.0.1:3081`
+- B: `Host: 192.x.x.x:3081` or `Host: 100.x.x.x:3081`
+- C: `Host: dsh.example.com` with `X-Forwarded-For: 100.x.x.x` / `X-Forwarded-Host` / `X-Forwarded-Proto: https`
+
+Even though Nginx connects from `127.0.0.1`, case C is treated as reverse-proxy traffic and requires authentication.
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:3081;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+Add custom domains to `trustedHosts`:
+
+```json
+{
+  "trustedHosts": ["dsh.example.com"]
+}
+```
+
+Common mistake: rewriting Host to `127.0.0.1` and stripping all `X-Forwarded-*` makes the plugin treat the request as case A and skip login. Tailscale Serve is also a same-host proxy and must preserve these headers.
+
+</details>
 
 ---
 

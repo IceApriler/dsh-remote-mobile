@@ -145,12 +145,59 @@ dsh web --no-open
 |---|---|---|---|
 | DSH 0.2.1+ 新装 | `127.0.0.1:3080` | `proxy` | `3081` |
 | DSH 0.1.7 ~ 0.2.0 旧配置 | `0.0.0.0:3080` | `direct`（自动回退） | `3080` |
-| 0.2.1+ 绑定具体网卡 IP | `10.x.x.x:3080` | `direct` | `3080` |
+| 0.2.1+ 绑定具体网卡 IP | `192.x.x.x:3080` | `direct` | `3080` |
 | 同机反向代理 | `127.0.0.1:3080` + 显式 `direct` | `direct` | 反代入口 |
 
 - **`proxy`**：推荐；核心保持回环，插件在 `3081` 提供认证与转发。
 - **`direct`**：不启动代理；要求核心本身对外可达，主要用于旧版配置或高级部署。
-- **`direct` + 回环核心**：外部手机无法直连，仅适合同机反向代理。
+- **`direct` + 回环核心**：DSH 只监听 `127.0.0.1`，手机无法直接访问；只有再通过同机 Nginx / Caddy / Tailscale Serve 等反向代理转发到 `3080` 时才有意义，否则只能本机使用。
+
+#### 访问链路与认证判定
+
+判定不能只看 TCP 来源 IP（socket 地址）：Host 与 `X-Forwarded-*` 也会改变结果。`socket IP` 是服务器看到的 TCP 对端地址，不是 Host，也不是 `X-Forwarded-For`。
+
+| 访问方式 | 链路 | 判定 | 插件登录 |
+|---|---|---|---|
+| A 本机直连 | PC → `127.0.0.1:3081` | 本机回环（loopback） | 不需要 |
+| B 手机直连 | 手机 → `192.x.x.x:3081` / `100.x.x.x:3081` | 外部直连（external） | 需要（可开 `allowLan`/`allowTailscale` 免密） |
+| C 同机反向代理 | 手机 → Nginx → `127.0.0.1:3081` | 反向代理（reverse-proxy） | 需要（不享受免密） |
+
+这里的“反向代理”指用户侧的 Nginx / Caddy / Tailscale Serve，不是插件的 3081 安全接入代理。
+
+`127.0.0.1` 仅在本机直连、且无外部 Host/Forwarded 时跳过登录，**当前没有开关**；跳过的只是插件登录，Host/Origin/CSRF 仍生效。LAN/Tailscale 默认认证，开启 `allowLan`/`allowTailscale` 后对应网络才免密；反向代理流量不享受这些免密。
+
+<details>
+<summary><b>展开：请求头、Nginx 配置与常见错误</b></summary>
+
+请求头示例（A/B/C 对应上表）：
+
+- A：`Host: 127.0.0.1:3081`
+- B：`Host: 192.x.x.x:3081` 或 `Host: 100.x.x.x:3081`
+- C：`Host: dsh.example.com`，并携带 `X-Forwarded-For: 100.x.x.x` / `X-Forwarded-Host` / `X-Forwarded-Proto: https`
+
+C 场景即使 Nginx 从 `127.0.0.1` 连入，仍判定为反向代理，需要认证。
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:3081;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+自定义域名需加入 `trustedHosts`：
+
+```json
+{
+  "trustedHosts": ["dsh.example.com"]
+}
+```
+
+常见错误：Nginx 把 Host 改写成 `127.0.0.1` 并删除全部 `X-Forwarded-*`，插件会误判为 A 并跳过登录。Tailscale Serve 也是同机反代，同样要保留这些头。
+
+</details>
 
 ---
 
