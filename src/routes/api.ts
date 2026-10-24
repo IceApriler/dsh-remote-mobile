@@ -40,10 +40,23 @@ function parseJsonBody(req: IncomingMessage): Promise<any> {
   })
 }
 
-export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore) {
+/**
+ * DSH 0.2.1+ WebServer 的路由契约：`kind` 决定注册到 exact 还是 prefixes 表。
+ * 当前所有接口都是字面路径，因此统一使用 exact；`method` 保留给旧宿主兼容。
+ */
+export interface WebRoute {
+  kind: 'exact' | 'prefix'
+  /** 旧版 DSH 使用；DSH 0.2.1+ 的 WebServer 不按 method 分派。 */
+  method?: 'GET' | 'POST'
+  path: string
+  handler: (req: IncomingMessage, res: ServerResponse) => unknown
+}
+
+export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore): WebRoute[] {
   return [
     // 0. RSA 公钥获取接口 (RSA-OAEP-SHA256)
     {
+      kind: 'exact',
       method: 'GET',
       path: '/api/remote-mobile/public-key',
       handler: async (_req: IncomingMessage, res: ServerResponse) => {
@@ -57,6 +70,7 @@ export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore
 
     // 1. 状态查询接口 (返回 Tailscale IP、局域网 LAN IP 与 IP 防暴破安全统计)
     {
+      kind: 'exact',
       method: 'GET',
       path: '/api/remote-mobile/status',
       handler: async (_req: IncomingMessage, res: ServerResponse) => {
@@ -106,6 +120,7 @@ export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore
 
     // 2. 生成 6 位短期配对码
     {
+      kind: 'exact',
       method: 'POST',
       path: '/api/remote-mobile/generate-code',
       handler: async (_req: IncomingMessage, res: ServerResponse) => {
@@ -120,6 +135,7 @@ export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore
 
     // 3. 手机端验证与换取长效 Cookie (支持 RSA-OAEP 密文解密 + 防暴力破解 429 拦截)
     {
+      kind: 'exact',
       method: 'POST',
       path: '/api/remote-mobile/verify',
       handler: async (req: IncomingMessage, res: ServerResponse) => {
@@ -161,6 +177,7 @@ export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore
 
     // 3.1 手动解除某个 IP 的防暴破锁定
     {
+      kind: 'exact',
       method: 'POST',
       path: '/api/remote-mobile/unlock-ip',
       handler: async (req: IncomingMessage, res: ServerResponse) => {
@@ -173,6 +190,7 @@ export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore
 
     // 3.2 一键清空所有 IP 访问与安全审计日志
     {
+      kind: 'exact',
       method: 'POST',
       path: '/api/remote-mobile/clear-ip-stats',
       handler: async (_req: IncomingMessage, res: ServerResponse) => {
@@ -183,6 +201,7 @@ export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore
 
     // 4. 切换 Tailscale / 局域网免密直连开关
     {
+      kind: 'exact',
       method: 'POST',
       path: '/api/remote-mobile/toggle-bypass',
       handler: async (req: IncomingMessage, res: ServerResponse) => {
@@ -209,6 +228,7 @@ export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore
       },
     },
     {
+      kind: 'exact',
       method: 'POST',
       path: '/api/remote-mobile/update-options',
       handler: async (req: IncomingMessage, res: ServerResponse) => {
@@ -310,6 +330,7 @@ export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore
 
     // 5. 设置并持久化长期访问密码 (支持 RSA 密文 + 6位以上字母数字复杂度校验)
     {
+      kind: 'exact',
       method: 'POST',
       path: '/api/remote-mobile/set-secret',
       handler: async (req: IncomingMessage, res: ServerResponse) => {
@@ -338,6 +359,7 @@ export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore
 
     // 5.1 清除长期访问密码
     {
+      kind: 'exact',
       method: 'POST',
       path: '/api/remote-mobile/clear-secret',
       handler: async (_req: IncomingMessage, res: ServerResponse) => {
@@ -348,6 +370,7 @@ export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore
 
     // 6. 撤销单个设备授权
     {
+      kind: 'exact',
       method: 'POST',
       path: '/api/remote-mobile/revoke-device',
       handler: async (req: IncomingMessage, res: ServerResponse) => {
@@ -360,6 +383,7 @@ export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore
 
     // 7. 一键撤销所有设备
     {
+      kind: 'exact',
       method: 'POST',
       path: '/api/remote-mobile/revoke-all',
       handler: async (_req: IncomingMessage, res: ServerResponse) => {
@@ -370,6 +394,7 @@ export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore
 
     // 8. 独立手机登录引导页面（已授权或 Tailscale/局域网免密设备访问时自动 302 跳转回工作区，支持 IP 访问计数与限频）
     {
+      kind: 'exact',
       method: 'GET',
       path: '/auth',
       handler: async (req: IncomingMessage, res: ServerResponse) => {
@@ -418,6 +443,7 @@ export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore
 
     // 9. SSE 实时事件监听通道 (Server-Sent Events 0延时推送，彻底告别轮询)
     {
+      kind: 'exact',
       method: 'GET',
       path: '/api/remote-mobile/events',
       handler: async (req: IncomingMessage, res: ServerResponse) => {
@@ -479,6 +505,7 @@ export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore
 
     // 10. 移动端样式片段（样式小插件）管理 API（合并 GET 与 POST 处理，避免 webserver.register 重复 path 冲突）
     {
+      kind: 'exact',
       path: '/api/remote-mobile/styles',
       handler: async (req: IncomingMessage, res: ServerResponse) => {
         if (!styleStore) {
@@ -517,6 +544,7 @@ export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore
       },
     },
     {
+      kind: 'exact',
       method: 'POST',
       path: '/api/remote-mobile/styles/toggle',
       handler: async (req: IncomingMessage, res: ServerResponse) => {
@@ -530,6 +558,7 @@ export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore
       },
     },
     {
+      kind: 'exact',
       method: 'POST',
       path: '/api/remote-mobile/styles/delete',
       handler: async (req: IncomingMessage, res: ServerResponse) => {
@@ -542,6 +571,7 @@ export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore
       },
     },
     {
+      kind: 'exact',
       method: 'POST',
       path: '/api/remote-mobile/styles/reset',
       handler: async (_req: IncomingMessage, res: ServerResponse) => {

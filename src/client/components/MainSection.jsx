@@ -13,6 +13,7 @@ import {
   clearIpStatsApi,
 } from '../api.js';
 import { generateQrSvg } from '../qrcode.js';
+import { buildDirectLink, resolveAccessPort } from '../utils/access.js';
 import { NetworkCard } from './NetworkCard.jsx';
 import { QrPairingCard } from './QrPairingCard.jsx';
 import { SecretCard } from './SecretCard.jsx';
@@ -616,8 +617,12 @@ export function TailscaleMobileSection(props) {
       selectedTab === 'tailscale' && status.tailscaleIp
         ? status.tailscaleIp
         : status.lanIp || '127.0.0.1';
-    const port = (typeof window !== 'undefined' && window.location.port) || '3080';
-    const directLink = `http://${effectiveQrIp}:${port}/auth?token=${status.code || ''}`;
+    const port = resolveAccessPort(status);
+    if (port === null) {
+      showToast(t('proxyNotReady', currentLang), 'danger', 3000);
+      return;
+    }
+    const directLink = buildDirectLink(effectiveQrIp, port, status.code || '');
     copyText(directLink, t('copiedTip', currentLang));
     setStatus((prev) => ({ ...prev, copied: true }));
     setTimeout(() => {

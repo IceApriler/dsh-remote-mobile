@@ -18,6 +18,7 @@ import { installStartupFailureHint } from './startup-hint.js'
 import { SessionStore, type SessionStoreOptions } from './auth/token.js'
 import { createGlobalAuthGate } from './auth/gate.js'
 import { createRoutes } from './routes/api.js'
+import { registerWebRoutes } from './routes/register.js'
 import { StyleSnippetStore } from './styles/style-snippets.js'
 import { getLocalTailscaleIp, getLocalLanIp } from './auth/tailscale.js'
 import {
@@ -130,12 +131,10 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
     // 挂载 HTML 模板层的样式与 Polyfill 注入钩子（在 Gzip 压缩前注入）
     mountIndexInjections(ctx, styleStore)
 
-    // 注册插件专属的 HTTP & SSE API 路由
+    // 注册插件专属的 HTTP & SSE API 路由。registerWebRoutes 会通过 ctx.effect
+    // 收集 DSH WebServer 返回的撤销函数，保证插件重新激活/热重载时不残留路由。
     if (typeof ctx.webServer.register === 'function') {
-      const routes = createRoutes(store, styleStore)
-      for (const route of routes) {
-        ctx.webServer.register(route)
-      }
+      registerWebRoutes(ctx, createRoutes(store, styleStore))
     }
   }
 

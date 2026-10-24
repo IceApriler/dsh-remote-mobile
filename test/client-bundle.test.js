@@ -50,4 +50,11 @@ test('客户端 Bundle 实时刷新链路完整性测试', async (t) => {
     assert.ok(!apiSrc.includes("fetch('/api/remote-mobile/"), 'src/client/api.js 中不应存在硬编码绝对路径 fetch')
     assert.ok(!apiSrc.includes('fetch("/api/remote-mobile/'), 'src/client/api.js 中不应存在硬编码绝对路径 fetch')
   })
+
+  await t.test('对外访问地址不得回退到页面端口', () => {
+    assert.ok(
+      !bundle.includes('window.location.port'),
+      '客户端 bundle 中不应存在 window.location.port 作为对外端口来源',
+    )
+  })
 })

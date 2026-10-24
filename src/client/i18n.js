@@ -140,6 +140,7 @@ export var translations = {
     proxyResetToast: "已恢复默认接入配置；重启 DSH 后生效。",
     proxySaveFailTip: "请检查端口、监听地址与受信任域名格式",
     proxyCurrentRuntime: "当前运行",
+    proxyNotReady: "安全接入代理未就绪，请先启动代理",
 
     // 卡片 8: 移动端样式片段（样式小插件）
     tabAccess: "接入",
@@ -329,6 +330,7 @@ export var translations = {
     proxyResetToast: "Default access configuration restored; restart DSH to apply.",
     proxySaveFailTip: "Check the port, listen address, and trusted-host format",
     proxyCurrentRuntime: "Current runtime",
+    proxyNotReady: "Secure access proxy is not ready. Start the proxy first.",
 
     // Card 8: Mobile Style Snippets (style mini-plugin)
     tabAccess: "Access",

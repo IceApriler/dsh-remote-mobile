@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.1] - 2026-10-24
+
+### Fixed (解决 Issue #9 · 适配 DSH 0.2.1 路由契约并修复对外端口来源)
+
+- **DSH 0.2.1+ 路由契约兼容**：18 条 API 路由显式声明 `kind: 'exact'`，不再因缺少 `kind` 全部进入 `prefixes` 表。修复插件重复激活、组件级关闭/启用或热重载时抛出 `webserver: duplicate undefined route "/api/remote-mobile/public-key"`，导致条目启用失败的问题。
+- **路由生命周期管理**：新增 `src/routes/register.ts`，通过 `ctx.effect` 收集 `WebServer.register()` 返回的 disposer，在插件 dispose/热重载时撤销全部路由；注册中途失败会回滚已注册路由。没有 `ctx.effect` 的旧宿主降级使用 `ctx.on('dispose')` 回收。
+- **消除 prefix 误匹配**：`/api/remote-mobile/public-key/foo` 等未知子路径不再命中父级 handler，路由恢复严格的 exact 语义。
+- **对外端口来源统一**：新增 `src/client/utils/access.js`，二维码、复制链接和网络地址卡片统一使用 `status.proxy.activePort`；移除 `window.location.port` 与硬编码 `3080` 兜底，修复在 3080 / DSH Desktop 50905 页面复制或扫码得到不可访问端口的问题。
+- **代理未就绪处理**：`activePort` 缺失或非法时不再生成错误链接，改为提示“安全接入代理未就绪”并禁用相关复制/二维码操作；中英文文案同步。
+- **测试覆盖**：
+  - 新增 `test/routes-contract.test.js`，覆盖 18 条路由 exact 契约、dispose 撤销、同一 WebServer 二次注册、注册失败回滚及旧宿主降级；
+  - 新增 `test/access-port.test.js`，覆盖端口解析与直达链接构造；
+  - `test/client-bundle.test.js` 增加打包产物中禁止 `window.location.port` 的防回归断言。
+- **升级提示**：DSH 0.2.1+ 的 WebServer 不按 `method` 字段分派，本次保留该字段用于旧版兼容；升级到 1.10.1 后建议重启一次 DSH，以清理由 1.10.0 旧代码遗留在当前进程中的路由。
+
+---
+
 ## [1.10.0] - 2026-10-21
 
 ### Added & Fixed (解决 Issue #8 · 适配 DSH 0.2.1+ 核心禁止监听 0.0.0.0，内置智能自适应安全接入代理)

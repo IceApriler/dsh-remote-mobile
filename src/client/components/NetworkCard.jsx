@@ -1,4 +1,5 @@
 import React from 'react';
+import { resolveAccessPort } from '../utils/access.js';
 import { t } from '../i18n.js';
 
 /**
@@ -7,7 +8,10 @@ import { t } from '../i18n.js';
 export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang }) {
   const tsHost = status.tailscaleIp || '100.x.y.z';
   const lanHost = status.lanIp || '127.0.0.1';
-  const port = (status && status.proxy && status.proxy.activePort) || (typeof window !== 'undefined' && window.location.port) || '3080';
+  const port = resolveAccessPort(status);
+  const portReady = port !== null;
+  const tailscaleAddress = portReady ? `http://${tsHost}:${port}` : null;
+  const lanAddress = portReady ? `http://${lanHost}:${port}` : null;
 
   return (
     <div
@@ -193,7 +197,9 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
             style={{
               fontSize: '13px',
               fontFamily: 'monospace',
-              color: 'var(--dsw-alias-brand-primary, #3b82f6)',
+              color: portReady
+                ? 'var(--dsw-alias-brand-primary, #3b82f6)'
+                : 'var(--dsw-alias-label-error, #ef4444)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -213,19 +219,21 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
                 minWidth: 0,
               }}
             >
-              {`http://${tsHost}:${port}`}
+              {tailscaleAddress || t('proxyNotReady', lang)}
             </span>
             <button
               type="button"
-              onClick={() => copyText(`http://${tsHost}:${port}`, t('copiedTip', lang))}
+              disabled={!portReady}
+              onClick={() => tailscaleAddress && copyText(tailscaleAddress, t('copiedTip', lang))}
               style={{
                 padding: '3px 10px',
                 background: 'var(--dsw-alias-bg-layer-3, rgba(255, 255, 255, 0.08))',
                 border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.25))',
                 borderRadius: '4px',
                 fontSize: '11px',
-                cursor: 'pointer',
+                cursor: portReady ? 'pointer' : 'not-allowed',
                 color: 'var(--dsw-alias-label-secondary, inherit)',
+                opacity: portReady ? 1 : 0.4,
                 whiteSpace: 'nowrap',
                 flexShrink: 0,
               }}
@@ -366,7 +374,9 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
           style={{
             fontSize: '13px',
             fontFamily: 'monospace',
-            color: 'var(--dsw-alias-brand-primary, #3b82f6)',
+            color: portReady
+              ? 'var(--dsw-alias-brand-primary, #3b82f6)'
+              : 'var(--dsw-alias-label-error, #ef4444)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -386,19 +396,21 @@ export function NetworkCard({ status, toggleTailscale, toggleLan, copyText, lang
               minWidth: 0,
             }}
           >
-            {`http://${lanHost}:${port}`}
+            {lanAddress || t('proxyNotReady', lang)}
           </span>
           <button
             type="button"
-            onClick={() => copyText(`http://${lanHost}:${port}`, t('copiedTip', lang))}
+            disabled={!portReady}
+            onClick={() => lanAddress && copyText(lanAddress, t('copiedTip', lang))}
             style={{
               padding: '3px 10px',
               background: 'var(--dsw-alias-bg-layer-3, rgba(255, 255, 255, 0.08))',
               border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.25))',
               borderRadius: '4px',
               fontSize: '11px',
-              cursor: 'pointer',
+              cursor: portReady ? 'pointer' : 'not-allowed',
               color: 'var(--dsw-alias-label-secondary, inherit)',
+              opacity: portReady ? 1 : 0.4,
               whiteSpace: 'nowrap',
               flexShrink: 0,
             }}

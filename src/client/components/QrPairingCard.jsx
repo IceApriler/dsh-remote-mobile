@@ -1,5 +1,6 @@
 import React from 'react';
 import { formatCountdown } from '../utils/format.js';
+import { buildDirectLink, resolveAccessPort } from '../utils/access.js';
 import { t } from '../i18n.js';
 
 /**
@@ -19,7 +20,9 @@ export function QrPairingCard({
   copyDirectLink,
   lang,
 }) {
-  const port = (status && status.proxy && status.proxy.activePort) || (typeof window !== 'undefined' && window.location.port) || '3080';
+  const port = resolveAccessPort(status);
+  const portReady = port !== null;
+  const proxyUnavailable = status?.proxy?.mode === 'proxy' && status.proxy.running === false;
   const isExpired = timeLeft <= 0;
   const currentHost =
     selectedTab === 'lan' && status.lanIp
@@ -28,7 +31,7 @@ export function QrPairingCard({
         status.lanIp ||
         (typeof window !== 'undefined' && window.location.hostname) ||
         '127.0.0.1';
-  const directLink = `http://${currentHost}:${port}/auth?token=${status.code || ''}`;
+  const directLink = portReady ? buildDirectLink(currentHost, port, status.code || '') : '';
 
   return (
     <div
@@ -88,8 +91,26 @@ export function QrPairingCard({
         </div>
       ) : null}
 
-      {/* 1. 二维码展示区（仅在安全接入代理正常运行时允许展开显示） */}
-      {showQr && !(status?.proxy?.mode === 'proxy' && status.proxy.running === false) ? (
+      {!portReady && !status.loading && !proxyUnavailable ? (
+        <div
+          style={{
+            background: 'rgba(245, 158, 11, 0.12)',
+            border: '1px solid rgba(245, 158, 11, 0.35)',
+            borderRadius: '8px',
+            padding: '12px 14px',
+            marginBottom: '14px',
+            fontSize: '13px',
+            color: 'var(--dsw-alias-label-secondary, inherit)',
+            lineHeight: '1.6',
+            textAlign: 'left',
+          }}
+        >
+          <strong>⚠️ {t('proxyNotReady', lang)}</strong>
+        </div>
+      ) : null}
+
+      {/* 1. 二维码展示区（仅在安全接入代理正常运行且对外端口可用时允许展开显示） */}
+      {showQr && portReady && !proxyUnavailable ? (
         <div
           style={{
             background: 'var(--dsw-alias-bg-layer-2, rgba(128,128,128,0.06))',
@@ -339,7 +360,7 @@ export function QrPairingCard({
       >
         <button
           type="button"
-          disabled={status?.proxy?.mode === 'proxy' && status.proxy.running === false}
+          disabled={proxyUnavailable || !portReady}
           onClick={() => setShowQr(!showQr)}
           style={{
             padding: '7px 16px',
@@ -353,8 +374,8 @@ export function QrPairingCard({
             borderRadius: '8px',
             fontSize: '13px',
             fontWeight: '600',
-            cursor: status?.proxy?.mode === 'proxy' && status.proxy.running === false ? 'not-allowed' : 'pointer',
-            opacity: status?.proxy?.mode === 'proxy' && status.proxy.running === false ? 0.4 : 1,
+            cursor: proxyUnavailable || !portReady ? 'not-allowed' : 'pointer',
+            opacity: proxyUnavailable || !portReady ? 0.4 : 1,
             whiteSpace: 'nowrap',
             flexShrink: 0,
           }}
