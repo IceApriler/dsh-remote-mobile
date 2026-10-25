@@ -651,6 +651,12 @@ Save the file. DSH with HMR usually reloads automatically; otherwise fully resta
 
 ---
 
+## Star History
+
+[![Star History Chart](https://api.star-history.com/chart?repos=IceApriler/dsh-remote-mobile&type=date&legend=bottom-right)](https://www.star-history.com/?repos=IceApriler%2Fdsh-remote-mobile&type=date&legend=bottom-right)
+
+---
+
 ## 📄 License
 
 This project is licensed under the [MIT License](LICENSE).
