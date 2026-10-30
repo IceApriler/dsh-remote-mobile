@@ -28,6 +28,7 @@ import {
   takeOverConnectionAuth,
   injectTrustedHosts,
 } from './bridge/compat.js'
+import { bindDirectoryPickerRuntime, getDirectoryPickerStatus } from './bridge/directory-picker.js'
 import { detectServerMode } from './gateway/detector.js'
 import { GatewayServer } from './gateway/server.js'
 import { generateGatewaySecret, setGatewaySecret, clearGatewaySecret } from './gateway/secret.js'
@@ -220,6 +221,7 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
   // proxy 是默认模式，但核心已对外监听时会回退 direct：
   // - 旧版 webserver 配置（0.0.0.0 / 具体网卡 IP）继续可用；
   // - direct + 回环核心时，外部手机无法直连，仅适合同机反向代理。
+  bindDirectoryPickerRuntime(ctx, () => detection.isLoopback)
   const requestedMode = store.getOptions().mode ?? 'proxy'
   const legacyDirectFallback =
     requestedMode === 'proxy' && detection.mode === 'direct' && !detection.isLoopback
@@ -391,6 +393,12 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
         }
       }
 
+      const dirPickerStatus = getDirectoryPickerStatus()
+      if (dirPickerStatus.needsWarning) {
+        console.log(`│ ⚠️ 移动端选目录提示: 当前未开启网页内目录选择器，手机点「选择文件夹」会在电脑弹窗`)
+        console.log(`│   可在 Web「设置」->「远程与移动端」顶部一键开启网页目录选择器`)
+      }
+
       console.log(`│ 访问与配置说明:`)
       console.log(`│   - 手机/远程设备打开对应地址即可直接访问`)
       console.log(`│   - 在本机打开 Web 界面 ->「设置」->「远程与移动端」进行安全管理:`)
@@ -434,6 +442,7 @@ export * from './auth/token.js'
 export * from './auth/gate.js'
 export * from './routes/api.js'
 export * from './bridge/compat.js'
+export * from './bridge/directory-picker.js'
 export * from './styles/style-snippets.js'
 export * from './gateway/detector.js'
 export * from './gateway/server.js'

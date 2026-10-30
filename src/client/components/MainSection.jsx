@@ -11,6 +11,7 @@ import {
   revokeAllDevicesApi,
   unlockIpApi,
   clearIpStatsApi,
+  toggleDirectoryPickerApi,
 } from '../api.js';
 import { generateQrSvg } from '../qrcode.js';
 import { buildDirectLink, resolveAccessPort } from '../utils/access.js';
@@ -58,6 +59,15 @@ export function TailscaleMobileSection(props) {
     pairingBridgeMode: 'pending',
     pairingBridgeConflict: '',
     pairingBridgeConflictId: '',
+    directoryPicker: {
+      patchEnabled: false,
+      patchPartial: false,
+      runtimeActive: false,
+      restartRequired: false,
+      needsWarning: false,
+      patchFilePath: '',
+      yamlSnippet: '',
+    },
     proxy: null,
   });
 
@@ -83,6 +93,9 @@ export function TailscaleMobileSection(props) {
   const [hasUpdate, setHasUpdate] = useState(false);
   // 共存警示横幅的本会话关闭状态（不持久化，刷新后若冲突仍存在会再次提示）
   const [conflictBannerDismissed, setConflictBannerDismissed] = useState(false);
+  // 目录选择器受限提醒横幅的本会话关闭状态与写入加载态
+  const [dirPickerBannerDismissed, setDirPickerBannerDismissed] = useState(false);
+  const [isPatchingDirPicker, setIsPatchingDirPicker] = useState(false);
   // 用户是否手动切换过扫码页签：手动选择后，状态轮询不再自动跳回 Tailscale
   const qrTabTouchedRef = useRef(false);
   const toastTimerRef = useRef(null);
@@ -136,6 +149,7 @@ export function TailscaleMobileSection(props) {
           proxyConfigLoadedRef.current = true;
         }
 
+        const dp = data.directoryPicker || {};
         setStatus((prev) => ({
           ...prev,
           tailscaleIp: data.tailscaleIp || '',
@@ -156,6 +170,15 @@ export function TailscaleMobileSection(props) {
           pairingBridgeMode: data.pairingBridgeMode || 'pending',
           pairingBridgeConflict: data.pairingBridgeConflict || '',
           pairingBridgeConflictId: data.pairingBridgeConflictId || '',
+          directoryPicker: {
+            patchEnabled: Boolean(dp.patchEnabled),
+            patchPartial: Boolean(dp.patchPartial),
+            runtimeActive: Boolean(dp.runtimeActive),
+            restartRequired: Boolean(dp.restartRequired),
+            needsWarning: Boolean(dp.needsWarning),
+            patchFilePath: dp.patchFilePath || '',
+            yamlSnippet: dp.yamlSnippet || '',
+          },
           proxy: data.proxy || null,
           loading: false,
         }));
@@ -608,6 +631,54 @@ export function TailscaleMobileSection(props) {
     persistProxyConfig('proxy', 3081, '0.0.0.0', []);
   };
 
+  const toggleDirectoryPicker = (enable) => {
+    if (!enable) {
+      if (!confirm(t('dirPickerDisableConfirm', currentLang))) {
+        return;
+      }
+    }
+    setIsPatchingDirPicker(true);
+    toggleDirectoryPickerApi(enable)
+      .then((res) => {
+        setIsPatchingDirPicker(false);
+        if (res && res.success) {
+          const dp = res.directoryPicker || {};
+          setStatus((prev) => ({
+            ...prev,
+            directoryPicker: {
+              patchEnabled: Boolean(dp.patchEnabled),
+              patchPartial: Boolean(dp.patchPartial),
+              runtimeActive: Boolean(dp.runtimeActive),
+              restartRequired: Boolean(dp.restartRequired),
+              needsWarning: Boolean(dp.needsWarning),
+              patchFilePath: dp.patchFilePath || '',
+              yamlSnippet: dp.yamlSnippet || '',
+            },
+          }));
+          refreshStatusOnly();
+          showToast(
+            t(enable ? 'dirPickerEnabledToast' : 'dirPickerDisabledToast', currentLang),
+            'success',
+            4500
+          );
+        } else {
+          showToast(
+            (currentLang === 'en' ? 'Operation failed: ' : '操作失败：') + ((res && res.reason) || ''),
+            'danger',
+            3500
+          );
+        }
+      })
+      .catch((err) => {
+        setIsPatchingDirPicker(false);
+        showToast(
+          (currentLang === 'en' ? 'Operation failed: ' : '操作失败：') + (err?.message || err),
+          'danger',
+          3500
+        );
+      });
+  };
+
   const copyDirectLink = () => {
     if (timeLeft <= 0) {
       alert(t('codeExpired', currentLang));
@@ -959,6 +1030,180 @@ export function TailscaleMobileSection(props) {
         </div>
       ) : null}
 
+      {/* 移动端添加工作区（目录选择器）受限醒目提醒横幅：未开启 browse 模式时在设置页顶部提醒并支持一键开启 */}
+      {!status.loading && status.directoryPicker.needsWarning && !dirPickerBannerDismissed ? (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '10px',
+            padding: '12px 14px',
+            borderRadius: '10px',
+            border: '1px solid rgba(245, 158, 11, 0.45)',
+            background: 'rgba(245, 158, 11, 0.12)',
+          }}
+        >
+          <span style={{ fontSize: '16px', lineHeight: '20px' }}>📁</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                fontSize: '13px',
+                fontWeight: '700',
+                marginBottom: '4px',
+                color: 'var(--dsw-alias-label-primary, inherit)',
+              }}
+            >
+              {t('dirPickerBannerTitle', currentLang)}
+            </div>
+            <div
+              style={{
+                fontSize: '12px',
+                lineHeight: 1.6,
+                whiteSpace: 'pre-line',
+                color: 'var(--dsw-alias-label-secondary, inherit)',
+              }}
+            >
+              {t('dirPickerBannerBody', currentLang)}
+            </div>
+            <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                disabled={isPatchingDirPicker}
+                onClick={() => toggleDirectoryPicker(true)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 12px',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  borderRadius: '7px',
+                  cursor: isPatchingDirPicker ? 'not-allowed' : 'pointer',
+                  opacity: isPatchingDirPicker ? 0.7 : 1,
+                  border: 'none',
+                  background: '#2563eb',
+                  color: '#ffffff',
+                  boxShadow: '0 2px 6px rgba(37, 99, 235, 0.3)',
+                }}
+              >
+                {isPatchingDirPicker
+                  ? t('dirPickerEnablingBtn', currentLang)
+                  : t('dirPickerEnableBtn', currentLang)}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const yaml = status.directoryPicker.yamlSnippet || '';
+                  if (yaml) {
+                    copyText(yaml, t('dirPickerCopiedYamlTip', currentLang));
+                  }
+                }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '5px 10px',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  borderRadius: '7px',
+                  cursor: 'pointer',
+                  border: '1px solid rgba(245, 158, 11, 0.55)',
+                  background: 'rgba(245, 158, 11, 0.18)',
+                  color: 'var(--dsw-alias-label-primary, inherit)',
+                }}
+              >
+                {t('dirPickerCopyYamlBtn', currentLang)}
+              </button>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setDirPickerBannerDismissed(true)}
+            title={t('dirPickerBannerDismiss', currentLang)}
+            style={{
+              flexShrink: 0,
+              width: '24px',
+              height: '24px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '12px',
+              background: 'rgba(128, 128, 128, 0.15)',
+              color: 'var(--dsw-alias-label-secondary, inherit)',
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      ) : null}
+
+      {/* 目录选择器已写入但待重启生效的提示横幅 */}
+      {!status.loading &&
+      status.directoryPicker.patchEnabled &&
+      status.directoryPicker.restartRequired &&
+      !dirPickerBannerDismissed ? (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '10px',
+            padding: '12px 14px',
+            borderRadius: '10px',
+            border: '1px solid rgba(59, 130, 246, 0.45)',
+            background: 'rgba(59, 130, 246, 0.1)',
+          }}
+        >
+          <span style={{ fontSize: '16px', lineHeight: '20px' }}>✅</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                fontSize: '13px',
+                fontWeight: '700',
+                marginBottom: '4px',
+                color: 'var(--dsw-alias-label-primary, inherit)',
+              }}
+            >
+              {t('dirPickerRestartBannerTitle', currentLang)}
+            </div>
+            <div
+              style={{
+                fontSize: '12px',
+                lineHeight: 1.6,
+                color: 'var(--dsw-alias-label-secondary, inherit)',
+              }}
+            >
+              {t('dirPickerRestartBannerBody', currentLang, {
+                path: status.directoryPicker.patchFilePath || '~/.dsh/profiles/web/cordis.patch.yml',
+              })}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setDirPickerBannerDismissed(true)}
+            title={t('dirPickerBannerDismiss', currentLang)}
+            style={{
+              flexShrink: 0,
+              width: '24px',
+              height: '24px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '12px',
+              background: 'rgba(128, 128, 128, 0.15)',
+              color: 'var(--dsw-alias-label-secondary, inherit)',
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      ) : null}
+
       {/* 页签导航：接入 / 设备与安全 / 样式覆写 / 本地数据（下划线风格，支持移动端横滑且绝不换行） */}
       <div
         style={{
@@ -1032,6 +1277,9 @@ export function TailscaleMobileSection(props) {
           setTrustedHostsInput={setTrustedHostsInput}
           saveProxyConfig={saveProxyConfig}
           resetProxyConfigDefaults={resetProxyConfigDefaults}
+          toggleDirectoryPicker={toggleDirectoryPicker}
+          isPatchingDirPicker={isPatchingDirPicker}
+          copyText={copyText}
           isSaving={isSaving}
           lang={currentLang}
         />

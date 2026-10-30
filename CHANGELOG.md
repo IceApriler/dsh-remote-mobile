@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.2] - 2026-10-30
+
+### Added & Fixed (移动端添加工作区 / 选择文件夹受限检测与一键开启网页目录选择器)
+
+- **问题背景**：DSH 官方默认目录选择器 `dsh-host-directory-picker-auto`（`id: directory-picker`）仅在进程启动时根据 `webServer.host` 是否绑定 `127.0.0.1` 回环来判断“本机 / 远程”。由于本插件默认采用安全接入代理模式（DSH 核心保持 `127.0.0.1:3080` 回环，由 `3081` 代理对外），手机端点击「添加工作区 / 选择文件夹」时会被 `auto` 误判为本机桌面操作，将原生文件夹选择窗（`native`）弹在 PC 屏幕上，导致手机端一直等待且无法添加工作区。
+- **双维度精准状态检测（`src/bridge/directory-picker.ts`）**：
+  - 结合 Cordis 运行时 `loader.entries()` 与 `~/.dsh/profiles/web/cordis.patch.yml` 配置文件解析，精准识别当前是否已启用应用内网页目录选择器（`@deepseek-ai/dsh-host-directory-picker-browse` + `@deepseek-ai/dsh-client-ui-directory-picker-browse`）、是否仅部分配置（`patchPartial`）、是否待重启/热重载生效（`restartRequired`），以及是否需要展示受限提醒（`needsWarning`）；
+  - `/api/remote-mobile/status` 新增 `directoryPicker` 状态契约字段；终端启动就绪横幅（`printReadyBanner`）在未开启网页目录选择器时同步输出友好提示。
+- **严格幂等去重的补丁写入与无损还原**：
+  - 新增 `POST /api/remote-mobile/directory-picker` 路由（`exact` 契约），支持在 Web 设置页一键开启（`enabled: true`）或恢复 PC 原生目录选择器（`enabled: false`）；
+  - **严格结构化去重**：写入 `~/.dsh/profiles/web/cordis.patch.yml` 时，若已存在 `- id: directory-picker`（未设 `disabled` 或为 `false`）则就地更新为 `disabled: true` 并清理重复块；对 `directory-picker-browse` 与 `ui-directory-picker-browse` 逐项独立查重，仅补充缺失项，绝不产生重复条目；
+  - **安全无损还原**：恢复 PC 原生目录选择器时，仅移除与目录选择器相关的禁用项、两个 `browse` 子项及专属注释，若与其它插件共用 `- insert:` 块则完整保留共用块与用户其它配置。
+- **设置面板醒目提醒横幅与常驻控制区**：
+  - **顶部醒目提醒横幅（`MainSection.jsx`）**：当处于回环核心且未启用 `browse` 模式时，在「设置 -> 远程与移动端」顶部展示醒目提醒，提供 **「⚡ 一键开启网页目录选择器」** 与 **「📋 复制 YAML 配置」** 按钮；写入后若尚未热重载生效，自动切换为蓝色待生效提示；
+  - **「接入」页签常驻开关（`ProxyConfigCard.jsx`）**：在「接入代理配置」卡片底部常驻展示当前目录选择器状态与目标 `cordis.patch.yml` 路径，支持随时一键开启或点击 **「🔄 恢复 PC 原生目录选择器」** 撤回配置；中英文国际化（`i18n.js`）及中英文 README（`Q12`）同步更新。
+- **测试覆盖**：新增 `test/directory-picker.test.js`，覆盖空配置检测、多次调用严格幂等去重、已有 `directory-picker` 就地更新、单边 `browse` 缺失补齐、共用 `insert` 块无损还原、运行时 Loader 状态探测及 API 路由闭环。
+
+---
+
 ## [1.10.1] - 2026-10-24
 
 ### Fixed (解决 Issue #9 · 适配 DSH 0.2.1 路由契约并修复对外端口来源)

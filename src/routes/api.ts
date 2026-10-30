@@ -6,6 +6,11 @@ import { getPublicKeyPem, decryptWithPrivateKey, validateSecretStrength, RSA_KEY
 import { getLoginPageHtml } from './login-page.js'
 import { DEFAULT_STYLE_FILE, type StyleSnippetStore } from '../styles/style-snippets.js'
 import { getPairingBridgeState } from '../bridge/compat.js'
+import {
+  getDirectoryPickerStatus,
+  enableDirectoryPickerBrowse,
+  disableDirectoryPickerBrowse,
+} from '../bridge/directory-picker.js'
 import { resolveRedirectPath } from '../auth/prefix.js'
 
 function jsonResponse(res: ServerResponse, status: number, data: any) {
@@ -52,7 +57,16 @@ export interface WebRoute {
   handler: (req: IncomingMessage, res: ServerResponse) => unknown
 }
 
-export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore): WebRoute[] {
+export interface CreateRoutesOptions {
+  /** 测试环境注入的自定义 cordis.patch.yml 路径（避免污染宿主配置） */
+  patchFilePath?: string
+}
+
+export function createRoutes(
+  store: SessionStore,
+  styleStore?: StyleSnippetStore,
+  routeOptions?: CreateRoutesOptions
+): WebRoute[] {
   return [
     // 0. RSA 公钥获取接口 (RSA-OAEP-SHA256)
     {
@@ -105,6 +119,8 @@ export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore
           pairingBridgeMode: bridgeState.mode,
           pairingBridgeConflict: bridgeState.conflictWith || '',
           pairingBridgeConflictId: bridgeState.conflictEntryId || '',
+          // 目录选择器（移动端添加工作区/选择文件夹）状态与补丁信息
+          directoryPicker: getDirectoryPickerStatus(routeOptions?.patchFilePath),
           // 安全接入代理运行状态
           proxy: {
             ...store.getGatewayStatus(),
@@ -580,6 +596,45 @@ export function createRoutes(store: SessionStore, styleStore?: StyleSnippetStore
         }
         styleStore.resetEnabled()
         jsonResponse(res, 200, { success: true, snippets: styleStore.list() })
+      },
+    },
+
+    // 11. 移动端网页目录选择器（browse 模式）一键开启与还原（严格幂等去重写入 cordis.patch.yml）
+    {
+      kind: 'exact',
+      method: 'POST',
+      path: '/api/remote-mobile/directory-picker',
+      handler: async (req: IncomingMessage, res: ServerResponse) => {
+        const body = await parseJsonBody(req)
+        if (typeof body.enabled !== 'boolean') {
+          return jsonResponse(res, 400, {
+            success: false,
+            reason: 'enabled 必须为布尔值 (true 开启网页目录选择器 / false 恢复原生目录选择器)',
+          })
+        }
+        try {
+          const result = body.enabled
+            ? enableDirectoryPickerBrowse(routeOptions?.patchFilePath)
+            : disableDirectoryPickerBrowse(routeOptions?.patchFilePath)
+          return jsonResponse(res, 200, {
+            success: true,
+            changed: result.changed,
+            directoryPicker: {
+              patchEnabled: result.patchEnabled,
+              patchPartial: result.patchPartial,
+              runtimeActive: result.runtimeActive,
+              restartRequired: result.restartRequired,
+              needsWarning: result.needsWarning,
+              patchFilePath: result.patchFilePath,
+              yamlSnippet: result.yamlSnippet,
+            },
+          })
+        } catch (err: any) {
+          return jsonResponse(res, 500, {
+            success: false,
+            reason: err?.message || '写入 cordis.patch.yml 失败',
+          })
+        }
       },
     },
   ]

@@ -631,7 +631,10 @@ dsh plugin --profile web remove dsh-remote-mobile
 2. **auto 只按启动环境判定**：`dsh-host-directory-picker-auto` 在启动时检查 `webServer.host`。当核心绑定 `127.0.0.1`、非 SSH 启动且系统有桌面时，它判定为 `native`，调用 PC 的 macOS / Windows 原生目录选择器。
 3. **安全接入代理让远程请求看起来像本机**：本插件让 DSH 核心保持 `127.0.0.1:3080`，由 `0.0.0.0:3081` 安全接入代理对外服务。手机通过 Tailscale 访问 3081 时，核心收到的仍是回环请求，auto 误判“操作者就坐在 PC 前”，于是把 native 窗口弹在 PC 上；手机端不会渲染这个系统窗口，只会等待。
 
-**修复**：固定使用应用内 `browse` 目录选择器。编辑 `~/.dsh/profiles/web/cordis.patch.yml`（Windows：`%USERPROFILE%\.dsh\profiles\web\cordis.patch.yml`），在末尾追加：
+**修复（推荐一键开启，也支持手动配置）**：
+
+- **方式一（Web 界面一键开启 / 还原，自动幂等去重）**：打开 DSH Web 界面 -> **「设置」->「远程与移动端」**，在顶部醒目提醒横幅（或「接入」页签底部的「移动端添加工作区（目录选择器模式）」区域）点击 **「⚡ 一键开启网页目录选择器」**。插件会自动在 `~/.dsh/profiles/web/cordis.patch.yml` 中安全写入配置并严格去重；后续如需切回电脑原生窗口，也可随时点击 **「🔄 恢复 PC 原生目录选择器」** 一键还原。
+- **方式二（手动编辑配置文件）**：固定使用应用内 `browse` 目录选择器。编辑 `~/.dsh/profiles/web/cordis.patch.yml`（Windows：`%USERPROFILE%\.dsh\profiles\web\cordis.patch.yml`），在末尾追加：
 
 ```yaml
 - id: directory-picker

@@ -630,7 +630,10 @@ Steps:
 2. **Auto decides only from the boot environment**: `dsh-host-directory-picker-auto` checks `webServer.host` at startup. With a `127.0.0.1` core, no SSH launch, and a desktop session, it selects `native`, which opens the PC's macOS / Windows folder chooser.
 3. **The secure proxy makes remote requests look local**: this plugin keeps the DSH core on `127.0.0.1:3080` and serves remote clients through the `0.0.0.0:3081` secure proxy. When a phone reaches 3081 over Tailscale, the core still sees a loopback request, so auto assumes the operator is sitting at the PC and opens the native chooser there. The phone cannot render that host-side window and simply waits.
 
-**Fix**: pin the in-app `browse` picker. Append to `~/.dsh/profiles/web/cordis.patch.yml` (Windows: `%USERPROFILE%\.dsh\profiles\web\cordis.patch.yml`):
+**Fix (One-click in Web UI recommended, or manual configuration)**:
+
+- **Option 1 (One-click enable / restore in Web UI with automatic deduplication)**: Open DSH Web UI -> **Settings -> Remote & Mobile Access**, and click **"⚡ Enable In-App Directory Browser"** in the top reminder banner (or inside the "Mobile Workspace Directory Picker Mode" section of the Access tab). The plugin will safely write the patch into `~/.dsh/profiles/web/cordis.patch.yml` with strict deduplication. You can also click **"🔄 Restore PC Native Picker"** at any time to revert.
+- **Option 2 (Manual file edit)**: Pin the in-app `browse` picker. Append to `~/.dsh/profiles/web/cordis.patch.yml` (Windows: `%USERPROFILE%\.dsh\profiles\web\cordis.patch.yml`):
 
 ```yaml
 - id: directory-picker

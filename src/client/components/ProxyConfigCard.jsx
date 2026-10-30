@@ -17,10 +17,15 @@ export function ProxyConfigCard({
   setTrustedHostsInput,
   saveProxyConfig,
   resetProxyConfigDefaults,
+  toggleDirectoryPicker,
+  isPatchingDirPicker,
+  copyText,
   isSaving,
   lang,
 }) {
   const isDirect = modeInput === 'direct';
+  const dirPicker = (status && status.directoryPicker) || {};
+  const isBrowseEnabled = Boolean(dirPicker.patchEnabled || dirPicker.runtimeActive);
   const fieldLabelStyle = {
     fontSize: '12px',
     fontWeight: '600',
@@ -196,6 +201,132 @@ export function ProxyConfigCard({
         >
           {isSaving ? t('proxySavingBtn', lang) : t('proxySaveBtn', lang)}
         </button>
+      </div>
+
+      {/* 移动端添加工作区（目录选择器模式）状态与一键切换区 */}
+      <div
+        style={{
+          ...fieldBoxStyle,
+          marginTop: '4px',
+          border: isBrowseEnabled
+            ? '1px solid rgba(16, 185, 129, 0.3)'
+            : '1px solid rgba(245, 158, 11, 0.35)',
+          background: isBrowseEnabled
+            ? 'rgba(16, 185, 129, 0.06)'
+            : 'rgba(245, 158, 11, 0.08)',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '8px',
+            flexWrap: 'wrap',
+          }}
+        >
+          <span style={fieldLabelStyle}>{t('dirPickerSectionTitle', lang)}</span>
+          <span
+            style={{
+              fontSize: '11px',
+              fontWeight: '600',
+              color: isBrowseEnabled ? '#10b981' : '#f59e0b',
+            }}
+          >
+            {dirPicker.restartRequired
+              ? t('dirPickerStatusPendingRestart', lang)
+              : isBrowseEnabled
+              ? t('dirPickerStatusActive', lang)
+              : t('dirPickerStatusNativeWarn', lang)}
+          </span>
+        </div>
+
+        <span style={fieldHintStyle}>{t('dirPickerSectionDesc', lang)}</span>
+
+        {dirPicker.patchFilePath ? (
+          <div
+            style={{
+              fontSize: '11px',
+              color: 'var(--dsw-alias-label-tertiary, #888)',
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+              wordBreak: 'break-all',
+            }}
+          >
+            {t('dirPickerPatchFileLabel', lang)}
+            {dirPicker.patchFilePath}
+          </div>
+        ) : null}
+
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            flexWrap: 'wrap',
+            marginTop: '4px',
+          }}
+        >
+          {typeof toggleDirectoryPicker === 'function' ? (
+            isBrowseEnabled ? (
+              <button
+                type="button"
+                disabled={isPatchingDirPicker}
+                onClick={() => toggleDirectoryPicker(false)}
+                style={{
+                  padding: '5px 12px',
+                  background: 'transparent',
+                  border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.3))',
+                  color: 'var(--dsw-alias-label-secondary, inherit)',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  cursor: isPatchingDirPicker ? 'not-allowed' : 'pointer',
+                  opacity: isPatchingDirPicker ? 0.6 : 1,
+                }}
+              >
+                {t('dirPickerRestoreNativeBtn', lang)}
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={isPatchingDirPicker}
+                onClick={() => toggleDirectoryPicker(true)}
+                style={{
+                  padding: '5px 12px',
+                  background: '#2563eb',
+                  border: 'none',
+                  color: '#ffffff',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  cursor: isPatchingDirPicker ? 'not-allowed' : 'pointer',
+                  opacity: isPatchingDirPicker ? 0.7 : 1,
+                }}
+              >
+                {isPatchingDirPicker
+                  ? t('dirPickerEnablingBtn', lang)
+                  : t('dirPickerEnableBtn', lang)}
+              </button>
+            )
+          ) : null}
+
+          {typeof copyText === 'function' && dirPicker.yamlSnippet ? (
+            <button
+              type="button"
+              onClick={() => copyText(dirPicker.yamlSnippet, t('dirPickerCopiedYamlTip', lang))}
+              style={{
+                padding: '5px 10px',
+                background: 'transparent',
+                border: '1px solid var(--dsw-alias-border-l2, rgba(128,128,128,0.25))',
+                color: 'var(--dsw-alias-label-secondary, inherit)',
+                borderRadius: '6px',
+                fontSize: '12px',
+                cursor: 'pointer',
+              }}
+            >
+              {t('dirPickerCopyYamlBtn', lang)}
+            </button>
+          ) : null}
+        </div>
       </div>
     </div>
   );

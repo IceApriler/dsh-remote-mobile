@@ -44,8 +44,8 @@ function createFakeCtx(webServer) {
 test('DSH 路由契约与生命周期测试', async (t) => {
   const routes = createRoutes({}, {})
 
-  await t.test('18 条路由全部使用 exact 契约', () => {
-    assert.equal(routes.length, 18)
+  await t.test('19 条路由全部使用 exact 契约', () => {
+    assert.equal(routes.length, 19)
     assert.ok(routes.every((route) => route.kind === 'exact'))
   })
 
@@ -55,7 +55,7 @@ test('DSH 路由契约与生命周期测试', async (t) => {
 
     registerWebRoutes(ctx, routes)
 
-    assert.equal(webServer.exact.size, 18)
+    assert.equal(webServer.exact.size, 19)
     assert.equal(webServer.prefixes.size, 0)
 
     ctx.dispose()
@@ -72,7 +72,7 @@ test('DSH 路由契约与生命周期测试', async (t) => {
     firstCtx.dispose()
     registerWebRoutes(createFakeCtx(webServer), routes)
 
-    assert.equal(webServer.exact.size, 18)
+    assert.equal(webServer.exact.size, 19)
     assert.equal(webServer.prefixes.size, 0)
   })
 
@@ -106,7 +106,7 @@ test('DSH 路由契约与生命周期测试', async (t) => {
     }
 
     registerWebRoutes(ctx, routes)
-    assert.equal(webServer.exact.size, 18)
+    assert.equal(webServer.exact.size, 19)
 
     cleanups.forEach((cleanup) => cleanup())
     assert.equal(webServer.exact.size, 0)

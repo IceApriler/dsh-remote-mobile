@@ -145,3 +145,11 @@ export function resetStylesApi() {
     headers: { 'Content-Type': 'application/json' },
   });
 }
+
+export function toggleDirectoryPickerApi(enabled) {
+  return safeFetchJson(RM_API_BASE + 'directory-picker', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled: Boolean(enabled) }),
+  });
+}
