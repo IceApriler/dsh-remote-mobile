@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.3] - 2026-11-03
+
+### Fixed (解决 Issue #11 · 挂载网关生命周期至 ctx.effect，解决 DSH Desktop 更新重启失败与进程退出挂起)
+
+- **问题背景**：在 DSH Desktop（Electron 环境）中执行「更新并重启」时，宿主 shell 发送 shutdown 并断开 IPC，等待 Node.js 事件循环排空以实现优雅关停（graceful teardown）。由于旧版插件仅在 `ctx.on('dispose')` 上挂载网关关闭逻辑，而宿主在关闭 host 进程时并不会触发 `dispose` 事件（仅执行 `ctx.effect` 注册的 Teardown 清理回调），导致安全接入代理 HTTP Server（默认 `0.0.0.0:3081`）持续保持监听句柄，事件循环无法自然排空。10 秒后触发宿主优雅退出超时（`graceful deadline exceeded`），导致桌面端更新 100% 失败并报错退出。
+- **生命周期注册对齐宿主规范（`src/index.ts`）**：
+  - 抽取网关关闭与清理逻辑为幂等的 `cleanupGateway` 函数；
+  - 优先通过 `ctx.effect(() => cleanupGateway, 'dsh-remote-mobile:gateway-lifecycle')` 将网关生命周期与宿主副作用体系绑定，与 `registerWebRoutes` 的生命周期管理保持高度一致；
+  - 保留 `ctx.on?.('dispose', cleanupGateway)` 作为旧宿主环境及显式卸载/重载场景的兜底，并增加内部防重守卫确保幂等执行。
+- **强化安全接入代理关停与防死锁保护（`src/gateway/server.ts`）**：
+  - `GatewayServer.close()` 主动调用 Node.js 18.2+ 原生连接清理 API（`closeIdleConnections?.()` 与 `closeAllConnections?.()`），彻底释放所有残留连接；
+  - 引入 2 秒超时兜底保护机制（`setTimeout` + `Promise.race` 逻辑），防止底层套接字在极端异常时未触发回调造成事件循环挂死。
+- **测试覆盖（`test/lifecycle.test.js`）**：
+  - 新增全套生命周期与优雅退出测试，覆盖 `ctx.effect` 规范绑定、`cleanupGateway` 重复触发的幂等性、未监听时安全退出、原生连接清理方法调用以及底座挂起时的 2 秒超时兜底。
+
+---
+
 ## [1.10.2] - 2026-10-30
 
 ### Added & Fixed (移动端添加工作区 / 选择文件夹受限检测与一键开启网页目录选择器)
