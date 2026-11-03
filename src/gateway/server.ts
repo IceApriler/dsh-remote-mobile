@@ -240,13 +240,37 @@ export class GatewayServer {
     }
     this.activeSockets.clear()
 
-    // 2. 彻底关闭 Server 监听
+    // 2. 彻底关闭 Server 监听并释放所有连接
     const s = this.server
     this.server = null
     this.status = 'stopped'
 
+    // Node.js 18.2+ 原生连接清理
+    try {
+      const serverAny = s as any
+      serverAny.closeIdleConnections?.()
+      serverAny.closeAllConnections?.()
+    } catch {}
+
     await new Promise<void>((resolve) => {
-      s.close(() => resolve())
+      let resolved = false
+      const done = () => {
+        if (!resolved) {
+          resolved = true
+          resolve()
+        }
+      }
+      // 超时兜底（最多等待 2 秒），避免极端长连接挂住或未触发回调导致事件循环不退出
+      const timer = setTimeout(done, 2000)
+      try {
+        s.close(() => {
+          clearTimeout(timer)
+          done()
+        })
+      } catch {
+        clearTimeout(timer)
+        done()
+      }
     })
   }
 

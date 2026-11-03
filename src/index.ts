@@ -275,20 +275,37 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
   let timer1: ReturnType<typeof setTimeout> | null = null
   let timer2: ReturnType<typeof setTimeout> | null = null
 
+  const cleanupGateway = () => {
+    if (disposed) return
+    disposed = true
+    if (timer1) {
+      clearTimeout(timer1)
+      timer1 = null
+    }
+    if (timer2) {
+      clearTimeout(timer2)
+      timer2 = null
+    }
+    if (gatewayServer) {
+      clearGatewaySecret(gatewayServer.getServer())
+      gatewayServer.close().catch(() => {})
+    }
+    const webServer =
+      (typeof ctx.get === 'function' ? ctx.get('webServer') : undefined) ||
+      (ctx as any).webServer
+    if (webServer?.server) {
+      clearGatewaySecret(webServer.server)
+    }
+  }
+
+  // 宿主关停时 dispose 事件可能不触发，effect 清理一定会执行（与 registerWebRoutes 保持一致）
+  if (typeof ctx.effect === 'function') {
+    ctx.effect(() => cleanupGateway, 'dsh-remote-mobile:gateway-lifecycle')
+  }
+
+  // 兼容没有 ctx.effect 的旧宿主或显式卸载/重载触发的 dispose
   try {
-    ctx.on?.('dispose', () => {
-      disposed = true
-      if (timer1) clearTimeout(timer1)
-      if (timer2) clearTimeout(timer2)
-      if (gatewayServer) {
-        clearGatewaySecret(gatewayServer.getServer())
-        gatewayServer.close().catch(() => {})
-      }
-      const webServer = (typeof ctx.get === 'function' ? ctx.get('webServer') : undefined) || ctx.webServer
-      if (webServer?.server) {
-        clearGatewaySecret(webServer.server)
-      }
-    })
+    ctx.on?.('dispose', cleanupGateway)
   } catch {}
 
   const printReadyBanner = async () => {
