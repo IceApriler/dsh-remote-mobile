@@ -588,16 +588,24 @@ export function patchHttpServerWithVirtualizer(
         }
       }
 
-      // 同步有效客户端 IP 到三头（外部伪造的头在此被强制净化，下游生态插件与审计均可准确读取）
+      // 内部真实 IP 头始终写入（供本插件审计与路由层 getRealClientIp 读取）
       req.headers['x-dsh-real-ip'] = effectiveClientIp
-      req.headers['x-real-ip'] = effectiveClientIp
-      req.headers['x-forwarded-for'] = effectiveClientIp
 
       // 消费完毕后立即抹除内部私密密钥头，防止向下游泄露
       delete req.headers['x-dsh-gateway-secret']
 
-      if (!req.headers['x-forwarded-host'] && req.headers.host) {
-        req.headers['x-forwarded-host'] = req.headers.host
+      // 仅对外部直连、受信网关转发或同机反向代理流量注入标准转发头；
+      // 纯本机回环直连请求严禁注入 x-forwarded-for / x-real-ip / x-forwarded-host，
+      // 避免触发下游 loopback-only 生态插件（如 dsh-session-archive）的代理拦截误判（403）。
+      const shouldInjectForwardHeaders =
+        trustedGateway || !isLoopbackSocket || !isLoopbackRequest(req)
+
+      if (shouldInjectForwardHeaders) {
+        req.headers['x-real-ip'] = effectiveClientIp
+        req.headers['x-forwarded-for'] = effectiveClientIp
+        if (!req.headers['x-forwarded-host'] && req.headers.host) {
+          req.headers['x-forwarded-host'] = req.headers.host
+        }
       }
 
       // 仅当底层物理 socket 为外部来源（Direct 模式直接对公网开放）时才由底座补丁进行外部虚拟化；

@@ -182,6 +182,39 @@ test('上下文虚拟化与兼容性补丁测试 (compat.ts)', async (t) => {
     mockServer.emit('request', req, res)
   })
 
+  await t.test('纯本机回环直连不注入 x-forwarded-for / x-real-ip / x-forwarded-host（兼容 loopback-only 生态插件）', (t, done) => {
+    const mockServer = new EventEmitter()
+    const store = new SessionStore({ devicesFile: `/tmp/dsh-compat-loopback-clean-${Date.now()}.json` })
+    const gateMiddleware = (req, res, next) => { next?.(); return true }
+
+    let checked = false
+    mockServer.on('request', (req) => {
+      if (checked) return
+      checked = true
+      assert.equal(req.headers['x-dsh-real-ip'], '127.0.0.1')
+      assert.equal(req.headers['x-forwarded-for'], undefined)
+      assert.equal(req.headers['x-real-ip'], undefined)
+      assert.equal(req.headers['x-forwarded-host'], undefined)
+      done()
+    })
+
+    patchHttpServerWithVirtualizer(mockServer, gateMiddleware, store)
+
+    const req = {
+      headers: {
+        host: '127.0.0.1:19387',
+      },
+      socket: { remoteAddress: '127.0.0.1' },
+    }
+    const res = {
+      writeHead() {},
+      setHeader() {},
+      end() {},
+    }
+
+    mockServer.emit('request', req, res)
+  })
+
   await t.test('移动端请求注入 data-dsh-mobile 标记与样式片段，桌面端不注入', (t, done) => {
     const mockServer = new EventEmitter()
     const store = new SessionStore({ devicesFile: `/tmp/dsh-compat-style-1787460740359.json` })

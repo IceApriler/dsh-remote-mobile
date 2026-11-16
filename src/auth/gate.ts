@@ -25,10 +25,8 @@ export function isLoopbackRequest(req: IncomingMessage): boolean {
   const host = extractBareHostname(req.headers.host)
   if (host && !isLocalVariant(host)) return false
 
-  // 注意：插件自身会为 loopback 请求注入 x-forwarded-for / x-real-ip /
-  // x-forwarded-host（值均为 127.0.0.1），不能把“存在 Forwarded 头”直接
-  // 等同于“同机反向代理”，否则会误伤 3080 根路径的 connection 鉴权。
-  // 只有转发值指向外部主机/外部 IP，或出现 X-Forwarded-Proto 时，才判为代理。
+  // 只有转发值指向外部主机/外部 IP，或出现 X-Forwarded-Proto 时，才判为代理，
+  // 避免部分本地工具自带回环值 XFF 时误伤 3080 根路径的 connection 鉴权。
   const forwardedFor = firstHeaderValue(req.headers['x-forwarded-for'])
   if (forwardedFor && !isLoopbackIpValue(forwardedFor)) return false
 

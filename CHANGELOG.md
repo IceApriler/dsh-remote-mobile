@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.4] - 2026-11-16
+
+### Fixed (解决 Issue #12 · 停止对纯本机回环请求注入标准转发头，修复 loopback-only 生态插件全量 403)
+
+- **问题背景**：此前在 `src/bridge/compat.ts` 的门禁放行回调中，插件会无条件对所有请求写入 `x-real-ip`、`x-forwarded-for` 与 `x-forwarded-host`。当用户从桌面端本机回环（`127.0.0.1`）直连时，原本干净的本机请求也会被强行注入 `x-forwarded-for: 127.0.0.1`，导致遵循标准 loopback 围栏语义（只要存在 `x-forwarded-for` 即判定为经代理转发）的生态插件（如 `@linxin666/dsh-session-archive`）将本机请求误判为外部代理，全量返回 `403 forbidden: loopback-only`。
+- **精准收敛标准转发头注入（`src/bridge/compat.ts`）**：
+  - 保留内部专用头 `x-dsh-real-ip` 的写入，确保本插件自身的路由层（`getRealClientIp`）与安全审计逻辑不受影响；
+  - 仅对**受信网关转发**（`trustedGateway`）、**外部物理网络直连**（`!isLoopbackSocket`）或**同机反向代理**（`!isLoopbackRequest(req)`）流量注入/净化 `x-real-ip`、`x-forwarded-for` 与 `x-forwarded-host`；
+  - 纯本机回环直连请求不再写入上述标准转发头，恢复标准的直连 HTTP 请求头语义。
+- **注释与测试覆盖（`src/auth/gate.ts`, `test/compat.test.js`）**：
+  - 同步更新 `isLoopbackRequest` 的注释说明；
+  - 在 `test/compat.test.js` 新增“纯本机回环直连不注入 `x-forwarded-for` / `x-real-ip` / `x-forwarded-host`”回归测试。
+
+---
+
 ## [1.10.3] - 2026-11-03
 
 ### Fixed (解决 Issue #11 · 挂载网关生命周期至 ctx.effect，解决 DSH Desktop 更新重启失败与进程退出挂起)
