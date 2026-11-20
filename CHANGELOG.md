@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.0] - 2026-11-20
+
+### Added (无 GUI 服务器可用：`code` 获取配对码、`password` 设置长期密码)
+
+- **问题背景**：配对码与长期密码此前只能在「本机 Web UI → 设置 → 远程与移动端」获取。在 systemd / 容器 / NAS / 云主机这类没有图形界面的部署里，用户只能手写 `curl http://127.0.0.1:3081/api/remote-mobile/...`，既容易记错端口，也容易把密码留在 shell 历史里。
+- **新增插件自带 CLI（`bin: dsh-remote-mobile`，源码 `src/cli/`）**：
+  - `dsh-remote-mobile code` —— 查看配对码；**优先复用当前仍然有效的码**（`store.getActiveShortCode()`），没有或已过期才生成，`--new` 强制刷新；
+  - `dsh-remote-mobile password` —— 设置 / 更新长期密码，交互式输入不回显，支持 `--stdin` 管道与 `--clear` 清除；
+  - 通用参数：`--base-url` / `--port` / `--host` / `--token` / `--timeout` / `--dsh-home` / `--json`；`--json` 输出含 `code`、`expiresInSeconds`、`accessUrls`（局域网 / Tailscale / 配对入口）等字段，便于脚本集成。
+- **端点发现（`src/cli/client.ts`）**：读取 `settings.json` 的 `proxyPort`，结合本机网卡 IP 依次探测 `3080/3081/3082/3083`，并用「响应必须包含 `success` + `proxy` 结构」识别本插件服务，避免把同端口的其他服务误判为 DSH。命令只走本机回环，插件门禁对 loopback 无条件放行，无需任何凭据；直连模式（核心监听网卡 IP）下可用 `--token` 携带已配对设备令牌。
+- **离线兜底**：`password` 在 DSH 未运行或端口不可达时，直接以同等强度（复用 `hashSecret` 的 scrypt + 盐）写入 `settings.json`（保留 `allowLan` / `proxyPort` / `trustedHosts` 等既有字段、不落明文、权限 `0o600`），并明确提示「下次启动 `dsh web` 后生效」，支持「先设密码、再起服务」的初始化顺序。
+- **状态接口新增 `pairingCode` 字段（`src/routes/api.ts`）**：仅在**本机操作者**请求时返回当前有效配对码（`{ code, expiresAt }`），供 CLI 窥视而不刷新。
+  - 判定只看物理 Socket 地址，或受信网关上报的真实客户端 IP（`getClientIp` 读取的 `socket.__dsh_real_remote_address__` 仅在网关 Secret 校验通过后写入），**不采信可直接伪造的 `x-dsh-real-ip` 头**；
+  - 外部设备的该字段恒为 `null`，响应体中不会出现任何码值（已有回归测试覆盖伪造头场景）。
+- **测试**：新增 `test/cli.test.js`（32 项，含参数解析、报告渲染、候选端点推导、离线写入、用插件真实路由处理器起的回环 HTTP 端到端：生成码 → 窥视同码 → 设密码 → `hasSecret` → 清除 → 弱密码拒绝）；`test/routes.test.js` 新增「仅本机可见配对码 / 外部与伪造头均不可见」用例。
+- **文档**：README / README_EN 新增「无 GUI 服务器：命令行获取配对码 / 设置密码」章节（含 `npx` 与全局安装方式、输出样例、行为约定与直连模式说明）。
+
+> 说明：DSH 启动器的子命令（`dsh <profile>`、`dsh plugin`）由官方 CLI 固定实现，第三方插件无法注册新的 `dsh xxx` 子命令（`parseDshArgs` 只识别 `<profile>` 与 `plugin`）。因此 CLI 以插件包自带可执行文件 `dsh-remote-mobile` 提供，并与 `dsh` 共用同一个 `$DSH_HOME`。
+
+---
+
 ## [1.10.5] - 2026-11-20
 
 ### Fixed (DSH 0.2.2-rc.x 适配：connection 服务迟到就绪导致鉴权接管失手、/connect 始终 401)

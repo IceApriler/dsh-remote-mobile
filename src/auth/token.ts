@@ -675,6 +675,31 @@ export class SessionStore extends EventEmitter {
     return false
   }
 
+  /**
+   * 读取当前仍然有效的 6 位配对码（不刷新、不消耗）。
+   *
+   * 供无 GUI 部署的 CLI 使用：`dsh-remote-mobile code` 先窥视当前码，
+   * 只有当不存在或已过期时才生成新的，避免「每次查询都让屏幕上刚拿到的码失效」。
+   * 同一进程内可能同时存在多个未过期码（例如连续点击生成），这里返回最新创建的一个。
+   *
+   * @returns 有效配对码与过期时间；没有有效码时返回 null
+   */
+  getActiveShortCode(): { code: string; expiresAt: number } | null {
+    const now = Date.now()
+    let latest: ShortCodeRecord | null = null
+    for (const [key, record] of this.shortCodes) {
+      // 同一记录同时以 code 与 token 为键，只看 code 键避免重复处理
+      if (key !== record.code) continue
+      if (record.expiresAt <= now) {
+        this.shortCodes.delete(record.code)
+        this.shortCodes.delete(record.token)
+        continue
+      }
+      if (!latest || record.createdAt > latest.createdAt) latest = record
+    }
+    return latest ? { code: latest.code, expiresAt: latest.expiresAt } : null
+  }
+
   generateShortCode(): { code: string; token: string; expiresAt: number } {
     const code = randomInt(100000, 1000000).toString()
     const token = randomBytes(24).toString('hex')

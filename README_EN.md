@@ -148,6 +148,8 @@ dsh web --no-open
 
 Open the DSH Web Console in your browser, navigate to **Settings ⚙️ -> Remote & Mobile Access**, and scan the QR code with your mobile camera or WeChat to open the pairing/login page. After authorization, DSH is ready on mobile.
 
+> **Headless server?** Use the bundled CLI instead: `dsh-remote-mobile code` for a pairing code and `dsh-remote-mobile password` for the long-term password. See [Managing a headless server from the CLI](#cli).
+
 ---
 
 <span id="modes"></span>
@@ -449,6 +451,70 @@ Custom snippets (style mini-plugins) and their enabled states are persisted in `
 ```
 
 > Enabled snippets are merged into a single `<style>` injected into the main page and the `/auth` login page; **effectiveness is decided by viewport width**: snippets with `mobileEnabled` are wrapped in `@media (max-width: 900px)` (apply at ≤900px — a narrow PC window gets them too), `pcEnabled` in `@media (min-width: 901px)`, and both on means all widths (v1 files migrate automatically; `presetStates` always persists all three preset groups with current effective values). Note: enabling the Sidebar Drawer preset on PC changes the desktop layout — turn its PC switch off if undesired.
+
+---
+
+<span id="cli"></span>
+## 🖥️ Managing a Headless Server from the CLI
+
+On SSH-only machines (systemd, containers, NAS, cloud VMs) the pairing code and the long-term password used to require the local Web UI. The plugin now ships a CLI so you no longer need to hand-write `curl` calls:
+
+```bash
+# Show the current pairing code (reuses a still-valid code instead of refreshing it)
+dsh-remote-mobile code
+
+# Generate / force-refresh a pairing code
+dsh-remote-mobile code --new
+
+# Set the long-term password (interactive, no echo; --stdin works for pipelines)
+dsh-remote-mobile password
+
+# Clear the long-term password
+dsh-remote-mobile password --clear
+
+# Machine-readable output for scripts
+dsh-remote-mobile code --json | jq -r .code
+```
+
+`dsh-remote-mobile` ships with the plugin package, so it exists as soon as the plugin is installed. If it is not on your `PATH`:
+
+```bash
+# Option 1: run it from the profile's dependency directory
+cd ~/.dsh/profiles/web && npx dsh-remote-mobile code
+
+# Option 2: install globally (handy on servers you administer from the CLI)
+npm i -g dsh-remote-mobile && dsh-remote-mobile code
+
+# Option 3: run the published version without installing
+npx -y dsh-remote-mobile@latest code
+```
+
+Typical output:
+
+```
+配对码   492731
+有效期   4 分 12 秒（至 23:41:12）
+来源     当前仍然有效的配对码（未刷新）
+访问地址
+  局域网     http://192.168.1.8:3081
+  虚拟私网   http://100.88.0.3:3081（Tailscale）
+  配对入口   http://192.168.1.8:3081/auth
+服务       http://127.0.0.1:3081（proxy 模式，核心端口 3080）
+
+在手机浏览器打开「配对入口」，输入上面的 6 位配对码即可完成配对。
+```
+
+### Behaviour and contracts
+
+- **Talks to the running DSH first**: the command probes `settings.json`'s `proxyPort` plus `3080/3081/3082/3083` on loopback and uses the plugin's own HTTP API (loopback requests pass the gate unconditionally, so no credentials are needed). The printed code is therefore the exact one the server will accept.
+- **Peek, don't refresh**: `code` reads the currently valid code from the status endpoint and only generates a new one when none exists or it expired. `--new` forces a refresh (the previous code stops working).
+- **Codes live in server memory**: valid for 5 minutes, single use. When no running DSH can be found, `code` fails loudly and lists every address it tried — that is a design contract, not a misconfiguration.
+- **Passwords apply immediately**: `password` calls the server API and takes effect without a restart. If DSH is not running (or the port is unreachable) it falls back to writing `settings.json` directly with the same scrypt salted hash and `0o600` file mode, printing that the change applies on the next `dsh web` start.
+- **Passwords never leak into `ps`**: interactive input is hidden; scripts should use `--stdin`. Passing the password as a positional argument leaves it in your shell history, and the command warns about that.
+- **Custom deployments**: `--port` / `--base-url` select the endpoint, `--dsh-home` sets the DSH home, `--host` selects the probe host, `--timeout` tunes the timeout.
+- **Direct mode**: when the core listens on a NIC address, even local requests originate from that address and are no longer loopback, so use `dsh-remote-mobile code --token <paired-device-token>` to pass the gate with `Authorization: Bearer`.
+
+> Note: the DSH launcher's subcommands (`dsh <profile>` / `dsh plugin`) are fixed by the official CLI; third-party plugins cannot register new `dsh xxx` subcommands. The CLI therefore ships as the `dsh-remote-mobile` executable and reads the same `$DSH_HOME` as `dsh` does.
 
 ---
 

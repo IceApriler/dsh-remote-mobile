@@ -148,6 +148,8 @@ dsh web --no-open
 启动后，在电脑浏览器打开 DSH Web 控制台，进入 **设置 ⚙️ -> 远程与移动端**，使用手机微信或系统相机扫描二维码进入配对/登录页，完成授权后即可使用。
 
 > 设置面板按 **「接入 / 设备与安全 / 样式覆写 / 本地数据」** 四个页签分组显示，避免长页面；页签选择会被记住，切换不重置配对码等状态。
+>
+> **没有图形界面的服务器？** 直接用插件自带的命令行：`dsh-remote-mobile code` 获取配对码、`dsh-remote-mobile password` 设置长期密码，详见 [无 GUI 服务器：命令行管理](#cli)。
 
 ---
 
@@ -450,6 +452,70 @@ dsh plugin --profile web remove dsh-remote-mobile
 ```
 
 > 所有启用片段会拼接为单个 `<style>` 注入主页面与 `/auth` 登录页，**生效与否由视口宽度决定**：`mobileEnabled` 的片段包在 `@media (max-width: 900px)`（≤900px 生效，PC 拉小窗口同样生效），`pcEnabled` 的片段包在 `@media (min-width: 901px)`（宽视口生效），两端都开则全宽度生效（v1 旧格式自动迁移，`presetStates` 按三个预设分组齐全落盘）。注意：PC 开启侧边栏抽屉预设会改变桌面布局，如不想用可关闭该预设的 PC 开关。
+
+---
+
+<span id="cli"></span>
+## 🖥️ 无 GUI 服务器：命令行获取配对码 / 设置密码
+
+在只有 SSH 的服务器（systemd、容器、NAS、云主机）上，配对码与长期密码原本只能打开本机 Web UI 获取。插件自带命令行工具，无需图形界面，也不用再手写 `curl`：
+
+```bash
+# 查看当前配对码（有效则直接复用，不会把屏幕上的码刷新掉）
+dsh-remote-mobile code
+
+# 生成 / 强制刷新配对码
+dsh-remote-mobile code --new
+
+# 设置长期访问密码（交互式，输入不回显；也可 --stdin 走管道）
+dsh-remote-mobile password
+
+# 清除长期密码
+dsh-remote-mobile password --clear
+
+# 机器可读输出，方便脚本集成
+dsh-remote-mobile code --json | jq -r .code
+```
+
+`dsh-remote-mobile` 由本插件包提供（安装插件后即存在）。若不在 PATH 中，可用以下任一方式调用：
+
+```bash
+# 方式一：从 profile 的依赖目录调用
+cd ~/.dsh/profiles/web && npx dsh-remote-mobile code
+
+# 方式二：全局安装（推荐给长期使用 CLI 的服务器）
+npm i -g dsh-remote-mobile && dsh-remote-mobile code
+
+# 方式三：不安装，直接跑最新版
+npx -y dsh-remote-mobile@latest code
+```
+
+典型输出：
+
+```
+配对码   492731
+有效期   4 分 12 秒（至 23:41:12）
+来源     当前仍然有效的配对码（未刷新）
+访问地址
+  局域网     http://192.168.1.8:3081
+  虚拟私网   http://100.88.0.3:3081（Tailscale）
+  配对入口   http://192.168.1.8:3081/auth
+服务       http://127.0.0.1:3081（proxy 模式，核心端口 3080）
+
+在手机浏览器打开「配对入口」，输入上面的 6 位配对码即可完成配对。
+```
+
+### 工作原理与行为约定
+
+- **优先与运行中的 DSH 通信**：命令自动按 `settings.json` 里的 `proxyPort` 以及 `3080/3081/3082/3083` 逐个探测本机端点，命中后再调用插件自己的 HTTP API（loopback 请求由插件门禁无条件放行，不需要任何凭据）。因此打印出来的配对码**就是服务端真正会接受的那个**。
+- **窥视而不刷新**：`code` 先读取状态接口里的当前有效码；只有不存在或已过期时才生成新码。加 `--new` 才会强制刷新（旧码随即失效）。
+- **配对码只在服务端内存中**：有效期 5 分钟、一次性使用。`code` 探测不到运行中的 DSH 时会明确报错并列出尝试过的地址 —— 这是设计约束，不是配置问题。
+- **密码即时生效**：`password` 优先调用服务端接口，写入后**无需重启**。若 DSH 尚未启动（或端口不可达），则退化为直接写入 `settings.json`（同样使用 scrypt 加盐哈希，文件权限 `0o600`），并提示「下次启动 `dsh web` 后生效」。
+- **密码不会出现在进程列表**：交互式输入不回显；脚本请用 `--stdin`。用位置参数传密码会留在 shell 历史中，命令会给出警告。
+- **自定义部署**：`--port` / `--base-url` 指定端点；`--dsh-home` 指定 DSH 主目录；`--host` 指定探测主机；`--timeout` 调整超时。
+- **直连模式（direct）**：若核心监听的是网卡 IP，本机请求源地址也是网卡 IP，不再被视为回环。此时 `dsh-remote-mobile code --token <已配对设备令牌>` 可携带 `Authorization: Bearer` 通过门禁。
+
+> 注：DSH 启动器的子命令（`dsh <profile>` / `dsh plugin`）由官方 CLI 固定实现，第三方插件无法注册 `dsh xxx` 形式的新子命令，因此这里以插件包自带的 `dsh-remote-mobile` 可执行文件提供，行为与 `dsh` 一致地读取同一个 `$DSH_HOME`。
 
 ---
 
