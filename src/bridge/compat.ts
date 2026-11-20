@@ -1095,9 +1095,52 @@ export function takeOverConnectionAuth(connection: any, store: SessionStore): vo
     }
   }
 
-  // 4. 动态向 DSH 底座 connection.trustedHosts 注入当前本机所有可用 IP 与网关端口
+  // 4. 接管 connection.authorizeConnect (控制 GET /connect 的进程 Token 换取)
+  // 官方语义：/connect 只接受「带本次进程 launchToken」的请求并换取 API Cookie，
+  // 其余请求一律 401。对已经通过本插件门禁（扫码配对 / 长期密码 / 免密直连）的手机而言，
+  // 这个 401 会让页面停在「未连接」——移动端根本拿不到桌面端启动时打印的临时 token。
+  // 因此：携带官方合法 token 时仍走官方换取；已授权但未携带 token 时直接回到应用根路径，
+  // 让页面继续使用本插件门禁建立的会话，而不是被官方 401 打断。
+  if (typeof connection.authorizeConnect === 'function') {
+    const origAuthorizeConnect = connection.authorizeConnect.bind(connection)
+    connection.authorizeConnect = (req: any, res: any): void => {
+      if (!isRequestAuthorizedByGate(req, store)) {
+        return origAuthorizeConnect(req, res)
+      }
+      const officialToken = extractLaunchTokenFromUrl(req?.url)
+      if (
+        officialToken &&
+        connection.browserAuth?.launchToken &&
+        safeStringEqual(officialToken, connection.browserAuth.launchToken)
+      ) {
+        return origAuthorizeConnect(req, res)
+      }
+      try {
+        res.writeHead(302, {
+          'cache-control': 'no-store',
+          location: './',
+          'referrer-policy': 'no-referrer',
+        })
+        res.end()
+      } catch {}
+    }
+  }
+
+  // 5. 动态向 DSH 底座 connection.trustedHosts 注入当前本机所有可用 IP 与网关端口
   // （适配 DSH 0.2.1+ 底层 Host/Origin 信任围栏，使外部网关合规直通，免去伪造 Host 头带来的副作用）
   injectTrustedHosts(connection, [store.getActivePort(), 3080, 3081], store.getOptions().trustedHosts)
+}
+
+/** 从 /connect 请求 URL 中提取官方进程 token（仅取单值，多值视为非法，交回官方处理） */
+function extractLaunchTokenFromUrl(url?: string): string | null {
+  if (!url || !url.includes('token=')) return null
+  try {
+    const parsed = new URL(url, 'http://dsh.invalid')
+    const tokens = parsed.searchParams.getAll('token')
+    return tokens.length === 1 ? tokens[0] : null
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -1172,4 +1215,188 @@ export function injectTrustedHosts(target: any, ports: number[] = [3080, 3081], 
     }
   } catch {}
 }
+
+/** connection 服务就绪绑定的选项 */
+export interface ConnectionAuthBindingOptions {
+  /** 轮询兜底窗口时长（毫秒，默认 30s）：事件与注入都失效时的最后一道保险 */
+  retryWindowMs?: number
+  /** 轮询间隔（毫秒，默认 500） */
+  retryIntervalMs?: number
+  /** 某一次尝试成功接管时的回调（每次插件生命周期最多触发一次） */
+  onAttached?: (connection: any) => void
+}
+
+/** connection 服务就绪绑定句柄 */
+export interface ConnectionAuthBinding {
+  /** 当前是否已完成接管（服务已就绪且打好接管标记） */
+  isAttached(): boolean
+  /** 立即主动尝试一次接管（幂等），返回本次是否已处于接管状态 */
+  tryAttach(): boolean
+  /** 解绑全部监听与定时器（插件卸载 / 热重载时必须调用） */
+  dispose(): void
+}
+
+/**
+ * 等待并接管 DSH 底座的 connection 鉴权服务（多通道 + 迟到就绪兜底）
+ *
+ * 【为什么需要它】
+ * `connection` 服务的提供方（官方 `@deepseek-ai/dsh-client-connection`）自身是异步激活的：
+ * 它的 `apply()` 要先 `await` 凭据服务与 `BrowserAuth.create()`（落盘读写签名密钥）才会
+ * `new HostConnectionService(...)` 注册服务。因此插件 `apply` 执行的那一刻，`ctx.get('connection')`
+ * 大概率还是 `undefined`——DSH 0.2.2-rc.x 里这一步的耗时进一步拉长，就直接表现为
+ * 「找不到服务端的 connection 服务 → 官方 401 未被接管 → 手机登录后连不上」。
+ *
+ * 旧实现只依赖 `ctx.inject(['connection'], cb)` 一条通道，一旦宿主对该动态注入做了作用域
+ * 隔离或注入回调抛错（均被 try/catch 静默吞掉），接管就永远不会发生，且没有任何补救。
+ *
+ * 本函数用四条彼此独立的通道兜住任意时序：
+ * 1. 立即主动探测（`ctx.get('connection')` / `ctx.root.get('connection')` / `ctx.connection`）；
+ * 2. Cordis 动态注入 `ctx.inject(['connection'], cb)`（标准依赖注入通道）；
+ * 3. `internal/service` 全局事件（服务任何时刻被 provide 都能第一时间收到）；
+ * 4. 有界轮询兜底（覆盖 internal 事件被作用域过滤、注入失效等异常宿主）。
+ *
+ * 接管本身幂等（`__dsh_rm_auth_takeover__`），因此多条通道重复命中不会重复包装。
+ *
+ * @param ctx - Cordis 上下文对象
+ * @param store - 会话与配置管理器实例
+ * @param options - 轮询窗口与接管回调
+ * @returns 绑定句柄（可查询状态、主动重试、卸载时解绑）
+ */
+export function bindConnectionAuth(
+  ctx: any,
+  store: SessionStore,
+  options: ConnectionAuthBindingOptions = {}
+): ConnectionAuthBinding {
+  const retryWindowMs = options.retryWindowMs ?? 30_000
+  const retryIntervalMs = options.retryIntervalMs ?? 500
+
+  let attached = false
+  let disposed = false
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let deadline = Date.now() + retryWindowMs
+
+  const unsubscribers: Array<() => void> = []
+
+  /** 从任意可见通道读取 connection 服务实例 */
+  const readConnection = (): any => {
+    const candidates: any[] = []
+    try {
+      if (typeof ctx?.get === 'function') candidates.push(ctx.get('connection'))
+    } catch {}
+    try {
+      if (typeof ctx?.root?.get === 'function') candidates.push(ctx.root.get('connection'))
+    } catch {}
+    try {
+      if (ctx?.connection) candidates.push(ctx.connection)
+    } catch {}
+    return candidates.find((value) => value && typeof value === 'object')
+  }
+
+  const clearTimer = () => {
+    if (timer) {
+      clearTimeout(timer)
+      timer = null
+    }
+  }
+
+  const onAttached = () => {
+    if (!attached) return
+    clearTimer()
+    try {
+      options.onAttached?.(readConnection())
+    } catch {}
+  }
+
+  const tryAttach = (candidate?: any): boolean => {
+    if (attached || disposed) return attached
+    const connection = candidate && typeof candidate === 'object' ? candidate : readConnection()
+    if (!connection) return false
+    try {
+      takeOverConnectionAuth(connection, store)
+      attached = Boolean((connection as any).__dsh_rm_auth_takeover__)
+    } catch {
+      attached = false
+    }
+    if (attached) onAttached()
+    return attached
+  }
+
+  /** 注册事件/注入监听（逐条独立 try，单条失败不影响其余通道） */
+  const subscribe = () => {
+    // 通道 2：标准 Cordis 动态注入
+    try {
+      if (typeof ctx?.inject === 'function') {
+        ctx.inject(['connection'], (connCtx: any) => {
+          try {
+            const conn =
+              (typeof connCtx?.get === 'function' ? connCtx.get('connection') : undefined) ?? connCtx?.connection
+            tryAttach(conn)
+          } catch {}
+        })
+      }
+    } catch {}
+
+    // 通道 3：服务注册事件（内部事件需 global 才能跨插件收到）
+    try {
+      if (typeof ctx?.on === 'function') {
+        const handler = (name: string, value: any) => {
+          if (name !== 'connection') return
+          tryAttach(value)
+        }
+        let off: any
+        try {
+          off = ctx.on('internal/service', handler, { global: true })
+        } catch {
+          off = ctx.on('internal/service', handler)
+        }
+        if (typeof off === 'function') {
+          unsubscribers.push(() => {
+            try {
+              off()
+            } catch {}
+          })
+        } else if (typeof ctx.off === 'function') {
+          unsubscribers.push(() => {
+            try {
+              ctx.off('internal/service', handler)
+            } catch {}
+          })
+        }
+      }
+    } catch {}
+  }
+
+  /** 通道 4：有界轮询兜底（unref 保证不阻止宿主优雅退出） */
+  const schedulePoll = () => {
+    if (attached || disposed) return
+    if (Date.now() >= deadline) return
+    timer = setTimeout(() => {
+      timer = null
+      if (disposed) return
+      if (!tryAttach()) schedulePoll()
+    }, retryIntervalMs)
+    if (typeof (timer as any)?.unref === 'function') (timer as any).unref()
+  }
+
+  // 通道 1：立即探测
+  if (!tryAttach()) {
+    subscribe()
+    schedulePoll()
+  }
+
+  return {
+    isAttached: () => attached,
+    tryAttach: () => tryAttach(),
+    dispose: () => {
+      disposed = true
+      clearTimer()
+      for (const off of unsubscribers.splice(0)) {
+        try {
+          off()
+        } catch {}
+      }
+    },
+  }
+}
+
 
