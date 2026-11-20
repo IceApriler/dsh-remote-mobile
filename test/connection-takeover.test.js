@@ -26,6 +26,22 @@ test('官方 connection 服务透明接管测试 (takeOverConnectionAuth)', asyn
     allowTailscale: false,
   })
 
+  // 构造模拟响应对象，记录状态码、响应头与结束状态
+  function createMockResponse() {
+    return {
+      statusCode: 0,
+      headers: {},
+      ended: false,
+      writeHead(code, headers) {
+        this.statusCode = code
+        if (headers && typeof headers === 'object') this.headers = headers
+      },
+      end() {
+        this.ended = true
+      },
+    }
+  }
+
   // 构造模拟的官方 connection 服务对象
   function createMockConnection(launchToken = 'official-launch-token-xyz') {
     return {
@@ -51,6 +67,18 @@ test('官方 connection 服务透明接管测试 (takeOverConnectionAuth)', asyn
       },
       authorizeIndex(req, res) {
         return this.browserAuth.authorizeIndex(req, res)
+      },
+      // 官方 /connect：只认本次进程 launchToken，其余一律 401
+      authorizeConnect(req, res) {
+        const url = new URL(req.url || '/', 'http://dsh.invalid')
+        const tokens = url.searchParams.getAll('token')
+        if (tokens.length !== 1 || tokens[0] !== launchToken) {
+          res.writeHead(401)
+          res.end('dsh web authentication required')
+          return
+        }
+        res.writeHead(302, { location: './api/remote.mux', 'set-cookie': 'dsh-official-api=1' })
+        res.end()
       },
     }
   }
@@ -241,5 +269,63 @@ test('官方 connection 服务透明接管测试 (takeOverConnectionAuth)', asyn
       url: '/?auth_token=custom-auth-token-abcde',
     }
     assert.equal(store.extractTokenFromRequest(authTokenReq), 'custom-auth-token-abcde')
+  })
+
+  await t.test('未授权外部设备访问 /connect：保持官方 401，不放行', () => {
+    const conn = createMockConnection()
+    takeOverConnectionAuth(conn, store)
+
+    const res = createMockResponse()
+    conn.authorizeConnect(
+      { method: 'GET', headers: { host: '10.10.1.13:3080' }, socket: { remoteAddress: '10.10.1.99' }, url: '/connect' },
+      res
+    )
+
+    assert.equal(res.statusCode, 401)
+    assert.equal(res.ended, true)
+  })
+
+  await t.test('已配对手机访问 /connect（无官方临时 token）：不再 401，302 回应用根路径', () => {
+    const conn = createMockConnection()
+    takeOverConnectionAuth(conn, store)
+
+    const { code } = store.generateShortCode()
+    const verified = store.verify(code, 'Android Chrome', '10.10.1.88')
+    assert.ok(verified.success)
+
+    const res = createMockResponse()
+    conn.authorizeConnect(
+      {
+        method: 'GET',
+        headers: { host: '10.10.1.13:3080', cookie: `dsh_mobile_token=${verified.token}` },
+        socket: { remoteAddress: '10.10.1.88' },
+        url: '/connect?interactions=answer',
+      },
+      res
+    )
+
+    assert.equal(res.statusCode, 302)
+    assert.equal(res.headers.location, './')
+    assert.ok(!String(res.headers['set-cookie'] || '').includes('dsh-official-api'))
+  })
+
+  await t.test('携带官方合法 launchToken 访问 /connect：仍走官方换取 API Cookie', () => {
+    const conn = createMockConnection('launch-token-abc')
+    takeOverConnectionAuth(conn, store)
+
+    const res = createMockResponse()
+    conn.authorizeConnect(
+      {
+        method: 'GET',
+        headers: { host: '127.0.0.1:3080' },
+        socket: { remoteAddress: '127.0.0.1' },
+        url: '/connect?token=launch-token-abc',
+      },
+      res
+    )
+
+    assert.equal(res.statusCode, 302)
+    assert.equal(res.headers.location, './api/remote.mux')
+    assert.ok(String(res.headers['set-cookie']).includes('dsh-official-api'))
   })
 })
