@@ -8,6 +8,8 @@ import {
   ensureCliLauncher,
   isDirOnPath,
   isCliDirReachable,
+  findDshBinDir,
+  isDirWritable,
   describeCliLauncher,
   CLI_LAUNCHER_NAME,
 } from '../lib/cli/launcher.js'
@@ -45,10 +47,82 @@ function createEnv({ withCli = true } = {}) {
 }
 
 test('命令行工具自动落位 (ensureCliLauncher)', async (t) => {
+  await t.test('findDshBinDir 从 PATH 中找到 dsh 所在目录；找不到返回 null', () => {
+    const env = createEnv()
+    try {
+      const binDir = join(env.root, 'fakebin')
+      mkdirSync(binDir, { recursive: true })
+      writeFileSync(join(binDir, 'dsh'), '#!/bin/sh', { encoding: 'utf8', mode: 0o755 })
+      const pathEnv = [join(env.root, 'empty'), binDir, '/usr/bin'].join(delimiter)
+      assert.equal(findDshBinDir(pathEnv), binDir)
+      assert.equal(findDshBinDir(['/usr/bin', '/bin'].join(delimiter)), null)
+      // 可选：自定义可执行文件名
+      writeFileSync(join(binDir, 'dshx'), '#!/bin/sh', { encoding: 'utf8', mode: 0o755 })
+      assert.equal(findDshBinDir(pathEnv, 'dshx'), binDir)
+    } finally {
+      env.cleanup()
+    }
+  })
+
+  await t.test('dsh 所在目录可写时优先落位到该目录（PATH 与 dsh 完全一致）', () => {
+    const env = createEnv()
+    try {
+      const dshBin = join(env.root, 'usrbin')
+      mkdirSync(dshBin, { recursive: true })
+      // 与 dsh 同目录：PATH 里能解析到 dsh 且该目录可写
+      writeFileSync(join(dshBin, 'dsh'), '#!/bin/sh', { encoding: 'utf8', mode: 0o755 })
+      const result = ensureCliLauncher({
+        platform: 'linux',
+        home: env.home,
+        packageRoot: env.packageRoot,
+        pathEnv: [dshBin, '/usr/bin', '/bin'].join(delimiter),
+      })
+      assert.equal(result.ok, true)
+      assert.equal(result.location, 'dsh-bin')
+      assert.equal(result.path, join(dshBin, CLI_LAUNCHER_NAME))
+      assert.equal(result.onPath, true, '与 dsh 同目录时天然可达，包括非登录 shell')
+      assert.ok(readFileSync(result.path, 'utf8').includes(JSON.stringify(env.target)))
+      // 用户级目录不应被创建
+      assert.equal(existsSync(join(env.home, '.local', 'bin')), false)
+    } finally {
+      env.cleanup()
+    }
+  })
+
+  await t.test('dsh 目录不可写时回退到 ~/.local/bin', () => {
+    const env = createEnv()
+    try {
+      const result = ensureCliLauncher({
+        platform: 'linux',
+        home: env.home,
+        packageRoot: env.packageRoot,
+        dshBinDir: null,
+        pathEnv: ['/usr/bin', '/bin'].join(delimiter),
+        // 用一个不存在的目录模拟 root 独占的 /usr/bin：不可写
+        dshBinDir: join(env.root, 'no-such-bin'),
+      })
+      assert.equal(result.ok, true)
+      assert.equal(result.location, 'user-bin')
+      assert.equal(result.path, join(env.home, '.local', 'bin', CLI_LAUNCHER_NAME))
+    } finally {
+      env.cleanup()
+    }
+  })
+
+  await t.test('isDirWritable 对存在目录返回 true、不存在目录返回 false', () => {
+    const env = createEnv()
+    try {
+      assert.equal(isDirWritable(env.home), true)
+      assert.equal(isDirWritable(join(env.root, 'missing')), false)
+    } finally {
+      env.cleanup()
+    }
+  })
+
   await t.test('Windows 平台直接跳过（改用 npx / 全局安装）', () => {
     const env = createEnv()
     try {
-      const result = ensureCliLauncher({ platform: 'win32', home: env.home, packageRoot: env.packageRoot })
+      const result = ensureCliLauncher({ platform: 'win32', home: env.home, packageRoot: env.packageRoot, dshBinDir: null })
       assert.equal(result.ok, false)
       assert.equal(result.reason, 'windows')
       assert.equal(existsSync(env.script), false)
@@ -64,6 +138,7 @@ test('命令行工具自动落位 (ensureCliLauncher)', async (t) => {
         platform: 'linux',
         home: env.home,
         packageRoot: env.packageRoot,
+        dshBinDir: null,
         pathEnv: ['/usr/local/bin', '/usr/bin', '/bin'].join(delimiter),
       })
       assert.equal(result.ok, true)
@@ -85,9 +160,9 @@ test('命令行工具自动落位 (ensureCliLauncher)', async (t) => {
   await t.test('幂等：内容一致时不重写文件', () => {
     const env = createEnv()
     try {
-      const first = ensureCliLauncher({ platform: 'linux', home: env.home, packageRoot: env.packageRoot })
+      const first = ensureCliLauncher({ platform: 'linux', home: env.home, packageRoot: env.packageRoot, dshBinDir: null })
       assert.equal(first.updated, true)
-      const second = ensureCliLauncher({ platform: 'linux', home: env.home, packageRoot: env.packageRoot })
+      const second = ensureCliLauncher({ platform: 'linux', home: env.home, packageRoot: env.packageRoot, dshBinDir: null })
       assert.equal(second.ok, true)
       assert.equal(second.updated, false)
     } finally {
@@ -98,10 +173,10 @@ test('命令行工具自动落位 (ensureCliLauncher)', async (t) => {
   await t.test('自愈：安装位置变化时重写脚本', () => {
     const env = createEnv()
     try {
-      ensureCliLauncher({ platform: 'linux', home: env.home, packageRoot: env.packageRoot })
+      ensureCliLauncher({ platform: 'linux', home: env.home, packageRoot: env.packageRoot, dshBinDir: null })
       // 模拟旧版本的残留脚本（指向已失效路径）
       writeFileSync(env.script, buildLauncherScript('/old/missing/lib/cli/index.js'), 'utf8')
-      const healed = ensureCliLauncher({ platform: 'linux', home: env.home, packageRoot: env.packageRoot })
+      const healed = ensureCliLauncher({ platform: 'linux', home: env.home, packageRoot: env.packageRoot, dshBinDir: null })
       assert.equal(healed.updated, true)
       assert.ok(readFileSync(env.script, 'utf8').includes(JSON.stringify(env.target)))
     } finally {
@@ -116,6 +191,7 @@ test('命令行工具自动落位 (ensureCliLauncher)', async (t) => {
         platform: 'darwin',
         home: env.home,
         packageRoot: env.packageRoot,
+        dshBinDir: null,
         pathEnv: ['/usr/bin', join(env.home, '.local', 'bin'), '/bin'].join(delimiter),
       })
       assert.equal(result.ok, true)
@@ -138,6 +214,7 @@ test('命令行工具自动落位 (ensureCliLauncher)', async (t) => {
         platform: 'linux',
         home: env.home,
         packageRoot: env.packageRoot,
+        dshBinDir: null,
         pathEnv: ['/usr/local/bin', '/usr/bin', '/bin'].join(delimiter),
       })
       assert.equal(result.ok, true)
@@ -150,7 +227,7 @@ test('命令行工具自动落位 (ensureCliLauncher)', async (t) => {
   await t.test('CLI 入口缺失时返回 cli-missing，不创建残脚本', () => {
     const env = createEnv({ withCli: false })
     try {
-      const result = ensureCliLauncher({ platform: 'linux', home: env.home, packageRoot: env.packageRoot })
+      const result = ensureCliLauncher({ platform: 'linux', home: env.home, packageRoot: env.packageRoot, dshBinDir: null })
       assert.equal(result.ok, false)
       assert.equal(result.reason, 'cli-missing')
       assert.equal(existsSync(env.script), false)
@@ -165,7 +242,7 @@ test('命令行工具自动落位 (ensureCliLauncher)', async (t) => {
       // 用一个「父级是文件」的假 HOME 触发 ENOTDIR
       const blocked = join(env.root, 'blocked')
       writeFileSync(blocked, 'x', 'utf8')
-      const result = ensureCliLauncher({ platform: 'linux', home: blocked, packageRoot: env.packageRoot })
+      const result = ensureCliLauncher({ platform: 'linux', home: blocked, packageRoot: env.packageRoot, dshBinDir: null })
       assert.equal(result.ok, false)
       assert.ok(result.reason)
     } finally {
@@ -202,6 +279,17 @@ test('PATH 判定与 Banner 文案 (isDirOnPath / describeCliLauncher)', async (
         rmSync(root, { recursive: true, force: true })
       } catch {}
     }
+  })
+
+  await t.test('与 dsh 同目录时就绪文案强调所有 shell 均可用', () => {
+    const text = describeCliLauncher({
+      ok: true,
+      location: 'dsh-bin',
+      onPath: true,
+      path: '/usr/local/bin/dsh-remote-mobile',
+    })
+    assert.match(text, /与 dsh 同目录/)
+    assert.match(text, /所有 shell 均可用/)
   })
 
   await t.test('就绪且已在 PATH 时提示可直接使用', () => {
