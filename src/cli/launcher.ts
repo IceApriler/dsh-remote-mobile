@@ -8,8 +8,15 @@
  * `未找到命令`，只能手动 `cd` 到 profile 目录 `npx`，或自己写包装脚本。
  *
  * 【做法】
- * 插件激活时把 CLI「落位」到用户级 bin 目录（POSIX 平台默认 `~/.local/bin`，
- * 现代发行版的 `~/.profile` 已默认把它加入 `PATH`）：
+ * 插件激活时把 CLI「落位」到 **`~/.local/bin/dsh-remote-mobile`**（POSIX 平台；现代发行版
+ * 的 `~/.profile` 默认已把该目录加入 `PATH`）。
+ *
+ * 【为什么固定只有这一处落位】
+ * 之前曾按 PATH 找 `dsh` 所在目录并优先写入（那样非登录 shell / cron / systemd 也能命中）。
+ * 但目录选得越多，权限模型、用户 PATH 覆盖、与全局安装的相互覆盖就越难解释；而 `dsh` 目前
+ * 并不支持 `dsh <子命令>` 挂载（上游能力尚在讨论中）。因此这里**固定只落位 `~/.local/bin`、
+ * 不做多级回退**：语义单一、可预期。等上游支持插件子命令后，本文件连同 PATH 启发式可以
+ * 整体删除——那时命令由 `dsh` 自身分发，PATH 天然继承。
  *
  * - 写入一个**三行包装脚本**而不是软链接：软链接指向的 `.js` 需要可执行位，
  *   `file:` 安装 / 手工拷贝 / 后续升级都可能把权限位丢掉；包装脚本只 `exec node <绝对路径>`，
@@ -21,7 +28,7 @@
  * - Windows 跳过：`~/.local/bin` 不在 PATH 体系内，那边用 `npx dsh-remote-mobile` 或全局安装。
  */
 
-import { accessSync, chmodSync, constants, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -38,8 +45,6 @@ export interface CliLauncherResult {
   target?: string
   /** 该目录是否已在 PATH 中（不在时调用方应提示用户） */
   onPath?: boolean
-  /** 落位位置：与 dsh 同目录（PATH 与 dsh 完全一致）/ 用户级 ~/.local/bin */
-  location?: 'dsh-bin' | 'user-bin'
   /** 跳过或失败的原因 */
   reason?: string
 }
@@ -56,11 +61,6 @@ export interface CliLauncherOptions {
   pathEnv?: string
   /** 目标目录名，默认 .local/bin（相对 home） */
   binDirRelative?: string
-  /**
-   * 强制指定「dsh 所在目录」：`undefined` 时按 PATH 自动探测，传字符串则据此判断可写性，
-   * 传 null 表示禁用该策略（仅测试使用）
-   */
-  dshBinDir?: string | null
 }
 
 /** 可执行文件名 */
@@ -72,43 +72,6 @@ export const CLI_LAUNCHER_NAME = 'dsh-remote-mobile'
  */
 export function resolvePackageRoot(): string {
   return join(dirname(fileURLToPath(import.meta.url)), '..', '..')
-}
-
-/**
- * 在 PATH 中找到 `dsh` 可执行文件所在目录
- *
- * 目的：把 CLI 放到**和 `dsh` 同一个目录**，它的可达性就与 `dsh` 完全一致
- * （包括 `ssh host 'cmd'` 这类非登录 shell、systemd、cron）。典型可写场景是
- * nvm / volta / 用户级 npm prefix（`npm i -g` 装到 `~/.npm-global/bin`）等。
- *
- * @param pathEnv - 待搜索的 PATH
- * @param dshName - 可执行文件名，默认 dsh
- * @returns 目录绝对路径；找不到返回 null
- */
-export function findDshBinDir(pathEnv = process.env.PATH || '', dshName = 'dsh'): string | null {
-  for (const entry of pathEnv.split(delimiter)) {
-    const dir = entry.trim()
-    if (!dir) continue
-    try {
-      accessSync(join(dir, dshName), constants.X_OK)
-      return dir
-    } catch {}
-  }
-  return null
-}
-
-/**
- * 判断目录对当前用户是否可写（可写才敢往里放文件）
- * @param dir - 目录绝对路径
- * @returns 是否可写
- */
-export function isDirWritable(dir: string): boolean {
-  try {
-    accessSync(dir, constants.W_OK)
-    return true
-  } catch {
-    return false
-  }
 }
 
 /**
@@ -176,7 +139,7 @@ export function isCliDirReachable(
 }
 
 /**
- * 把 CLI 落位到用户级 bin 目录（幂等）
+ * 把 CLI 落位到 `~/.local/bin`（幂等，单一位置、无多级回退）
  *
  * @param options - 可注入的平台、主目录、包根与 PATH（仅测试使用）
  * @returns 落位结果；任何失败都以 `ok: false` 返回，绝不抛出
@@ -200,16 +163,7 @@ export function ensureCliLauncher(options: CliLauncherOptions = {}): CliLauncher
     return { ok: false, reason: 'cli-missing', target }
   }
 
-  // 优先放到「dsh 自己所在的目录」：这样可达性与 dsh 完全一致（含非登录 shell / systemd / cron）。
-  // 该目录通常属于 root（/usr/bin）不可写，此时退回用户级 ~/.local/bin。
-  const dshBinDir = options.dshBinDir === undefined ? findDshBinDir(pathEnv) : options.dshBinDir
-  let binDir = join(home, binDirRelative)
-  let location: 'dsh-bin' | 'user-bin' = 'user-bin'
-  if (dshBinDir && isDirWritable(dshBinDir)) {
-    binDir = dshBinDir
-    location = 'dsh-bin'
-  }
-
+  const binDir = join(home, binDirRelative)
   const scriptPath = join(binDir, CLI_LAUNCHER_NAME)
   const script = buildLauncherScript(target)
 
@@ -229,31 +183,9 @@ export function ensureCliLauncher(options: CliLauncherOptions = {}): CliLauncher
       updated,
       path: scriptPath,
       target,
-      location,
-      // 与 dsh 同目录时天然在 PATH 内；否则再兼顾一下登录 shell 的 startup 文件
-      onPath: location === 'dsh-bin' ? true : isCliDirReachable(binDir, home, pathEnv),
+      onPath: isCliDirReachable(binDir, home, pathEnv),
     }
   } catch (error: any) {
-    // 与 dsh 同目录但写入失败（例如只读 /usr/bin）时，退回用户级目录再试一次
-    if (location === 'dsh-bin') {
-      try {
-        const fallbackDir = join(home, binDirRelative)
-        if (!existsSync(fallbackDir)) mkdirSync(fallbackDir, { recursive: true })
-        const fallbackPath = join(fallbackDir, CLI_LAUNCHER_NAME)
-        writeFileSync(fallbackPath, script, { encoding: 'utf8', mode: 0o755 })
-        try {
-          chmodSync(fallbackPath, 0o755)
-        } catch {}
-        return {
-          ok: true,
-          updated: true,
-          path: fallbackPath,
-          target,
-          location: 'user-bin',
-          onPath: isCliDirReachable(fallbackDir, home, pathEnv),
-        }
-      } catch {}
-    }
     return { ok: false, reason: error?.message || String(error), path: scriptPath, target }
   }
 }
@@ -270,9 +202,6 @@ export function describeCliLauncher(result: CliLauncherResult): string {
       ? `npx --prefix "$DSH_HOME/profiles/web" ${CLI_LAUNCHER_NAME}`
       : `npx ${CLI_LAUNCHER_NAME}`
     return `CLI      自动落位未成功（${result.reason || '未知原因'}），可临时用：${hint}`
-  }
-  if (result.location === 'dsh-bin' && result.onPath) {
-    return `CLI      ${CLI_LAUNCHER_NAME} 已就绪（与 dsh 同目录，所有 shell 均可用）`
   }
   if (result.onPath) {
     return `CLI      ${CLI_LAUNCHER_NAME} 已就绪：直接执行 ${CLI_LAUNCHER_NAME} code / password`

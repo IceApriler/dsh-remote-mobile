@@ -487,12 +487,9 @@ dsh-remote-mobile code
 <details>
 <summary><b>Where does it go, and when do I need to touch PATH manually?</b></summary>
 
-On activation the plugin writes a three-line wrapper into an executable directory, preferring:
+On activation the plugin writes a three-line wrapper to **`~/.local/bin/dsh-remote-mobile` only** (POSIX; modern distributions already add that directory to `PATH` via `~/.profile`). No other location, no cascading fallback.
 
-1. **the directory that holds `dsh`** (only when it is writable — `nvm` / `volta` / user-level `npm prefix`), so anywhere `dsh` runs, this runs too, including non-login shells (`ssh host 'cmd'`), systemd and cron;
-2. otherwise `~/.local/bin` (modern distributions add it to `PATH` via `~/.profile`, so interactive logins work).
-
-A distro-packaged `dsh` lives in `/usr/bin` (root-owned). The plugin runs as your user and **never escalates to write system directories**, so the wrapper lands in `~/.local/bin`. Interactive logins work; only non-login shells (`ssh host 'cmd'`, cron) will not see it — if you need those, run this once:
+Known limitation: non-login shells (`ssh host 'cmd'`, cron, systemd) get their `PATH` from `/etc/environment`, which usually does not include `~/.local/bin`. Either run the command below once, or use the absolute path. The placement logic will be removed entirely once the launcher supports `dsh <command>`:
 
 ```bash
 sudo ln -sf ~/.local/bin/dsh-remote-mobile /usr/local/bin/dsh-remote-mobile
