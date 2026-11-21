@@ -23,6 +23,7 @@ import { validateSecretStrength } from '../auth/crypto.js'
 import {
   candidateBaseUrls,
   clearLongTermPassword,
+  isLocalBaseUrl,
   findEndpoint,
   generatePairingCode,
   readLocalSettings,
@@ -388,6 +389,13 @@ export async function runPasswordCommand(params: RunPasswordOptions): Promise<nu
   const endpoint = options.offline ? null : await findEndpoint(options)
 
   if (endpoint) {
+    // 密码默认明文发送：本机端点不产生流量，非本机（--base-url 指向其它主机）必须提醒
+    if (!clearing && !isLocalBaseUrl(endpoint.baseUrl)) {
+      stderr(
+        `警告：密码将以明文发送到 ${new URL(endpoint.baseUrl).host}（非本机地址）。\n` +
+          '      如链路未加密，请改为在本机执行，或通过 SSH 隧道 / TLS 反向代理访问。\n'
+      )
+    }
     const result = clearing
       ? await clearLongTermPassword(endpoint.baseUrl, options)
       : await setLongTermPassword(endpoint.baseUrl, secret, options)
@@ -466,7 +474,8 @@ export async function promptHidden(prompt: string): Promise<string> {
           resolve(value)
           return
         }
-        if (char === '\u0003') {
+        if (char === '\u0003' || char === '\u0004') {
+          // Ctrl+C 与 Ctrl+D（EOF）都视为取消，避免 raw 模式下挂在等待里
           cleanup()
           stdout.write('\n')
           reject(new Error('已取消'))
@@ -515,6 +524,12 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
   if (parsed.command === 'version') {
     process.stdout.write(`${readCliVersion()}\n`)
     return 0
+  }
+  if (!parsed.command) {
+    // 安全护栏：没有子命令时的裸参数绝不隐式当作「设置密码」，
+    // 否则 `dsh-remote-mobile <误敲的强密码>` 会直接改掉长期密码。
+    process.stderr.write(`缺少子命令（code / password），收到参数：${argv.join(' ')}\n\n${USAGE}`)
+    return 2
   }
 
   const stdout = (text: string) => process.stdout.write(text)

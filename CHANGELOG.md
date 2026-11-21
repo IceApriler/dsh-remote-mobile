@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **不覆盖全局安装**：已用 `npm i -g` 的场景保持原样；
   - 启动 Banner 新增一行 `CLI ...`，就绪时提示可直接执行，`~/.local/bin` 不在 `PATH` 时打印可粘贴的 `export PATH=...` 命令。
   - 测试：新增 `test/cli-launcher.test.js`（15 项，覆盖 Windows 跳过、生成脚本、幂等、路径自愈、PATH 判定、CLI 缺失、HOME 不可写、Banner 文案，以及 systemd 进程 PATH 与登录 shell 的差异）。
+- **安全护栏（审计修复）**：
+  - 缺少子命令时的裸参数（如 `dsh-remote-mobile Abcdef12345`）此前会被隐式当作 `password` 的明文参数，误敲即改密；现在返回用法错误（退出码 2），密码只能通过显式 `password` 子命令设置；
+  - `--base-url` 指向**非本机**地址时，`password` 会先警告「密码将以明文发送到 <host>」（本机端点不出网卡，无需提醒）；
+  - 交互式隐藏输入补 Ctrl+D（EOF）取消，避免 raw 模式下挂在等待里。
 - **超时与重试**：动作请求（生成配对码 / 写密码）默认超时放宽到 `8000ms`（原 2500ms 在低配服务器冷启动时偶发超时），端点探测仍收敛到 `2000ms` 以便快速跳过无效候选；超时类失败自动重试一次，仍失败时提示用 `--timeout` 加大。
 - **文档**：README / README_EN 新增「无 GUI 服务器：命令行获取配对码 / 设置密码」章节（含 `npx` 与全局安装方式、输出样例、行为约定与直连模式说明）。
 
