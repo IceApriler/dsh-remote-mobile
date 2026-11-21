@@ -30,12 +30,13 @@ import {
   setLongTermPassword,
   settingsFilePath,
   writePasswordOffline,
+  DEFAULT_ACTION_TIMEOUT_MS,
   type CliClientOptions,
   type RemoteMobileStatus,
 } from './client.js'
 
-/** CLI 版本（build 时由 scripts/build-client.js 之外的 release 脚本维护，见 package.json） */
-const DEFAULT_TIMEOUT_MS = 2500
+/** 动作请求默认超时（与 client 层保持一致，便于文档与测试引用） */
+const DEFAULT_TIMEOUT_MS = DEFAULT_ACTION_TIMEOUT_MS
 
 /** 解析后的命令行 */
 export interface ParsedArgs {
@@ -62,7 +63,7 @@ const USAGE = `dsh-remote-mobile — DSH 远程接入命令行工具（无 GUI �
   --port <n>          指定端口（默认按 settings.json 的 proxyPort 与 3080/3081 等探测）
   --host <ip>         指定主机（默认 127.0.0.1 与本机网卡 IP）
   --token <token>     直连模式下携带已配对设备令牌（Authorization: Bearer）
-  --timeout <ms>      单次请求超时，默认 2500
+  --timeout <ms>      动作请求超时，默认 8000（探测阶段自动收敛为 2000）
   --dsh-home <path>   DSH 主目录，默认 $DSH_HOME 或 ~/.dsh
   --json              输出机器可读 JSON
   -h, --help          显示帮助

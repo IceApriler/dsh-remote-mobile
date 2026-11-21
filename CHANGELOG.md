@@ -25,7 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **失败不阻断**：只读 HOME、权限不足等异常仅体现在启动 Banner 的提示里，不影响插件本身；
   - **不覆盖全局安装**：已用 `npm i -g` 的场景保持原样；
   - 启动 Banner 新增一行 `CLI ...`，就绪时提示可直接执行，`~/.local/bin` 不在 `PATH` 时打印可粘贴的 `export PATH=...` 命令。
-  - 测试：新增 `test/cli-launcher.test.js`（13 项，覆盖 Windows 跳过、生成脚本、幂等、路径自愈、PATH 判定、CLI 缺失、HOME 不可写、Banner 文案）。
+  - 测试：新增 `test/cli-launcher.test.js`（15 项，覆盖 Windows 跳过、生成脚本、幂等、路径自愈、PATH 判定、CLI 缺失、HOME 不可写、Banner 文案，以及 systemd 进程 PATH 与登录 shell 的差异）。
+- **超时与重试**：动作请求（生成配对码 / 写密码）默认超时放宽到 `8000ms`（原 2500ms 在低配服务器冷启动时偶发超时），端点探测仍收敛到 `2000ms` 以便快速跳过无效候选；超时类失败自动重试一次，仍失败时提示用 `--timeout` 加大。
 - **文档**：README / README_EN 新增「无 GUI 服务器：命令行获取配对码 / 设置密码」章节（含 `npx` 与全局安装方式、输出样例、行为约定与直连模式说明）。
 
 > 说明：DSH 启动器的子命令（`dsh <profile>`、`dsh plugin`）由官方 CLI 固定实现，第三方插件无法注册新的 `dsh xxx` 子命令（`parseDshArgs` 只识别 `<profile>` 与 `plugin`）。因此 CLI 以插件包自带可执行文件 `dsh-remote-mobile` 提供，并与 `dsh` 共用同一个 `$DSH_HOME`。
