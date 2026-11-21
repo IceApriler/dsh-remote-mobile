@@ -13,8 +13,10 @@ import {
   formatCodeReport,
   runCodeCommand,
   runPasswordCommand,
+  main,
 } from '../lib/cli/index.js'
 import {
+  isLocalBaseUrl,
   candidatePorts,
   candidateHosts,
   candidateBaseUrls,
@@ -86,6 +88,22 @@ test('命令行参数解析与渲染 (parseArgs / format*)', async (t) => {
     assert.equal(parsed.options.json, true)
     assert.equal(parsed.options.newCode, true)
     assert.equal(parsed.error, undefined)
+  })
+
+  await t.test('缺少子命令时裸参数不隐式当作设置密码（安全护栏，退出码 2）', async () => {
+    // 曾经的行为：无子命令 + 位置参数会被当作 password 的明文参数，误敲即改密
+    assert.equal(await main(['Abcdef12345']), 2)
+    assert.equal(await main(['--json']), 2)
+  })
+
+  await t.test('isLocalBaseUrl：回环/本机网卡为真，其它主机为假', () => {
+    assert.equal(isLocalBaseUrl('http://127.0.0.1:3081'), true)
+    assert.equal(isLocalBaseUrl('http://localhost:3080'), true)
+    assert.equal(isLocalBaseUrl('http://[::1]:3081'), true)
+    assert.equal(isLocalBaseUrl('http://192.168.1.8:3081', ['192.168.1.8']), true)
+    assert.equal(isLocalBaseUrl('http://example.com:3081', ['192.168.1.8']), false)
+    // 解析失败按本机处理，避免误报警告
+    assert.equal(isLocalBaseUrl('not a url'), true)
   })
 
   await t.test('解析 password 子命令的位置参数与模式开关', () => {

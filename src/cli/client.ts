@@ -245,6 +245,27 @@ async function requestAction(
 }
 
 /**
+ * 判断服务地址是否指向本机（回环或本机网卡地址）
+ *
+ * 密码默认以明文 JSON 发往探测到的端点：地址指向本机时不出网卡，无需加密；
+ * 但 `--base-url` 可以指向其它主机，那就是真正的明文跨网传输，必须给出警告。
+ *
+ * @param baseUrl - 服务地址
+ * @param localHosts - 视为本机的主机名集合，默认取本机回环与网卡 IP
+ * @returns 是否本机地址（解析失败按本机处理，不制造误报）
+ */
+export function isLocalBaseUrl(baseUrl: string, localHosts: string[] = candidateHosts()): boolean {
+  try {
+    const url = new URL(baseUrl)
+    const host = url.hostname.replace(/^\[|\]$/g, '')
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1') return true
+    return localHosts.includes(host)
+  } catch {
+    return true
+  }
+}
+
+/**
  * 探测单个候选地址上的插件状态接口
  * @param baseUrl - 候选地址
  * @param options - 令牌与超时
