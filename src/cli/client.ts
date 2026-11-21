@@ -23,6 +23,12 @@ import { homedir, networkInterfaces } from 'node:os'
 import { readPluginSettingsJson, writePluginSettingsJson, type SessionStoreOptions } from '../auth/token.js'
 import { hashSecret } from '../auth/crypto.js'
 
+/** 动作请求（生成配对码 / 写密码）的默认超时：冷启动或高负载机器上首次请求可能偏慢 */
+export const DEFAULT_ACTION_TIMEOUT_MS = 8000
+
+/** 端点探测的默认超时：候选地址可能很多，必须快速失败 */
+export const DEFAULT_PROBE_TIMEOUT_MS = 2000
+
 /** 状态接口返回的代理信息 */
 export interface RemoteMobileProxyStatus {
   mode?: 'proxy' | 'direct'
@@ -59,7 +65,7 @@ export interface CliClientOptions {
   host?: string
   /** 会话令牌（直连模式下本机请求不被视为回环时使用） */
   token?: string
-  /** 单次请求超时（毫秒，默认 2500） */
+  /** 动作请求超时（毫秒，默认 8000）；探测阶段会自动收敛到更短，避免逐个候选地址长时间等待 */
   timeoutMs?: number
   /** DSH 主目录（默认 $DSH_HOME 或 ~/.dsh） */
   dshHome?: string
@@ -187,7 +193,7 @@ export async function requestJson(
   url: string,
   options: RequestOptions = {}
 ): Promise<{ ok: boolean; status: number; data: any; error?: string }> {
-  const timeoutMs = options.timeoutMs ?? 2500
+  const timeoutMs = options.timeoutMs ?? DEFAULT_ACTION_TIMEOUT_MS
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   if (typeof (timer as any).unref === 'function') (timer as any).unref()
@@ -218,6 +224,27 @@ export async function requestJson(
 }
 
 /**
+ * 动作请求（生成配对码 / 设置密码）：超时类失败自动重试一次
+ *
+ * 服务器冷启动、或在低配机器上与大量插件同时加载时，首个请求偶发超时；
+ * 这类失败重试一次即可成功，不必让用户手动再敲一遍命令。
+ *
+ * @param url - 完整地址
+ * @param options - 请求参数
+ * @returns 请求结果（至多两次尝试）
+ */
+async function requestAction(
+  url: string,
+  options: RequestOptions = {}
+): Promise<{ ok: boolean; status: number; data: any; error?: string }> {
+  const first = await requestJson(url, options)
+  if (first.status === 0 && first.error === '请求超时') {
+    return requestJson(url, options)
+  }
+  return first
+}
+
+/**
  * 探测单个候选地址上的插件状态接口
  * @param baseUrl - 候选地址
  * @param options - 令牌与超时
@@ -229,7 +256,7 @@ export async function probeEndpoint(
 ): Promise<RemoteMobileStatus | null> {
   const result = await requestJson(`${trimTrailingSlash(baseUrl)}/api/remote-mobile/status`, {
     token: options.token,
-    timeoutMs: options.timeoutMs,
+    timeoutMs: Math.min(options.timeoutMs ?? DEFAULT_ACTION_TIMEOUT_MS, DEFAULT_PROBE_TIMEOUT_MS),
   })
   if (!result.ok || !result.data || result.data.success !== true) return null
   // 只接受本插件自己的响应：必须带 proxy 结构，避免把别的服务误判为 DSH
@@ -260,7 +287,7 @@ export async function generatePairingCode(
   baseUrl: string,
   options: CliClientOptions = {}
 ): Promise<{ ok: boolean; code?: string; expiresAt?: number; error?: string }> {
-  const result = await requestJson(`${trimTrailingSlash(baseUrl)}/api/remote-mobile/generate-code`, {
+  const result = await requestAction(`${trimTrailingSlash(baseUrl)}/api/remote-mobile/generate-code`, {
     method: 'POST',
     token: options.token,
     timeoutMs: options.timeoutMs,
@@ -283,7 +310,7 @@ export async function setLongTermPassword(
   secret: string,
   options: CliClientOptions = {}
 ): Promise<{ ok: boolean; error?: string }> {
-  const result = await requestJson(`${trimTrailingSlash(baseUrl)}/api/remote-mobile/set-secret`, {
+  const result = await requestAction(`${trimTrailingSlash(baseUrl)}/api/remote-mobile/set-secret`, {
     method: 'POST',
     body: { secret },
     token: options.token,
@@ -306,7 +333,7 @@ export async function clearLongTermPassword(
   baseUrl: string,
   options: CliClientOptions = {}
 ): Promise<{ ok: boolean; error?: string }> {
-  const result = await requestJson(`${trimTrailingSlash(baseUrl)}/api/remote-mobile/clear-secret`, {
+  const result = await requestAction(`${trimTrailingSlash(baseUrl)}/api/remote-mobile/clear-secret`, {
     method: 'POST',
     token: options.token,
     timeoutMs: options.timeoutMs,
@@ -348,6 +375,9 @@ export function writePasswordOffline(
 
 /** 把失败的请求转换成可读原因 */
 function describeFailure(result: { status: number; data: any; error?: string }): string {
+  if (result.error === '请求超时') {
+    return '请求超时：服务器繁忙或冷启动较慢，可加大超时后重试（--timeout 15000）'
+  }
   if (result.error) return result.error
   if (result.status === 401) return '服务拒绝了该请求（HTTP 401），直连模式下请用 --token 传入已配对设备令牌'
   if (result.status === 403) return '服务拒绝了该请求（HTTP 403），请检查 trustedHosts / Host 是否受信'
