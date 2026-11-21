@@ -149,7 +149,7 @@ dsh web --no-open
 
 > 设置面板按 **「接入 / 设备与安全 / 样式覆写 / 本地数据」** 四个页签分组显示，避免长页面；页签选择会被记住，切换不重置配对码等状态。
 >
-> **没有图形界面的服务器？** 直接用插件自带的命令行：`dsh-remote-mobile code` 获取配对码、`dsh-remote-mobile password` 设置长期密码，详见 [无 GUI 服务器：命令行管理](#cli)。
+> **没有图形界面的服务器？** 推荐直接用固定路径调用插件命令行：`~/.local/bin/dsh-remote-mobile code` 获取配对码、`~/.local/bin/dsh-remote-mobile password` 设置长期密码，详见 [无 GUI 服务器：命令行管理](#cli)。
 
 ---
 
@@ -462,35 +462,37 @@ dsh plugin --profile web remove dsh-remote-mobile
 
 ```bash
 # 查看当前配对码（有效则直接复用，不会把屏幕上的码刷新掉）
-dsh-remote-mobile code
+~/.local/bin/dsh-remote-mobile code
 
 # 生成 / 强制刷新配对码
-dsh-remote-mobile code --new
+~/.local/bin/dsh-remote-mobile code --new
 
 # 设置长期访问密码（交互式，输入不回显；也可 --stdin 走管道）
-dsh-remote-mobile password
+~/.local/bin/dsh-remote-mobile password
 
 # 清除长期密码
-dsh-remote-mobile password --clear
+~/.local/bin/dsh-remote-mobile password --clear
 
 # 机器可读输出，方便脚本集成
-dsh-remote-mobile code --json | jq -r .code
+~/.local/bin/dsh-remote-mobile code --json | jq -r .code
 ```
 
-`dsh-remote-mobile` 随插件一起安装，**重启 DSH 后即可直接使用**，无需配置 PATH：
+`dsh-remote-mobile` 随插件一起安装。由于当前上游 DSH 尚不支持第三方插件注册 `dsh <子命令>`，插件激活时会固定生成 `~/.local/bin/dsh-remote-mobile`；因此本文档统一使用这个固定路径，避免不同 shell 的 PATH 差异：
 
 ```bash
-dsh plugin --profile web add dsh-remote-mobile   # 插件 + 命令行工具一起就位
-sudo systemctl restart dsh                       # 或重启 dsh web
-dsh-remote-mobile code
+dsh plugin --profile web add dsh-remote-mobile          # 插件 + 命令行工具一起就位
+sudo systemctl restart dsh                              # 或重启 dsh web
+~/.local/bin/dsh-remote-mobile code
 ```
+
+> 如果你的登录 shell 已把 `~/.local/bin` 加入 PATH，也可以简写为 `dsh-remote-mobile code`；但 cron / systemd / 非登录 SSH 请继续使用固定路径（systemd 请写展开后的绝对路径，例如 `/home/<user>/.local/bin/dsh-remote-mobile` 或使用 `%h/.local/bin/dsh-remote-mobile`）。
 
 <details>
 <summary><b>它装到哪里？什么时候需要手动处理 PATH？</b></summary>
 
-插件激活时会把一个三行包装脚本**固定写到 `~/.local/bin/dsh-remote-mobile`**（POSIX；现代发行版 `~/.profile` 默认已把该目录加入 PATH），不做其他位置、不做多级回退。
+插件激活时会把一个三行包装脚本**固定写到 `~/.local/bin/dsh-remote-mobile`**（POSIX；不做其他位置、不做多级回退）。主示例统一使用该固定路径；只有在确认 `~/.local/bin` 已加入 PATH 的交互式登录 shell 中，才建议省略目录前缀。
 
-已知边界：非登录 shell（`ssh host 'cmd'`、cron、systemd）的 PATH 来自 `/etc/environment`，通常不含 `~/.local/bin`；此时需要执行一次下面这条命令，或直接用绝对路径。等上游支持 `dsh <子命令>` 后，这套落位逻辑会整体移除：
+已知边界：非登录 shell（`ssh host 'cmd'`、cron、systemd）的 PATH 来自 `/etc/environment`，通常不含 `~/.local/bin`；此时不要依赖短命令，直接写 `~/.local/bin/dsh-remote-mobile ...`，或执行一次下面这条命令把短命令也接通。等上游支持 `dsh <子命令>` 后，这套落位逻辑会整体移除：
 
 ```bash
 sudo ln -sf ~/.local/bin/dsh-remote-mobile /usr/local/bin/dsh-remote-mobile
@@ -527,9 +529,9 @@ npx -y dsh-remote-mobile@latest code                   # 直接用发布版
 - **密码即时生效**：`password` 优先调用服务端接口，写入后**无需重启**。若 DSH 尚未启动（或端口不可达），则退化为直接写入 `settings.json`（同样使用 scrypt 加盐哈希，文件权限 `0o600`），并提示「下次启动 `dsh web` 后生效」。
 - **密码不会出现在进程列表**：交互式输入不回显；脚本请用 `--stdin`。用位置参数传密码会留在 shell 历史中，命令会给出警告。
 - **自定义部署**：`--port` / `--base-url` 指定端点；`--dsh-home` 指定 DSH 主目录；`--host` 指定探测主机；`--timeout` 调整超时。
-- **直连模式（direct）**：若核心监听的是网卡 IP，本机请求源地址也是网卡 IP，不再被视为回环。此时 `dsh-remote-mobile code --token <已配对设备令牌>` 可携带 `Authorization: Bearer` 通过门禁。
+- **直连模式（direct）**：若核心监听的是网卡 IP，本机请求源地址也是网卡 IP，不再被视为回环。此时 `~/.local/bin/dsh-remote-mobile code --token <已配对设备令牌>` 可携带 `Authorization: Bearer` 通过门禁。
 
-> 注：DSH 启动器的子命令（`dsh <profile>` / `dsh plugin`）由官方 CLI 固定实现，第三方插件无法注册 `dsh xxx` 形式的新子命令，因此这里以插件包自带的 `dsh-remote-mobile` 可执行文件提供，行为与 `dsh` 一致地读取同一个 `$DSH_HOME`。
+> 注：DSH 启动器的子命令（`dsh <profile>` / `dsh plugin`）由官方 CLI 固定实现，第三方插件无法注册 `dsh xxx` 形式的新子命令，因此这里以插件包自带、固定落到 `~/.local/bin/dsh-remote-mobile` 的可执行文件提供，行为与 `dsh` 一致地读取同一个 `$DSH_HOME`。
 
 ---
 
