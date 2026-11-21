@@ -20,6 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 判定只看物理 Socket 地址，或受信网关上报的真实客户端 IP（`getClientIp` 读取的 `socket.__dsh_real_remote_address__` 仅在网关 Secret 校验通过后写入），**不采信可直接伪造的 `x-dsh-real-ip` 头**；
   - 外部设备的该字段恒为 `null`，响应体中不会出现任何码值（已有回归测试覆盖伪造头场景）。
 - **测试**：新增 `test/cli.test.js`（32 项，含参数解析、报告渲染、候选端点推导、离线写入、用插件真实路由处理器起的回环 HTTP 端到端：生成码 → 窥视同码 → 设密码 → `hasSecret` → 清除 → 弱密码拒绝）；`test/routes.test.js` 新增「仅本机可见配对码 / 外部与伪造头均不可见」用例。
+- **安装即用（新增 `src/cli/launcher.ts`）**：`dsh plugin --profile web add dsh-remote-mobile` 只会把可执行链接放进 profile 的 `node_modules/.bin`，而该目录不在 `PATH` —— 用户装完敲 `dsh-remote-mobile` 依然是「未找到命令」。插件激活时现在会把一个三行包装脚本落位到 `~/.local/bin/dsh-remote-mobile`（POSIX 平台；现代发行版该目录默认在 `PATH` 内），实现：
+  - **幂等 + 自愈**：内容一致不动文件，安装路径变化（换 profile / 升级）时自动重写；
+  - **失败不阻断**：只读 HOME、权限不足等异常仅体现在启动 Banner 的提示里，不影响插件本身；
+  - **不覆盖全局安装**：已用 `npm i -g` 的场景保持原样；
+  - 启动 Banner 新增一行 `CLI ...`，就绪时提示可直接执行，`~/.local/bin` 不在 `PATH` 时打印可粘贴的 `export PATH=...` 命令。
+  - 测试：新增 `test/cli-launcher.test.js`（13 项，覆盖 Windows 跳过、生成脚本、幂等、路径自愈、PATH 判定、CLI 缺失、HOME 不可写、Banner 文案）。
 - **文档**：README / README_EN 新增「无 GUI 服务器：命令行获取配对码 / 设置密码」章节（含 `npx` 与全局安装方式、输出样例、行为约定与直连模式说明）。
 
 > 说明：DSH 启动器的子命令（`dsh <profile>`、`dsh plugin`）由官方 CLI 固定实现，第三方插件无法注册新的 `dsh xxx` 子命令（`parseDshArgs` 只识别 `<profile>` 与 `plugin`）。因此 CLI 以插件包自带可执行文件 `dsh-remote-mobile` 提供，并与 `dsh` 共用同一个 `$DSH_HOME`。

@@ -29,6 +29,7 @@ import {
   injectTrustedHosts,
 } from './bridge/compat.js'
 import { bindDirectoryPickerRuntime, getDirectoryPickerStatus } from './bridge/directory-picker.js'
+import { ensureCliLauncher, describeCliLauncher } from './cli/launcher.js'
 import { detectServerMode } from './gateway/detector.js'
 import { GatewayServer } from './gateway/server.js'
 import { generateGatewaySecret, setGatewaySecret, clearGatewaySecret } from './gateway/secret.js'
@@ -113,6 +114,11 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
   const store = new SessionStore(config)
   const styleStore = new StyleSnippetStore()
   const gateMiddleware = createGlobalAuthGate(store)
+
+  // 1.1 把命令行工具落位到用户级 bin 目录（~/.local/bin）：`dsh plugin add` 只会在
+  //     profile 的 node_modules/.bin 里建链接，那个目录不在 PATH，用户会遇到「未找到命令」。
+  //     幂等、可自愈，失败只影响 Banner 提示，绝不影响插件启动。
+  const cliLauncher = ensureCliLauncher()
 
   // 为本次插件生命周期生成高强度握手 Secret，并绑定到底座 Server
   const gatewaySecret = generateGatewaySecret()
@@ -373,6 +379,8 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
       )
       console.log(`│ DSH 核心: ${detection.rawCoreHost}:${corePort} (${coreLabel})`)
       console.log(`│ 运行模式: ${modeLabel}`)
+      // 命令行工具落位情况：让「一行安装」后无需再手工配 PATH
+      console.log(`│ ${describeCliLauncher(cliLauncher)}`)
       if (modeFallbackError) {
         console.log(`│ ⚠️ 安全接入代理配置不可用，已回退 direct 模式: ${modeFallbackError}`)
       }
