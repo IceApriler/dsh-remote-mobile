@@ -488,12 +488,9 @@ dsh-remote-mobile code
 <details>
 <summary><b>它装到哪里？什么时候需要手动处理 PATH？</b></summary>
 
-插件激活时会把一个三行包装脚本落位到可执行目录，顺序是：
+插件激活时会把一个三行包装脚本**固定写到 `~/.local/bin/dsh-remote-mobile`**（POSIX；现代发行版 `~/.profile` 默认已把该目录加入 PATH），不做其他位置、不做多级回退。
 
-1. **与 `dsh` 同目录**（仅当该目录可写，例如 `nvm` / `volta` / 用户级 `npm prefix`）——`dsh` 能跑的地方它都能跑，包括 `ssh host 'cmd'` 这类非登录 shell、systemd 与 cron；
-2. 否则 `~/.local/bin`（现代发行版 `~/.profile` 默认已加入 PATH，交互式登录可用）。
-
-`apt` 安装的 `dsh` 在 `/usr/bin`（root 独占），插件以普通用户运行、**不会提权写系统目录**，因此会落到 `~/.local/bin`。此时交互式登录照常可用，只有非登录 shell（`ssh host 'cmd'`、cron）看不到它——需要的话执行一次：
+已知边界：非登录 shell（`ssh host 'cmd'`、cron、systemd）的 PATH 来自 `/etc/environment`，通常不含 `~/.local/bin`；此时需要执行一次下面这条命令，或直接用绝对路径。等上游支持 `dsh <子命令>` 后，这套落位逻辑会整体移除：
 
 ```bash
 sudo ln -sf ~/.local/bin/dsh-remote-mobile /usr/local/bin/dsh-remote-mobile
