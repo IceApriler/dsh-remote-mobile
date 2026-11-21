@@ -477,7 +477,12 @@ dsh-remote-mobile password --clear
 dsh-remote-mobile code --json | jq -r .code
 ```
 
-`dsh-remote-mobile` 由本插件包提供，**装好插件就自动可用**：插件激活时会把一个三行包装脚本写入 `~/.local/bin/dsh-remote-mobile`（现代发行版的 `~/.profile` 默认已把该目录加入 `PATH`）。所以下面这一行装完之后，重启 DSH 即可直接敲命令，**不需要手工配 PATH，也不需要在 `/usr/local/bin` 里放任何东西**：
+`dsh-remote-mobile` 由本插件包提供，**装好插件就自动可用**：插件激活时会把一个三行包装脚本落位到可执行目录，选择顺序是——
+
+1. **与 `dsh` 同一个目录**（先在该目录可写时才用，例如 `nvm` / `volta` / 用户级 `npm prefix`）：这样 `dsh` 能跑的地方它都能跑，**包括 `ssh host 'cmd'` 这类非登录 shell、systemd 与 cron**；
+2. 否则回退到 `~/.local/bin`（现代发行版的 `~/.profile` 默认已把该目录加入 `PATH`，交互式登录后即可用）。
+
+因此下面这一行装完之后，重启 DSH 即可直接敲命令，**不需要手工配 PATH，也不需要在 `/usr/local/bin` 里放任何东西**：
 
 ```bash
 dsh plugin --profile web add dsh-remote-mobile   # 插件 + 命令行工具一起就位
@@ -485,7 +490,7 @@ sudo systemctl restart dsh                       # 或重启 dsh web
 dsh-remote-mobile code
 ```
 
-若 `~/.local/bin` 不在 `PATH` 中（极简系统或自定义 shell），启动 Banner 会直接打印可粘贴的 `export PATH=...` 命令。其它调用方式：
+若 DSH 装在 root 独占的前缀（如 `/usr/bin`，绝大多数 `apt` 安装方式），插件没有写权限，会自动回退到 `~/.local/bin`：交互式登录照常可用，**非登录 shell（`ssh host 'cmd'`）则不在 PATH 内**——如需脚本/定时任务调用，执行一次 `sudo ln -sf ~/.local/bin/dsh-remote-mobile /usr/local/bin/dsh-remote-mobile` 即可（这是可选步骤，插件不会去碰 `/usr/local/bin`）。启动 Banner 会明确告诉你是哪种落位。其它调用方式：
 
 ```bash
 # 方式一：从 profile 的依赖目录调用

@@ -476,7 +476,12 @@ dsh-remote-mobile password --clear
 dsh-remote-mobile code --json | jq -r .code
 ```
 
-`dsh-remote-mobile` ships with the plugin package and **is available as soon as the plugin is installed**: on activation the plugin writes a three-line wrapper to `~/.local/bin/dsh-remote-mobile` (modern distributions already add that directory to `PATH` via `~/.profile`). So the single install command below plus a restart is all you need — **no `PATH` editing and nothing in `/usr/local/bin`**:
+`dsh-remote-mobile` ships with the plugin package and **is available as soon as the plugin is installed**: on activation the plugin writes a three-line wrapper into an executable directory, preferring —
+
+1. **the directory that holds `dsh`** (used when it is writable, e.g. `nvm` / `volta` / a user-level `npm prefix`), so anywhere `dsh` runs, this runs too — **including non-login shells such as `ssh host 'cmd'`, systemd and cron**;
+2. otherwise `~/.local/bin` (modern distributions add it to `PATH` via `~/.profile`, so it works for interactive logins).
+
+So the single install command below plus a restart is all you need — **no `PATH` editing and nothing in `/usr/local/bin`**:
 
 ```bash
 dsh plugin --profile web add dsh-remote-mobile   # plugin and CLI land together
@@ -484,7 +489,7 @@ sudo systemctl restart dsh                       # or restart dsh web
 dsh-remote-mobile code
 ```
 
-If `~/.local/bin` is not on `PATH` (minimal systems or custom shells), the startup banner prints a ready-to-paste `export PATH=...` line. Other invocation styles:
+If DSH lives in a root-owned prefix (e.g. `/usr/bin` from a distro package — the common case), the plugin cannot write there and falls back to `~/.local/bin`: interactive logins work, but **non-login shells (`ssh host 'cmd'`) will not see it**. For scripts or cron, run once: `sudo ln -sf ~/.local/bin/dsh-remote-mobile /usr/local/bin/dsh-remote-mobile` (optional; the plugin never touches `/usr/local/bin`). The startup banner tells you which location was used. Other invocation styles:
 
 ```bash
 # Option 1: run it from the profile's dependency directory
