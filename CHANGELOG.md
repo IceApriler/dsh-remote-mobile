@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.0] - 2026-11-20
+
+### Added (无 GUI 服务器可用：`code` 获取配对码、`password` 设置长期密码)
+
+- **问题背景**：配对码与长期密码此前只能在「本机 Web UI → 设置 → 远程与移动端」获取。在 systemd / 容器 / NAS / 云主机这类没有图形界面的部署里，用户只能手写 `curl http://127.0.0.1:3081/api/remote-mobile/...`，既容易记错端口，也容易把密码留在 shell 历史里。
+- **新增插件自带 CLI（`bin: dsh-remote-mobile`，源码 `src/cli/`）**：
+  - `dsh-remote-mobile code` —— 查看配对码；**优先复用当前仍然有效的码**（`store.getActiveShortCode()`），没有或已过期才生成，`--new` 强制刷新；
+  - `dsh-remote-mobile password` —— 设置 / 更新长期密码，交互式输入不回显，支持 `--stdin` 管道与 `--clear` 清除；
+  - 通用参数：`--base-url` / `--port` / `--host` / `--token` / `--timeout` / `--dsh-home` / `--json`；`--json` 输出含 `code`、`expiresInSeconds`、`accessUrls`（局域网 / Tailscale / 配对入口）等字段，便于脚本集成。
+- **端点发现（`src/cli/client.ts`）**：读取 `settings.json` 的 `proxyPort`，结合本机网卡 IP 依次探测 `3080/3081/3082/3083`，并用「响应必须包含 `success` + `proxy` 结构」识别本插件服务，避免把同端口的其他服务误判为 DSH。命令只走本机回环，插件门禁对 loopback 无条件放行，无需任何凭据；直连模式（核心监听网卡 IP）下可用 `--token` 携带已配对设备令牌。
+- **离线兜底**：`password` 在 DSH 未运行或端口不可达时，直接以同等强度（复用 `hashSecret` 的 scrypt + 盐）写入 `settings.json`（保留 `allowLan` / `proxyPort` / `trustedHosts` 等既有字段、不落明文、权限 `0o600`），并明确提示「下次启动 `dsh web` 后生效」，支持「先设密码、再起服务」的初始化顺序。
+- **状态接口新增 `pairingCode` 字段（`src/routes/api.ts`）**：仅在**本机操作者**请求时返回当前有效配对码（`{ code, expiresAt }`），供 CLI 窥视而不刷新。
+  - 判定只看物理 Socket 地址，或受信网关上报的真实客户端 IP（`getClientIp` 读取的 `socket.__dsh_real_remote_address__` 仅在网关 Secret 校验通过后写入），**不采信可直接伪造的 `x-dsh-real-ip` 头**；
+  - 外部设备的该字段恒为 `null`，响应体中不会出现任何码值（已有回归测试覆盖伪造头场景）。
+- **测试**：新增 `test/cli.test.js`（32 项，含参数解析、报告渲染、候选端点推导、离线写入、用插件真实路由处理器起的回环 HTTP 端到端：生成码 → 窥视同码 → 设密码 → `hasSecret` → 清除 → 弱密码拒绝）；`test/routes.test.js` 新增「仅本机可见配对码 / 外部与伪造头均不可见」用例。
+- **安装即用（新增 `src/cli/launcher.ts`）**：固定落位 `~/.local/bin`（POSIX），**不做多级回退、不写系统目录**（曾在 RC 期间试过「与 dsh 同目录优先」，但在上游尚未支持 `dsh <子命令>` 时多位置只会增加权限与覆盖风险，故收敛为单一位置）。上游一旦支持插件子命令，该落位模块与 PATH 启发式将整体移除。`dsh plugin --profile web add dsh-remote-mobile` 只会把可执行链接放进 profile 的 `node_modules/.bin`，而该目录不在 `PATH` —— 用户装完敲 `dsh-remote-mobile` 依然是「未找到命令」。插件激活时现在会把一个三行包装脚本落位到 `~/.local/bin/dsh-remote-mobile`（POSIX 平台；现代发行版该目录默认在 `PATH` 内），实现：
+  - **幂等 + 自愈**：内容一致不动文件，安装路径变化（换 profile / 升级）时自动重写；
+  - **失败不阻断**：只读 HOME、权限不足等异常仅体现在启动 Banner 的提示里，不影响插件本身；
+  - **不覆盖全局安装**：已用 `npm i -g` 的场景保持原样；
+  - 启动 Banner 新增一行 `CLI ...`，就绪时提示可直接执行，`~/.local/bin` 不在 `PATH` 时打印可粘贴的 `export PATH=...` 命令。
+  - 测试：新增 `test/cli-launcher.test.js`（15 项，覆盖 Windows 跳过、生成脚本、幂等、路径自愈、PATH 判定、CLI 缺失、HOME 不可写、Banner 文案，以及 systemd 进程 PATH 与登录 shell 的差异）。
+- **安全护栏（审计修复）**：
+  - 缺少子命令时的裸参数（如 `dsh-remote-mobile Abcdef12345`）此前会被隐式当作 `password` 的明文参数，误敲即改密；现在返回用法错误（退出码 2），密码只能通过显式 `password` 子命令设置；
+  - `--base-url` 指向**非本机**地址时，`password` 会先警告「密码将以明文发送到 <host>」（本机端点不出网卡，无需提醒）；
+  - 交互式隐藏输入补 Ctrl+D（EOF）取消，避免 raw 模式下挂在等待里。
+- **超时与重试**：动作请求（生成配对码 / 写密码）默认超时放宽到 `8000ms`（原 2500ms 在低配服务器冷启动时偶发超时），端点探测仍收敛到 `2000ms` 以便快速跳过无效候选；超时类失败自动重试一次，仍失败时提示用 `--timeout` 加大。
+- **文档**：README / README_EN 新增「无 GUI 服务器：命令行获取配对码 / 设置密码」章节（含 `npx` 与全局安装方式、输出样例、行为约定与直连模式说明）。
+
+> 说明：DSH 启动器的子命令（`dsh <profile>`、`dsh plugin`）由官方 CLI 固定实现，第三方插件无法注册新的 `dsh xxx` 子命令（`parseDshArgs` 只识别 `<profile>` 与 `plugin`）。因此 CLI 以插件包自带可执行文件 `dsh-remote-mobile` 提供，并与 `dsh` 共用同一个 `$DSH_HOME`。
+
+---
+
 ## [1.10.4] - 2026-11-16
 
 ### Fixed (解决 Issue #12 · 停止对纯本机回环请求注入标准转发头，修复 loopback-only 生态插件全量 403)
