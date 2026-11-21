@@ -148,7 +148,7 @@ dsh web --no-open
 
 Open the DSH Web Console in your browser, navigate to **Settings ⚙️ -> Remote & Mobile Access**, and scan the QR code with your mobile camera or WeChat to open the pairing/login page. After authorization, DSH is ready on mobile.
 
-> **Headless server?** Use the bundled CLI instead: `dsh-remote-mobile code` for a pairing code and `dsh-remote-mobile password` for the long-term password. See [Managing a headless server from the CLI](#cli).
+> **Headless server?** Use the bundled CLI through its fixed path: `~/.local/bin/dsh-remote-mobile code` for a pairing code and `~/.local/bin/dsh-remote-mobile password` for the long-term password. See [Managing a headless server from the CLI](#cli).
 
 ---
 
@@ -461,35 +461,37 @@ On SSH-only machines (systemd, containers, NAS, cloud VMs) the pairing code and 
 
 ```bash
 # Show the current pairing code (reuses a still-valid code instead of refreshing it)
-dsh-remote-mobile code
+~/.local/bin/dsh-remote-mobile code
 
 # Generate / force-refresh a pairing code
-dsh-remote-mobile code --new
+~/.local/bin/dsh-remote-mobile code --new
 
 # Set the long-term password (interactive, no echo; --stdin works for pipelines)
-dsh-remote-mobile password
+~/.local/bin/dsh-remote-mobile password
 
 # Clear the long-term password
-dsh-remote-mobile password --clear
+~/.local/bin/dsh-remote-mobile password --clear
 
 # Machine-readable output for scripts
-dsh-remote-mobile code --json | jq -r .code
+~/.local/bin/dsh-remote-mobile code --json | jq -r .code
 ```
 
-`dsh-remote-mobile` is installed with the plugin and **works right after a restart**, with no `PATH` setup:
+`dsh-remote-mobile` is installed with the plugin. Because upstream DSH does not currently let third-party plugins register `dsh <subcommand>`, activation always writes `~/.local/bin/dsh-remote-mobile`; this document therefore uses that fixed path consistently to avoid shell `PATH` differences:
 
 ```bash
-dsh plugin --profile web add dsh-remote-mobile   # plugin and CLI land together
-sudo systemctl restart dsh                       # or restart dsh web
-dsh-remote-mobile code
+dsh plugin --profile web add dsh-remote-mobile          # plugin and CLI land together
+sudo systemctl restart dsh                              # or restart dsh web
+~/.local/bin/dsh-remote-mobile code
 ```
+
+> If your login shell already has `~/.local/bin` in `PATH`, the short form `dsh-remote-mobile code` also works; for cron / systemd / non-login SSH keep using the fixed path (in systemd units, use an expanded absolute path such as `/home/<user>/.local/bin/dsh-remote-mobile` or `%h/.local/bin/dsh-remote-mobile`).
 
 <details>
 <summary><b>Where does it go, and when do I need to touch PATH manually?</b></summary>
 
-On activation the plugin writes a three-line wrapper to **`~/.local/bin/dsh-remote-mobile` only** (POSIX; modern distributions already add that directory to `PATH` via `~/.profile`). No other location, no cascading fallback.
+On activation the plugin writes a three-line wrapper to **`~/.local/bin/dsh-remote-mobile` only** (POSIX; no other location, no cascading fallback). The main examples consistently use that fixed path; omit the directory prefix only in an interactive login shell where `~/.local/bin` is confirmed to be in `PATH`.
 
-Known limitation: non-login shells (`ssh host 'cmd'`, cron, systemd) get their `PATH` from `/etc/environment`, which usually does not include `~/.local/bin`. Either run the command below once, or use the absolute path. The placement logic will be removed entirely once the launcher supports `dsh <command>`:
+Known limitation: non-login shells (`ssh host 'cmd'`, cron, systemd) get their `PATH` from `/etc/environment`, which usually does not include `~/.local/bin`. Do not rely on the short command there; use `~/.local/bin/dsh-remote-mobile ...` directly, or run the command below once to enable the short form as well. The placement logic will be removed entirely once the launcher supports `dsh <command>`:
 
 ```bash
 sudo ln -sf ~/.local/bin/dsh-remote-mobile /usr/local/bin/dsh-remote-mobile
@@ -526,9 +528,9 @@ Typical output:
 - **Passwords apply immediately**: `password` calls the server API and takes effect without a restart. If DSH is not running (or the port is unreachable) it falls back to writing `settings.json` directly with the same scrypt salted hash and `0o600` file mode, printing that the change applies on the next `dsh web` start.
 - **Passwords never leak into `ps`**: interactive input is hidden; scripts should use `--stdin`. Passing the password as a positional argument leaves it in your shell history, and the command warns about that.
 - **Custom deployments**: `--port` / `--base-url` select the endpoint, `--dsh-home` sets the DSH home, `--host` selects the probe host, `--timeout` tunes the timeout.
-- **Direct mode**: when the core listens on a NIC address, even local requests originate from that address and are no longer loopback, so use `dsh-remote-mobile code --token <paired-device-token>` to pass the gate with `Authorization: Bearer`.
+- **Direct mode**: when the core listens on a NIC address, even local requests originate from that address and are no longer loopback, so use `~/.local/bin/dsh-remote-mobile code --token <paired-device-token>` to pass the gate with `Authorization: Bearer`.
 
-> Note: the DSH launcher's subcommands (`dsh <profile>` / `dsh plugin`) are fixed by the official CLI; third-party plugins cannot register new `dsh xxx` subcommands. The CLI therefore ships as the `dsh-remote-mobile` executable and reads the same `$DSH_HOME` as `dsh` does.
+> Note: the DSH launcher's subcommands (`dsh <profile>` / `dsh plugin`) are fixed by the official CLI; third-party plugins cannot register new `dsh xxx` subcommands. The CLI therefore ships as the `dsh-remote-mobile` executable, fixed at `~/.local/bin/dsh-remote-mobile`, and reads the same `$DSH_HOME` as `dsh` does.
 
 ---
 
