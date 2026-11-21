@@ -476,13 +476,21 @@ dsh-remote-mobile password --clear
 dsh-remote-mobile code --json | jq -r .code
 ```
 
-`dsh-remote-mobile` ships with the plugin package, so it exists as soon as the plugin is installed. If it is not on your `PATH`:
+`dsh-remote-mobile` ships with the plugin package and **is available as soon as the plugin is installed**: on activation the plugin writes a three-line wrapper to `~/.local/bin/dsh-remote-mobile` (modern distributions already add that directory to `PATH` via `~/.profile`). So the single install command below plus a restart is all you need — **no `PATH` editing and nothing in `/usr/local/bin`**:
+
+```bash
+dsh plugin --profile web add dsh-remote-mobile   # plugin and CLI land together
+sudo systemctl restart dsh                       # or restart dsh web
+dsh-remote-mobile code
+```
+
+If `~/.local/bin` is not on `PATH` (minimal systems or custom shells), the startup banner prints a ready-to-paste `export PATH=...` line. Other invocation styles:
 
 ```bash
 # Option 1: run it from the profile's dependency directory
 cd ~/.dsh/profiles/web && npx dsh-remote-mobile code
 
-# Option 2: install globally (handy on servers you administer from the CLI)
+# Option 2: install globally (servers you administer from the CLI)
 npm i -g dsh-remote-mobile && dsh-remote-mobile code
 
 # Option 3: run the published version without installing

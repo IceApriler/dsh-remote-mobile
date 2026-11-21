@@ -477,13 +477,21 @@ dsh-remote-mobile password --clear
 dsh-remote-mobile code --json | jq -r .code
 ```
 
-`dsh-remote-mobile` 由本插件包提供（安装插件后即存在）。若不在 PATH 中，可用以下任一方式调用：
+`dsh-remote-mobile` 由本插件包提供，**装好插件就自动可用**：插件激活时会把一个三行包装脚本写入 `~/.local/bin/dsh-remote-mobile`（现代发行版的 `~/.profile` 默认已把该目录加入 `PATH`）。所以下面这一行装完之后，重启 DSH 即可直接敲命令，**不需要手工配 PATH，也不需要在 `/usr/local/bin` 里放任何东西**：
+
+```bash
+dsh plugin --profile web add dsh-remote-mobile   # 插件 + 命令行工具一起就位
+sudo systemctl restart dsh                       # 或重启 dsh web
+dsh-remote-mobile code
+```
+
+若 `~/.local/bin` 不在 `PATH` 中（极简系统或自定义 shell），启动 Banner 会直接打印可粘贴的 `export PATH=...` 命令。其它调用方式：
 
 ```bash
 # 方式一：从 profile 的依赖目录调用
 cd ~/.dsh/profiles/web && npx dsh-remote-mobile code
 
-# 方式二：全局安装（推荐给长期使用 CLI 的服务器）
+# 方式二：全局安装（长期使用 CLI 的服务器）
 npm i -g dsh-remote-mobile && dsh-remote-mobile code
 
 # 方式三：不安装，直接跑最新版
