@@ -476,12 +476,7 @@ dsh-remote-mobile password --clear
 dsh-remote-mobile code --json | jq -r .code
 ```
 
-`dsh-remote-mobile` ships with the plugin package and **is available as soon as the plugin is installed**: on activation the plugin writes a three-line wrapper into an executable directory, preferring —
-
-1. **the directory that holds `dsh`** (used when it is writable, e.g. `nvm` / `volta` / a user-level `npm prefix`), so anywhere `dsh` runs, this runs too — **including non-login shells such as `ssh host 'cmd'`, systemd and cron**;
-2. otherwise `~/.local/bin` (modern distributions add it to `PATH` via `~/.profile`, so it works for interactive logins).
-
-So the single install command below plus a restart is all you need — **no `PATH` editing and nothing in `/usr/local/bin`**:
+`dsh-remote-mobile` is installed with the plugin and **works right after a restart**, with no `PATH` setup:
 
 ```bash
 dsh plugin --profile web add dsh-remote-mobile   # plugin and CLI land together
@@ -489,18 +484,27 @@ sudo systemctl restart dsh                       # or restart dsh web
 dsh-remote-mobile code
 ```
 
-If DSH lives in a root-owned prefix (e.g. `/usr/bin` from a distro package — the common case), the plugin cannot write there and falls back to `~/.local/bin`: interactive logins work, but **non-login shells (`ssh host 'cmd'`) will not see it**. For scripts or cron, run once: `sudo ln -sf ~/.local/bin/dsh-remote-mobile /usr/local/bin/dsh-remote-mobile` (optional; the plugin never touches `/usr/local/bin`). The startup banner tells you which location was used. Other invocation styles:
+<details>
+<summary><b>Where does it go, and when do I need to touch PATH manually?</b></summary>
+
+On activation the plugin writes a three-line wrapper into an executable directory, preferring:
+
+1. **the directory that holds `dsh`** (only when it is writable — `nvm` / `volta` / user-level `npm prefix`), so anywhere `dsh` runs, this runs too, including non-login shells (`ssh host 'cmd'`), systemd and cron;
+2. otherwise `~/.local/bin` (modern distributions add it to `PATH` via `~/.profile`, so interactive logins work).
+
+A distro-packaged `dsh` lives in `/usr/bin` (root-owned). The plugin runs as your user and **never escalates to write system directories**, so the wrapper lands in `~/.local/bin`. Interactive logins work; only non-login shells (`ssh host 'cmd'`, cron) will not see it — if you need those, run this once:
 
 ```bash
-# Option 1: run it from the profile's dependency directory
-cd ~/.dsh/profiles/web && npx dsh-remote-mobile code
-
-# Option 2: install globally (servers you administer from the CLI)
-npm i -g dsh-remote-mobile && dsh-remote-mobile code
-
-# Option 3: run the published version without installing
-npx -y dsh-remote-mobile@latest code
+sudo ln -sf ~/.local/bin/dsh-remote-mobile /usr/local/bin/dsh-remote-mobile
 ```
+
+Or run it ad hoc without the system directory and without installing the plugin:
+
+```bash
+cd ~/.dsh/profiles/web && npx dsh-remote-mobile code   # reuse the profile's copy
+npx -y dsh-remote-mobile@latest code                   # run the published version
+```
+</details>
 
 Typical output:
 
