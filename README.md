@@ -607,6 +607,8 @@ dsh plugin --profile web remove dsh-remote-mobile
 4. 如果重启后仍然出现，请附上 DSH 版本、插件版本与启动日志反馈。
 
 > 1.10.0 已修复“插件自身为 loopback 请求注入的 127 Forwarded 头被误判为反向代理、导致 3080 根路径被官方 401 拦截”的回归；重启后本机 3080 应恢复正常。
+>
+> 若在 **DSH 0.2.2-rc.x** 上出现同类 401（含手机端 `/connect` 恒 401），属于 connection 服务迟到就绪未被接管，见 [Q13](#q13)；请升级到 1.10.5+。
 </details>
 
 <details>
@@ -651,6 +653,20 @@ dsh plugin --profile web remove dsh-remote-mobile
 保存后，启用了 HMR 的 DSH 通常会自动重载；否则完整重启 `dsh web`。手机端强制刷新页面后，点“选择文件夹”会出现应用内目录浏览器（面包屑、目录列表、新建子目录），手机和 PC 都会使用网页选择器。
 
 **取舍**：这样 PC 本地也不再弹原生窗口。如果希望 PC 用 native、手机用 browse，需要单独建一个 remote profile 或自定义混合选择器；DSH 的 auto 不支持按客户端切换。browse 仍受现有 DSH / 插件鉴权保护，不会绕过认证。
+</details>
+
+<details id="q13">
+<summary><b>Q13: DSH 0.2.2-rc.x 上手机登录成功却「连不上」，<code>/connect</code> 一直 401？</b></summary>
+
+**答**：这是 1.10.4 及更早版本对 DSH 0.2.2-rc.x 的适配缺陷，**1.10.5 已修复**。三个叠加原因：
+
+1. **`connection` 服务是异步就绪的**：官方 `@deepseek-ai/dsh-client-connection` 的 `apply()` 要先 `await` 凭据服务并落盘签名密钥，才会注册 `connection` 服务。插件启动时同步 `ctx.get('connection')` 必然拿不到，0.2.2-rc.x 里这段耗时更长，导致「找不到服务端的 connection 服务」。
+2. **接管通道过于单一**：旧版只挂了 `ctx.inject(['connection'])` 一条兜底，且异常被静默吞掉；一旦宿主隔离了动态注入，接管就永久失手。
+3. **`/connect` 从未被接管**：官方只认本次进程的 `launchToken`，手机上不可能有，于是登录成功也会撞上官方 401。
+
+1.10.5 起：接管改为 **立即探测 + 动态注入 + `internal/service` 事件 + 30 秒有界轮询** 四通道兜底；`/connect` 也纳入接管——已通过插件门禁（扫码 / 长期密码 / 免密直连）的设备直接 `302` 回到应用根路径，携带官方合法 token 时仍走官方换取 Cookie。
+
+升级后请**完整重启** `dsh web`（或桌面端），启动横幅应显示「官方临时 Token 鉴权已接管」。若仍显示「接管未完成」，请附上 DSH 版本、插件版本与启动日志反馈。
 </details>
 
 ---

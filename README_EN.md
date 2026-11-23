@@ -606,6 +606,8 @@ Steps:
 4. If it persists after restart, report the DSH version, plugin version, and startup logs.
 
 > 1.10.0 fixes the regression where loopback requests received plugin-injected 127 Forwarded headers that were mistaken for a reverse proxy, causing the 3080 root to be rejected by DSH's official 401. After restart, the local 3080 root should work again.
+>
+> If you hit the same 401 on **DSH 0.2.2-rc.x** (including a permanently 401 `/connect` on the phone), the `connection` service was ready late and the takeover never happened — see [Q13](#q13) and upgrade to 1.10.5+.
 </details>
 
 <details>
@@ -650,6 +652,20 @@ Steps:
 Save the file. DSH with HMR usually reloads automatically; otherwise fully restart `dsh web`. Hard-refresh the phone page, then "Select folder" opens the in-app directory browser (breadcrumbs, directory list, create subdirectory); both phone and PC use the web picker.
 
 **Trade-off**: The PC also loses the native chooser. If you want native on the PC and browse on the phone, use a separate remote profile or a custom hybrid picker; DSH's auto picker does not switch per client. The browse picker still requires the existing DSH / plugin authentication and does not bypass it.
+</details>
+
+<details id="q13">
+<summary><b>Q13: On DSH 0.2.2-rc.x the phone logs in successfully but stays "disconnected", and <code>/connect</code> always returns 401?</b></summary>
+
+**Answer**: This is an adaptation defect in 1.10.4 and earlier for DSH 0.2.2-rc.x, **fixed in 1.10.5**. Three overlapping causes:
+
+1. **The `connection` service becomes ready asynchronously**: the official `@deepseek-ai/dsh-client-connection` `apply()` first awaits the credentials service and persists its signing secret, and only then registers `connection`. A synchronous `ctx.get('connection')` during plugin startup can never see it, and 0.2.2-rc.x widens that window — hence "cannot find the server-side connection service".
+2. **Only one takeover channel existed**: earlier versions relied on a single `ctx.inject(['connection'])` fallback whose errors were silently swallowed, so any host that isolates dynamic injection lost the takeover permanently.
+3. **`/connect` was never taken over**: the official handler only accepts the current process `launchToken`, which a phone can never have, so a successful login still ended in an official 401.
+
+Since 1.10.5 the takeover uses four independent channels — **immediate probe + dynamic inject + `internal/service` event + a bounded 30s poll** — and `/connect` is covered too: devices already authorized by the plugin gate (QR pairing / long-term password / passwordless LAN or Tailscale) get `302` back to the application root, while requests carrying a valid official token still use the official cookie exchange.
+
+After upgrading, **fully restart** `dsh web` (or the desktop app). The startup banner should read "official temporary Token authentication taken over". If it still reports an incomplete takeover, please attach your DSH version, plugin version, and startup log.
 </details>
 
 ---

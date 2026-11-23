@@ -25,7 +25,7 @@ import {
   patchHttpServerWithVirtualizer,
   mountIndexInjections,
   registerRemoteWebUiPairingBridge,
-  takeOverConnectionAuth,
+  bindConnectionAuth,
   injectTrustedHosts,
 } from './bridge/compat.js'
 import { bindDirectoryPickerRuntime, getDirectoryPickerStatus } from './bridge/directory-picker.js'
@@ -145,50 +145,19 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
 
   // 5. 透明接管 DSH 底座 connection 鉴权服务（短路官方 Token 401 阻断）
   /**
-   * connection 鉴权接管采用三点冗余策略：
-   * 1) 插件 apply 时立即尝试 —— 覆盖 connection 先于本插件就绪的场景
-   * 2) ctx.inject 动态注入 —— 覆盖 connection 后于本插件就绪的场景
-   * 3) printReadyBanner 中兜底 —— 覆盖上述两者都未捕获到的极端时序
+   * connection 的提供方是**异步激活**的（内部还要 await 凭据服务与 BrowserAuth 落盘签名密钥），
+   * 插件 apply 执行时该服务往往尚未注册。历史上的「只取一次 + 只挂一条 ctx.inject」
+   * 会在宿主隔离作用域、注入回调异常或服务迟到就绪时永久失手——表现就是
+   * DSH 0.2.2-rc.x 上「找不到服务端的 connection 服务 → /connect 始终 401 → 手机登录后连不上」。
    *
-   * takeOverConnectionAuth 内部通过 __dsh_rm_auth_takeover__ 标记保证幂等，
-   * 同一 connection 实例不会被重复接管。
+   * 现在统一交给 bindConnectionAuth：立即探测 + 动态注入 + internal/service 事件 + 有界轮询
+   * 四条通道兜底，无论服务何时出现都会完成一次性幂等接管。
    */
-  let connectionAuthAttached = false
-  const attachConnectionAuth = (conn: any): boolean => {
-    if (!conn) return false
-    try {
-      takeOverConnectionAuth(conn, store)
-      connectionAuthAttached = Boolean((conn as any).__dsh_rm_auth_takeover__)
-    } catch {
-      connectionAuthAttached = false
-    }
-    return connectionAuthAttached
-  }
-
-  // 1) 优先通过 ctx.get 安全获取（未注入时不抛错返回 undefined）
-  try {
-    const conn = typeof ctx.get === 'function' ? ctx.get('connection') : undefined
-    if (conn) attachConnectionAuth(conn)
-  } catch (e) {
-    ctx.logger?.debug?.('[dsh-remote-mobile] 尝试直接获取 connection 失败:', e)
-  }
-
-  // 2) 声明动态子注入，在 connection 服务就绪时接管
-  if (typeof ctx.inject === 'function') {
-    try {
-      ctx.inject(['connection'], (connCtx: any) => {
-        try {
-          // 统一通过 get 获取服务实例，避免属性访问与方法获取返回不同对象
-          const conn = typeof connCtx?.get === 'function' ? connCtx.get('connection') : connCtx?.connection
-          if (conn) attachConnectionAuth(conn)
-        } catch (e) {
-          ctx.logger?.debug?.('[dsh-remote-mobile] inject 接收 connection 注入失败:', e)
-        }
-      })
-    } catch (e) {
-      ctx.logger?.debug?.('[dsh-remote-mobile] 注册 connection 动态注入失败:', e)
-    }
-  }
+  const connectionBinding = bindConnectionAuth(ctx, store, {
+    onAttached: () => {
+      ctx.logger?.info?.('[dsh-remote-mobile] 官方 connection 鉴权服务已接管（官方临时 Token 401 阻断已短路）')
+    },
+  })
 
   // 动态同步受信任主机到所有底层运行时（webRuntime、connection、webStartup）
   const syncTrustedHosts = (target?: any) => {
@@ -296,6 +265,10 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
     if (webServer?.server) {
       clearGatewaySecret(webServer.server)
     }
+    // 解绑 connection 就绪监听与轮询定时器，避免热重载后残留句柄
+    try {
+      connectionBinding.dispose()
+    } catch {}
   }
 
   // 宿主关停时 dispose 事件可能不触发，effect 清理一定会执行（与 registerWebRoutes 保持一致）
@@ -326,6 +299,13 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
     // 等待期间插件可能已被 dispose / 热重载；此时绝不能再 setGatewaySecret / patch / mount
     if (disposed) return
 
+    // connection 服务是异步激活的：给一个短暂窗口再判定，避免把「稍晚就绪」误报成「接管失败」
+    const attachWaitUntil = Date.now() + 1500
+    while (!connectionBinding.isAttached() && Date.now() < attachWaitUntil) {
+      await new Promise((r) => setTimeout(r, 100))
+      if (disposed) return
+    }
+
     try {
       syncTrustedHosts()
       const webServer = (typeof ctx.get === 'function' ? ctx.get('webServer') : undefined) || ctx.webServer
@@ -334,12 +314,8 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
         patchHttpServerWithVirtualizer(webServer.server, gateMiddleware, store, styleStore)
         mountIndexInjections(ctx, styleStore)
       }
-      try {
-        const conn = typeof ctx.get === 'function' ? ctx.get('connection') : undefined
-        if (conn) attachConnectionAuth(conn)
-      } catch (e) {
-        ctx.logger?.debug?.('[dsh-remote-mobile] 就绪回调获取 connection 失败:', e)
-      }
+      // 就绪时刻再主动探一次：轮询窗口内的迟到服务在这里也能立刻接管
+      connectionBinding.tryAttach()
 
       const tsIp = getLocalTailscaleIp()
       const lanIp = getLocalLanIp()
@@ -361,11 +337,12 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
             : 'direct（显式配置）'
 
       const divider = '─'.repeat(72)
+      const connectionAuthAttached = connectionBinding.isAttached()
       console.log(`\n┌${divider}`)
       console.log(
         connectionAuthAttached
           ? `│ [dsh-remote-mobile] ${versionLabel} 官方临时 Token 鉴权已接管，PC/移动端访问无需携带官方token`
-          : `│ [dsh-remote-mobile] ${versionLabel} ⚠️ 官方临时 Token 鉴权接管未完成，请检查 DSH 版本或启动日志`
+          : `│ [dsh-remote-mobile] ${versionLabel} ⚠️ 官方临时 Token 鉴权接管未完成（将持续重试至 30s），请检查 DSH 版本或启动日志`
       )
       console.log(`│ DSH 核心: ${detection.rawCoreHost}:${corePort} (${coreLabel})`)
       console.log(`│ 运行模式: ${modeLabel}`)
