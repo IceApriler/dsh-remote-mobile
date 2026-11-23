@@ -24,7 +24,7 @@ import {
   candidateBaseUrls,
   clearLongTermPassword,
   isLocalBaseUrl,
-  findEndpoint,
+  findEndpointDetailed,
   generatePairingCode,
   readLocalSettings,
   resolveDshHome,
@@ -262,7 +262,7 @@ export function formatCodeReport(context: CodeReportContext): string {
 
   lines.push(`服务       ${context.baseUrl}（${mode} 模式，核心端口 ${corePort}）`)
   if (mode === 'proxy' && context.status.proxy?.running === false) {
-    lines.push('提示       安全接入代理当前未运行，手机可能无法连接；请检查 3081 端口占用')
+    lines.push(`提示       安全接入代理当前未运行，手机可能无法连接；请检查 ${port} 端口占用`)
   }
   lines.push('')
   lines.push('在手机浏览器打开「配对入口」，输入上面的 6 位配对码即可完成配对。')
@@ -284,9 +284,14 @@ export interface RunCodeOptions {
 export async function runCodeCommand(params: RunCodeOptions): Promise<number> {
   const { options, stdout, stderr } = params
   const dshHome = resolveDshHome(options.dshHome)
-  const endpoint = await findEndpoint(options)
+  const search = await findEndpointDetailed(options)
 
-  if (!endpoint) {
+  if (!search.endpoint) {
+    if (search.authFailure) {
+      stderr(`读取配对码失败：${search.authFailure.message}\n`)
+      stderr(`目标端点：${search.authFailure.baseUrl}\n`)
+      return 1
+    }
     const tried = candidateBaseUrls(options)
     stderr('未找到正在运行的 DSH（dsh-remote-mobile 服务无法连接）。\n')
     stderr('已尝试以下地址：\n')
@@ -299,7 +304,7 @@ export async function runCodeCommand(params: RunCodeOptions): Promise<number> {
     return 1
   }
 
-  const { baseUrl, status } = endpoint
+  const { baseUrl, status } = search.endpoint
   const existing = status.pairingCode
   const now = Date.now()
 
@@ -386,7 +391,27 @@ export async function runPasswordCommand(params: RunPasswordOptions): Promise<nu
     }
   }
 
-  const endpoint = options.offline ? null : await findEndpoint(options)
+  const search = options.offline
+    ? { endpoint: null, authFailure: undefined }
+    : await findEndpointDetailed(options)
+  const endpoint = search.endpoint
+
+  if (!endpoint) {
+    // 401/403 说明服务在，只是鉴权没通过；显式 --base-url 也代表用户明确指定了目标。
+    // 这两类失败都必须退出，只有「没有显式目标且自动探测不到服务」才允许走离线兜底。
+    if (search.authFailure) {
+      stderr(`设置失败：${search.authFailure.message}\n`)
+      stderr(`目标端点：${search.authFailure.baseUrl}\n`)
+      stderr('已停止，未写入本机 settings.json。\n')
+      return 1
+    }
+    if (options.baseUrl) {
+      stderr(`无法连接到显式指定的地址：${options.baseUrl}\n`)
+      stderr('已停止，未写入本机 settings.json。\n')
+      stderr('如确实要先写本机配置，请显式使用 --offline，并确认目标就是本机 DSH。\n')
+      return 1
+    }
+  }
 
   if (endpoint) {
     // 密码默认明文发送：本机端点不产生流量，非本机（--base-url 指向其它主机）必须提醒

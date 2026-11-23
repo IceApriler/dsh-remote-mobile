@@ -6,6 +6,7 @@ import { getPublicKeyPem, decryptWithPrivateKey, validateSecretStrength, RSA_KEY
 import { getLoginPageHtml } from './login-page.js'
 import { DEFAULT_STYLE_FILE, type StyleSnippetStore } from '../styles/style-snippets.js'
 import { getPairingBridgeState } from '../bridge/compat.js'
+import { isLocalOperatorRequest } from '../auth/local-operator.js'
 import {
   getDirectoryPickerStatus,
   enableDirectoryPickerBrowse,
@@ -25,23 +26,6 @@ function getRealClientIp(req: IncomingMessage): string {
   const real = req.headers['x-dsh-real-ip']
   if (typeof real === 'string' && real) return real
   return getClientIp(req)
-}
-
-/**
- * 判断请求是否来自「本机操作者」（供 CLI 读取尚未过期的配对码）。
- *
- * 只认物理 Socket 地址或受信网关上报的真实客户端 IP（`getClientIp` 读取的
- * `socket.__dsh_real_remote_address__` 仅在网关 Secret 校验通过后由虚拟化层写入），
- * 不采信任何可被直接伪造的 `x-dsh-real-ip` 头 —— 否则直连模式下的外部设备
- * 只要自带该头就能读到配对码。
- */
-function isLocalOperatorRequest(req: IncomingMessage): boolean {
-  try {
-    const ip = getClientIp(req)
-    return ip === '127.0.0.1' || ip === '::1' || ip === 'localhost'
-  } catch {
-    return false
-  }
 }
 
 function parseJsonBody(req: IncomingMessage): Promise<any> {

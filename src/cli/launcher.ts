@@ -28,7 +28,7 @@
  * - Windows 跳过：`~/.local/bin` 不在 PATH 体系内，那边用 `npx dsh-remote-mobile` 或全局安装。
  */
 
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -84,9 +84,35 @@ export function buildLauncherScript(target: string): string {
     '#!/bin/sh',
     '# 由 dsh-remote-mobile 插件自动生成：无需手动配置 PATH，插件升级后本脚本自动跟随。',
     '# 卸载插件后可安全删除本文件。',
-    `exec node ${JSON.stringify(target)} "$@"`,
+    `exec node ${shellSingleQuote(target)} "$@"`,
     '',
   ].join('\n')
+}
+
+/** 生成包装脚本时使用的固定标记，用于区分本插件生成的文件与用户自建脚本 */
+const LAUNCHER_MARKER = '由 dsh-remote-mobile 插件自动生成'
+
+/**
+ * 按 POSIX sh 单引号规则转义路径
+ *
+ * 双引号会继续展开 `$`、反引号和命令替换；单引号内除单引号本身外均为字面量，
+ * 因此把目标路径整体包进单引号，并把内部单引号替换为 `'\''` 是最稳妥的写法。
+ */
+function shellSingleQuote(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`
+}
+
+/**
+ * 判断当前进程是否处于 node --test 测试环境
+ *
+ * 与 SessionStore 的隔离策略保持一致：测试环境必须跳过真实 HOME 的自动落位，
+ * 避免跑一次测试就把本机 `~/.local/bin/dsh-remote-mobile` 写成测试临时路径。
+ */
+export function isCliLauncherTestEnvironment(): boolean {
+  return Boolean(
+    process.env.NODE_TEST_CONTEXT ||
+    process.argv.some((arg) => arg.includes('test'))
+  )
 }
 
 /**
@@ -169,8 +195,28 @@ export function ensureCliLauncher(options: CliLauncherOptions = {}): CliLauncher
 
   try {
     if (!existsSync(binDir)) mkdirSync(binDir, { recursive: true })
+
+    // 先检查目标路径本身：软链接可能指向 `npm config set prefix ~/.local` 的全局安装目标，
+    // 直接 writeFileSync 会沿链接把真实 JS 覆写成 shell 脚本；用户自建脚本同样不能覆盖。
+    let existingContent: string | null = null
+    try {
+      const stat = lstatSync(scriptPath)
+      if (stat.isSymbolicLink()) {
+        return { ok: false, reason: 'symlink', path: scriptPath, target }
+      }
+      if (!stat.isFile()) {
+        return { ok: false, reason: 'not-a-file', path: scriptPath, target }
+      }
+      existingContent = readFileSync(scriptPath, 'utf8')
+      if (!existingContent.includes(LAUNCHER_MARKER)) {
+        return { ok: false, reason: 'foreign-file', path: scriptPath, target }
+      }
+    } catch (error: any) {
+      if (error?.code !== 'ENOENT') throw error
+    }
+
     let updated = false
-    if (!existsSync(scriptPath) || readFileSync(scriptPath, 'utf8') !== script) {
+    if (existingContent !== script) {
       writeFileSync(scriptPath, script, { encoding: 'utf8', mode: 0o755 })
       updated = true
     }
@@ -198,6 +244,10 @@ export function ensureCliLauncher(options: CliLauncherOptions = {}): CliLauncher
 export function describeCliLauncher(result: CliLauncherResult): string {
   if (!result.ok) {
     if (result.reason === 'windows') return `CLI      Windows 请用 npx ${CLI_LAUNCHER_NAME}（或 npm i -g）`
+    if (result.reason === 'test') return 'CLI      测试环境：跳过自动落位'
+    if (result.reason === 'symlink' || result.reason === 'foreign-file' || result.reason === 'not-a-file') {
+      return `CLI      ${result.path || '~/.local/bin/' + CLI_LAUNCHER_NAME} 已存在且非本插件生成，已跳过覆盖；请手动检查或删除后重启`
+    }
     const hint = process.env.DSH_HOME
       ? `npx --prefix "$DSH_HOME/profiles/web" ${CLI_LAUNCHER_NAME}`
       : `npx ${CLI_LAUNCHER_NAME}`

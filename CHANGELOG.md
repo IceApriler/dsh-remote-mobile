@@ -33,6 +33,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **超时与重试**：动作请求（生成配对码 / 写密码）默认超时放宽到 `8000ms`（原 2500ms 在低配服务器冷启动时偶发超时），端点探测仍收敛到 `2000ms` 以便快速跳过无效候选；超时类失败自动重试一次，仍失败时提示用 `--timeout` 加大。
 - **文档**：README / README_EN 新增「无 GUI 服务器：命令行获取配对码 / 设置密码」章节（含 `npx` 与全局安装方式、输出样例、行为约定与直连模式说明）。
 
+### Fixed (PR 审查修复：代理模式配对码边界、launcher 防覆写、CLI 失败语义)
+
+- **代理模式 / 同机反代下状态接口误暴露配对码（`src/auth/local-operator.ts`, `src/bridge/compat.ts`, `src/routes/api.ts`）**：
+  - 旧实现用 `getClientIp()` 判断本机，而受信网关与同机反向代理的物理连接同样是 `127.0.0.1`，导致外部已认证设备也能读到 `pairingCode`；
+  - 改为在底座虚拟化层完成「物理 socket + 网关 Secret + 反代头」三重校验后写入不可伪造的 Symbol 标记，路由层只认该标记；
+  - 新增 proxy 模式、同机反代、受信网关外部客户端、伪造 `x-dsh-real-ip`/`XFF` 回归测试，并直接断言 `/api/remote-mobile/status` 的响应体不泄漏码值。
+- **launcher 防覆写与测试隔离（`src/cli/launcher.ts`, `src/index.ts`）**：
+  - 写入前先 `lstatSync`：软链接、目录、用户自建脚本（不含插件标记）一律跳过，避免沿软链接把 npm 全局安装的真实 JS 覆写成 shell 脚本；
+  - 包装脚本的目标路径改用 POSIX 单引号转义，避免 `$` / 反引号被 shell 展开；
+  - `node --test` 环境跳过自动落位，避免测试写入真实 `~/.local/bin`。
+- **CLI 失败语义（`src/cli/client.ts`, `src/cli/index.ts`）**：
+  - `probeEndpoint` 不再把 401/403 当作「未找到服务」；新增 `findEndpointDetailed()` 透传鉴权失败，`code` / `password` 直接报错退出；
+  - 显式 `--base-url` 连接失败时不再回退写本机 `settings.json`；只有未指定目标且自动探测不到服务，或显式 `--offline` 时才离线写入。
+- **版本与依赖**：rebase 最新 `master`（含 v1.10.5），保留 1.10.5 与 1.11.0 两段 CHANGELOG，`package.json` / `package-lock.json` / 客户端版本统一为 `1.11.0`。
+
 > 说明：DSH 启动器的子命令（`dsh <profile>`、`dsh plugin`）由官方 CLI 固定实现，第三方插件无法注册新的 `dsh xxx` 子命令（`parseDshArgs` 只识别 `<profile>` 与 `plugin`）。因此 CLI 以插件包自带可执行文件 `dsh-remote-mobile` 提供，并与 `dsh` 共用同一个 `$DSH_HOME`。
 
 ---

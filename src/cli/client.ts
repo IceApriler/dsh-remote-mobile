@@ -77,6 +77,24 @@ export interface ResolvedEndpoint {
   status: RemoteMobileStatus
 }
 
+/** 单个候选地址的原始探测结果（保留 401/403 等失败语义） */
+export interface EndpointProbeResult {
+  baseUrl: string
+  status: RemoteMobileStatus | null
+  httpStatus: number
+  error?: string
+}
+
+/** 端点发现结果：既可能找到端点，也可能只拿到 401/403 等鉴权失败 */
+export interface EndpointSearchResult {
+  endpoint: ResolvedEndpoint | null
+  authFailure?: {
+    baseUrl: string
+    status: number
+    message: string
+  }
+}
+
 /**
  * 解析 DSH 主目录
  * @param explicit - 命令行显式传入的路径
@@ -271,18 +289,63 @@ export function isLocalBaseUrl(baseUrl: string, localHosts: string[] = candidate
  * @param options - 令牌与超时
  * @returns 命中时返回状态，否则 null
  */
-export async function probeEndpoint(
+export async function probeEndpointDetailed(
   baseUrl: string,
   options: CliClientOptions = {}
-): Promise<RemoteMobileStatus | null> {
+): Promise<EndpointProbeResult> {
   const result = await requestJson(`${trimTrailingSlash(baseUrl)}/api/remote-mobile/status`, {
     token: options.token,
     timeoutMs: Math.min(options.timeoutMs ?? DEFAULT_ACTION_TIMEOUT_MS, DEFAULT_PROBE_TIMEOUT_MS),
   })
-  if (!result.ok || !result.data || result.data.success !== true) return null
+  if (!result.ok || !result.data || result.data.success !== true) {
+    return {
+      baseUrl,
+      status: null,
+      httpStatus: result.status,
+      error: result.error || describeFailure(result),
+    }
+  }
   // 只接受本插件自己的响应：必须带 proxy 结构，避免把别的服务误判为 DSH
-  if (!result.data.proxy || typeof result.data.proxy !== 'object') return null
-  return result.data as RemoteMobileStatus
+  if (!result.data.proxy || typeof result.data.proxy !== 'object') {
+    return { baseUrl, status: null, httpStatus: result.status, error: '响应不是 dsh-remote-mobile 状态结构' }
+  }
+  return { baseUrl, status: result.data as RemoteMobileStatus, httpStatus: result.status }
+}
+
+/**
+ * 探测单个候选地址上的插件状态接口
+ * @param baseUrl - 候选地址
+ * @param options - 令牌与超时
+ * @returns 命中时返回状态，否则 null
+ */
+export async function probeEndpoint(
+  baseUrl: string,
+  options: CliClientOptions = {}
+): Promise<RemoteMobileStatus | null> {
+  return (await probeEndpointDetailed(baseUrl, options)).status
+}
+
+/**
+ * 依次探测候选地址，返回第一个可用的 DSH 端点
+ * @param options - CLI 选项
+ * @returns 命中的端点（含状态）或 null
+ */
+export async function findEndpointDetailed(options: CliClientOptions = {}): Promise<EndpointSearchResult> {
+  let authFailure: EndpointSearchResult['authFailure']
+  for (const baseUrl of candidateBaseUrls(options)) {
+    const probe = await probeEndpointDetailed(baseUrl, options)
+    if (probe.status) return { endpoint: { baseUrl, status: probe.status } }
+    // 401/403 不是「没找到服务」，而是服务在但当前请求没有通过鉴权。
+    // 记录下来供上层直接报错，绝不能伪装成探测失败后静默写本机配置。
+    if (!authFailure && (probe.httpStatus === 401 || probe.httpStatus === 403)) {
+      authFailure = {
+        baseUrl,
+        status: probe.httpStatus,
+        message: probe.error || describeFailure({ status: probe.httpStatus, data: null }),
+      }
+    }
+  }
+  return { endpoint: null, authFailure }
 }
 
 /**
@@ -291,11 +354,7 @@ export async function probeEndpoint(
  * @returns 命中的端点（含状态）或 null
  */
 export async function findEndpoint(options: CliClientOptions = {}): Promise<ResolvedEndpoint | null> {
-  for (const baseUrl of candidateBaseUrls(options)) {
-    const status = await probeEndpoint(baseUrl, options)
-    if (status) return { baseUrl, status }
-  }
-  return null
+  return (await findEndpointDetailed(options)).endpoint
 }
 
 /**

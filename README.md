@@ -490,7 +490,7 @@ sudo systemctl restart dsh                              # 或重启 dsh web
 <details>
 <summary><b>它装到哪里？什么时候需要手动处理 PATH？</b></summary>
 
-插件激活时会把一个三行包装脚本**固定写到 `~/.local/bin/dsh-remote-mobile`**（POSIX；不做其他位置、不做多级回退）。主示例统一使用该固定路径；只有在确认 `~/.local/bin` 已加入 PATH 的交互式登录 shell 中，才建议省略目录前缀。
+插件激活时会把一个三行包装脚本**固定写到 `~/.local/bin/dsh-remote-mobile`**（POSIX；不做其他位置、不做多级回退）。主示例统一使用该固定路径；只有在确认 `~/.local/bin` 已加入 PATH 的交互式登录 shell 中，才建议省略目录前缀。如果该路径已经是软链接、目录，或用户自建脚本（不含本插件生成标记），插件会跳过覆盖并在 Banner 提示手动处理，避免误改 `npm config set prefix ~/.local` 的全局安装或自定义脚本。
 
 已知边界：非登录 shell（`ssh host 'cmd'`、cron、systemd）的 PATH 来自 `/etc/environment`，通常不含 `~/.local/bin`；此时不要依赖短命令，直接写 `~/.local/bin/dsh-remote-mobile ...`，或执行一次下面这条命令把短命令也接通。等上游支持 `dsh <子命令>` 后，这套落位逻辑会整体移除：
 
@@ -526,7 +526,7 @@ npx -y dsh-remote-mobile@latest code                   # 直接用发布版
 - **优先与运行中的 DSH 通信**：命令自动按 `settings.json` 里的 `proxyPort` 以及 `3080/3081/3082/3083` 逐个探测本机端点，命中后再调用插件自己的 HTTP API（loopback 请求由插件门禁无条件放行，不需要任何凭据）。因此打印出来的配对码**就是服务端真正会接受的那个**。
 - **窥视而不刷新**：`code` 先读取状态接口里的当前有效码；只有不存在或已过期时才生成新码。加 `--new` 才会强制刷新（旧码随即失效）。
 - **配对码只在服务端内存中**：有效期 5 分钟、一次性使用。`code` 探测不到运行中的 DSH 时会明确报错并列出尝试过的地址 —— 这是设计约束，不是配置问题。
-- **密码即时生效**：`password` 优先调用服务端接口，写入后**无需重启**。若 DSH 尚未启动（或端口不可达），则退化为直接写入 `settings.json`（同样使用 scrypt 加盐哈希，文件权限 `0o600`），并提示「下次启动 `dsh web` 后生效」。
+- **密码即时生效**：`password` 优先调用服务端接口，写入后**无需重启**。只有自动探测不到运行中的 DSH、或显式使用 `--offline` 时，才写入 `settings.json`（同样使用 scrypt 加盐哈希，文件权限 `0o600`），并提示「下次启动 `dsh web` 后生效」。**401/403 会直接报错退出**；显式指定 `--base-url` 后连接失败也不会回退写本机配置（需要先写配置请用 `--offline`），避免把远端操作静默写成另一台机器的本地设置。
 - **密码不会出现在进程列表**：交互式输入不回显；脚本请用 `--stdin`。用位置参数传密码会留在 shell 历史中，命令会给出警告。
 - **自定义部署**：`--port` / `--base-url` 指定端点；`--dsh-home` 指定 DSH 主目录；`--host` 指定探测主机；`--timeout` 调整超时。
 - **直连模式（direct）**：若核心监听的是网卡 IP，本机请求源地址也是网卡 IP，不再被视为回环。此时 `~/.local/bin/dsh-remote-mobile code --token <已配对设备令牌>` 可携带 `Authorization: Bearer` 通过门禁。

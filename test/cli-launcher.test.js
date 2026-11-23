@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import {
@@ -8,6 +8,7 @@ import {
   ensureCliLauncher,
   isDirOnPath,
   isCliDirReachable,
+  isCliLauncherTestEnvironment,
   describeCliLauncher,
   CLI_LAUNCHER_NAME,
 } from '../lib/cli/launcher.js'
@@ -81,7 +82,8 @@ test('命令行工具自动落位 (ensureCliLauncher)', async (t) => {
 
       const content = readFileSync(env.script, 'utf8')
       assert.match(content, /^#!\/bin\/sh/)
-      assert.ok(content.includes(JSON.stringify(env.target)), '包装脚本必须指向当前安装位置')
+      const quotedTarget = `'${env.target.replace(/'/g, "'\\''")}'`
+      assert.ok(content.includes(quotedTarget), '包装脚本必须用单引号安全引用当前安装位置')
       assert.match(content, /exec node /)
       assert.match(content, /"\$@"/, '必须原样透传参数')
     } finally {
@@ -110,10 +112,57 @@ test('命令行工具自动落位 (ensureCliLauncher)', async (t) => {
       writeFileSync(env.script, buildLauncherScript('/old/missing/lib/cli/index.js'), 'utf8')
       const healed = ensureCliLauncher({ platform: 'linux', home: env.home, packageRoot: env.packageRoot })
       assert.equal(healed.updated, true)
-      assert.ok(readFileSync(env.script, 'utf8').includes(JSON.stringify(env.target)))
+      const quotedTarget = `'${env.target.replace(/'/g, "'\\''")}'`
+      assert.ok(readFileSync(env.script, 'utf8').includes(quotedTarget))
     } finally {
       env.cleanup()
     }
+  })
+
+  await t.test('单引号转义：目标路径含 $、反引号、空格或单引号时不会被 shell 展开', () => {
+    const target = "/tmp/a b/$HOME/`whoami`/it's/lib/cli/index.js"
+    const script = buildLauncherScript(target)
+    assert.ok(script.includes("exec node '/tmp/a b/$HOME/`whoami`/it'\\''s/lib/cli/index.js' \"$@\""))
+  })
+
+  await t.test('目标已是软链接时跳过，绝不沿链接覆写真实文件', (t) => {
+    if (process.platform === 'win32') {
+      t.skip('Windows 创建符号链接需要额外权限')
+      return
+    }
+    const env = createEnv()
+    try {
+      const realFile = join(env.root, 'real-target.js')
+      writeFileSync(realFile, '#!/usr/bin/env node\nconsole.log("real")\n', 'utf8')
+      mkdirSync(join(env.home, '.local', 'bin'), { recursive: true })
+      symlinkSync(realFile, env.script)
+      const result = ensureCliLauncher({ platform: 'linux', home: env.home, packageRoot: env.packageRoot })
+      assert.equal(result.ok, false)
+      assert.equal(result.reason, 'symlink')
+      assert.match(readFileSync(realFile, 'utf8'), /console\.log\("real"\)/, '软链接目标不得被覆盖')
+    } finally {
+      env.cleanup()
+    }
+  })
+
+  await t.test('目标已存在但不是本插件生成的脚本时跳过覆盖', () => {
+    const env = createEnv()
+    try {
+      mkdirSync(join(env.home, '.local', 'bin'), { recursive: true })
+      const custom = '#!/bin/sh\n# 用户自己的脚本\necho custom\n'
+      writeFileSync(env.script, custom, 'utf8')
+      const result = ensureCliLauncher({ platform: 'linux', home: env.home, packageRoot: env.packageRoot })
+      assert.equal(result.ok, false)
+      assert.equal(result.reason, 'foreign-file')
+      assert.equal(readFileSync(env.script, 'utf8'), custom)
+    } finally {
+      env.cleanup()
+    }
+  })
+
+  await t.test('测试环境跳过自动落位，避免写入真实 ~/.local/bin', () => {
+    assert.equal(isCliLauncherTestEnvironment(), true)
+    assert.match(describeCliLauncher({ ok: false, reason: 'test' }), /测试环境：跳过自动落位/)
   })
 
   await t.test('~/.local/bin 已在 PATH 时标记 onPath', () => {

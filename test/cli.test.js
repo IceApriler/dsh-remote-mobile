@@ -5,6 +5,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync, existsSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SessionStore } from '../lib/auth/token.js'
+import { markLocalOperatorRequest } from '../lib/auth/local-operator.js'
 import { createRoutes } from '../lib/routes/api.js'
 import {
   parseArgs,
@@ -50,6 +51,10 @@ async function startPluginServer() {
   const store = new SessionStore({ devicesFile: join(tmp, 'devices.json') })
   const routes = createRoutes(store)
   const server = http.createServer(async (req, res) => {
+    // 测试桩直接挂路由处理器，跳过 compat 虚拟化层；这里模拟本机回环已通过三重校验后的标记。
+    if (req.socket?.remoteAddress === '127.0.0.1' || req.socket?.remoteAddress === '::1') {
+      markLocalOperatorRequest(req)
+    }
     const pathname = (req.url || '/').split('?')[0]
     const route = routes.find(
       (item) => item.path === pathname && (item.method || 'GET') === (req.method || 'GET'),
@@ -410,12 +415,15 @@ test('runPasswordCommand 离线兜底写入配置', async (t) => {
     }
   })
 
-  await t.test('服务不可达时自动回退到离线写入并给出警告', async () => {
+  await t.test('未指定目标且自动探测不到服务时回退到离线写入并给出警告', async () => {
     const temp = createTempHome()
+    const originalFetch = globalThis.fetch
     try {
+      // 隔离真实网络：让所有候选端点立即失败，模拟 DSH 未启动
+      globalThis.fetch = async () => { throw new Error('ECONNREFUSED') }
       const chunks = []
       const exitCode = await runPasswordCommand({
-        options: { dshHome: temp.dshHome, baseUrl: 'http://127.0.0.1:1', timeoutMs: 300 },
+        options: { dshHome: temp.dshHome, timeoutMs: 100 },
         secret: 'Abcdef12',
         stdout: (text) => chunks.push(text),
         stderr: (text) => chunks.push(text),
@@ -423,6 +431,68 @@ test('runPasswordCommand 离线兜底写入配置', async (t) => {
       assert.equal(exitCode, 0)
       assert.match(chunks.join(''), /未连接到运行中的 DSH/)
       assert.ok(readLocalSettings(temp.dshHome).secretHash)
+    } finally {
+      globalThis.fetch = originalFetch
+      temp.cleanup()
+    }
+  })
+
+  await t.test('显式本机 --base-url 不可达时同样直接报错，不静默写配置', async () => {
+    const temp = createTempHome()
+    try {
+      const chunks = []
+      const exitCode = await runPasswordCommand({
+        options: { dshHome: temp.dshHome, baseUrl: 'http://127.0.0.1:1', timeoutMs: 200 },
+        secret: 'Abcdef12',
+        stdout: (text) => chunks.push(text),
+        stderr: (text) => chunks.push(text),
+      })
+      assert.equal(exitCode, 1)
+      assert.match(chunks.join(''), /无法连接到显式指定的地址/)
+      assert.equal(existsSync(settingsFilePath(temp.dshHome)), false)
+    } finally {
+      temp.cleanup()
+    }
+  })
+
+  await t.test('401/403 直接报错退出，不静默回退写入本机配置', async () => {
+    const temp = createTempHome()
+    const server = http.createServer((_req, res) => {
+      res.writeHead(401, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'Unauthorized' }))
+    })
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const { port } = server.address()
+    try {
+      const chunks = []
+      const exitCode = await runPasswordCommand({
+        options: { dshHome: temp.dshHome, baseUrl: `http://127.0.0.1:${port}`, timeoutMs: 1000 },
+        secret: 'Abcdef12',
+        stdout: (text) => chunks.push(text),
+        stderr: (text) => chunks.push(text),
+      })
+      assert.equal(exitCode, 1)
+      assert.match(chunks.join(''), /HTTP 401|服务拒绝了该请求/)
+      assert.equal(existsSync(settingsFilePath(temp.dshHome)), false, '不得回退写本机 settings.json')
+    } finally {
+      await new Promise((resolve) => server.close(resolve))
+      temp.cleanup()
+    }
+  })
+
+  await t.test('显式非本机 --base-url 不可达时直接报错，不写本机配置', async () => {
+    const temp = createTempHome()
+    try {
+      const chunks = []
+      const exitCode = await runPasswordCommand({
+        options: { dshHome: temp.dshHome, baseUrl: 'http://example.invalid:3081', timeoutMs: 200 },
+        secret: 'Abcdef12',
+        stdout: (text) => chunks.push(text),
+        stderr: (text) => chunks.push(text),
+      })
+      assert.equal(exitCode, 1)
+      assert.match(chunks.join(''), /未写入本机 settings\.json/)
+      assert.equal(existsSync(settingsFilePath(temp.dshHome)), false)
     } finally {
       temp.cleanup()
     }
