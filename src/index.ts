@@ -153,8 +153,23 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
    * 现在统一交给 bindConnectionAuth：立即探测 + 动态注入 + internal/service 事件 + 有界轮询
    * 四条通道兜底，无论服务何时出现都会完成一次性幂等接管。
    */
+  let resolveAttachWait: (() => void) | null = null
+  let attachWaitTimer: ReturnType<typeof setTimeout> | null = null
+  const clearAttachWait = () => {
+    if (attachWaitTimer) {
+      clearTimeout(attachWaitTimer)
+      attachWaitTimer = null
+    }
+    if (resolveAttachWait) {
+      const done = resolveAttachWait
+      resolveAttachWait = null
+      done()
+    }
+  }
+
   const connectionBinding = bindConnectionAuth(ctx, store, {
     onAttached: () => {
+      clearAttachWait()
       ctx.logger?.info?.('[dsh-remote-mobile] 官方 connection 鉴权服务已接管（官方临时 Token 401 阻断已短路）')
     },
   })
@@ -266,6 +281,7 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
       clearGatewaySecret(webServer.server)
     }
     // 解绑 connection 就绪监听与轮询定时器，避免热重载后残留句柄
+    clearAttachWait()
     try {
       connectionBinding.dispose()
     } catch {}
@@ -299,14 +315,8 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
     // 等待期间插件可能已被 dispose / 热重载；此时绝不能再 setGatewaySecret / patch / mount
     if (disposed) return
 
-    // connection 服务是异步激活的：给一个短暂窗口再判定，避免把「稍晚就绪」误报成「接管失败」
-    const attachWaitUntil = Date.now() + 1500
-    while (!connectionBinding.isAttached() && Date.now() < attachWaitUntil) {
-      await new Promise((r) => setTimeout(r, 100))
-      if (disposed) return
-    }
-
     try {
+      // 先完成受信任主机同步与底层门禁补挂，避免被 connection 等待窗口推迟
       syncTrustedHosts()
       const webServer = (typeof ctx.get === 'function' ? ctx.get('webServer') : undefined) || ctx.webServer
       if (webServer?.server) {
@@ -314,8 +324,25 @@ export function apply(ctx: any, config: SessionStoreOptions = {}): void {
         patchHttpServerWithVirtualizer(webServer.server, gateMiddleware, store, styleStore)
         mountIndexInjections(ctx, styleStore)
       }
-      // 就绪时刻再主动探一次：轮询窗口内的迟到服务在这里也能立刻接管
+
+      // connection 服务是异步激活的：先主动探测一次；若尚未就绪则用可立即唤醒且 unref 的短暂窗口等待，
+      // 避免把「稍晚就绪」误报成「接管失败」，同时不阻塞宿主优雅退出
       connectionBinding.tryAttach()
+      if (!connectionBinding.isAttached() && !disposed) {
+        await new Promise<void>((resolve) => {
+          resolveAttachWait = resolve
+          attachWaitTimer = setTimeout(() => {
+            attachWaitTimer = null
+            if (resolveAttachWait === resolve) resolveAttachWait = null
+            resolve()
+          }, 1500)
+          if (typeof (attachWaitTimer as any)?.unref === 'function') {
+            (attachWaitTimer as any).unref()
+          }
+        })
+        if (disposed) return
+        connectionBinding.tryAttach()
+      }
 
       const tsIp = getLocalTailscaleIp()
       const lanIp = getLocalLanIp()

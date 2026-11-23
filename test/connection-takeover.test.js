@@ -68,8 +68,14 @@ test('官方 connection 服务透明接管测试 (takeOverConnectionAuth)', asyn
       authorizeIndex(req, res) {
         return this.browserAuth.authorizeIndex(req, res)
       },
-      // 官方 /connect：只认本次进程 launchToken，其余一律 401
+      // 官方 /connect：只认本次进程 launchToken 的 GET 请求且服务未 disposed，其余一律 401
+      disposed: false,
       authorizeConnect(req, res) {
+        if (this.disposed || (req.method && req.method !== 'GET')) {
+          res.writeHead(401)
+          res.end('dsh web authentication required')
+          return
+        }
         const url = new URL(req.url || '/', 'http://dsh.invalid')
         const tokens = url.searchParams.getAll('token')
         if (tokens.length !== 1 || tokens[0] !== launchToken) {
@@ -327,5 +333,66 @@ test('官方 connection 服务透明接管测试 (takeOverConnectionAuth)', asyn
     assert.equal(res.statusCode, 302)
     assert.equal(res.headers.location, './api/remote.mux')
     assert.ok(String(res.headers['set-cookie']).includes('dsh-official-api'))
+  })
+
+  await t.test('已授权设备携带错误或多值 token 访问 /connect：交回官方保持 401，不静默 302', () => {
+    const conn = createMockConnection('launch-token-abc')
+    takeOverConnectionAuth(conn, store)
+
+    const wrongRes = createMockResponse()
+    conn.authorizeConnect(
+      {
+        method: 'GET',
+        headers: { host: '127.0.0.1:3080' },
+        socket: { remoteAddress: '127.0.0.1' },
+        url: '/connect?token=wrong-token',
+      },
+      wrongRes
+    )
+    assert.equal(wrongRes.statusCode, 401)
+    assert.equal(wrongRes.ended, true)
+
+    const multiRes = createMockResponse()
+    conn.authorizeConnect(
+      {
+        method: 'GET',
+        headers: { host: '127.0.0.1:3080' },
+        socket: { remoteAddress: '127.0.0.1' },
+        url: '/connect?token=launch-token-abc&token=extra',
+      },
+      multiRes
+    )
+    assert.equal(multiRes.statusCode, 401)
+    assert.equal(multiRes.ended, true)
+  })
+
+  await t.test('非 GET 请求或服务已 disposed 访问 /connect：交回官方处理，不返回 302', () => {
+    const conn = createMockConnection('launch-token-abc')
+    takeOverConnectionAuth(conn, store)
+
+    const postRes = createMockResponse()
+    conn.authorizeConnect(
+      {
+        method: 'POST',
+        headers: { host: '127.0.0.1:3080' },
+        socket: { remoteAddress: '127.0.0.1' },
+        url: '/connect',
+      },
+      postRes
+    )
+    assert.equal(postRes.statusCode, 401)
+
+    conn.disposed = true
+    const disposedRes = createMockResponse()
+    conn.authorizeConnect(
+      {
+        method: 'GET',
+        headers: { host: '127.0.0.1:3080' },
+        socket: { remoteAddress: '127.0.0.1' },
+        url: '/connect',
+      },
+      disposedRes
+    )
+    assert.equal(disposedRes.statusCode, 401)
   })
 })

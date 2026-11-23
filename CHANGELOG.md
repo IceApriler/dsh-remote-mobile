@@ -7,24 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.10.5] - 2026-11-20
 
-### Fixed (DSH 0.2.2-rc.3 适配：connection 服务迟到就绪导致鉴权接管失手、/connect 始终 401)
+### Fixed (DSH 0.2.2-rc.x 适配：connection 服务迟到就绪导致鉴权接管失手、/connect 始终 401)
 
-- **问题背景**：DSH 0.2.2-rc.3 上插件 1.10.4 出现「找不到服务端的 `connection` 服务」——官方临时 Token 鉴权始终未被接管，`/connect` 恒返回 401，手机扫码/密码登录成功后页面停在「未连接」。
+- **问题背景**：DSH 0.2.2-rc.x（实测 `0.2.2-rc.3` / `rc.5`）上插件 1.10.4 出现「找不到服务端的 `connection` 服务」——官方临时 Token 鉴权始终未被接管，`/connect` 恒返回 401，手机扫码/密码登录成功后页面停在「未连接」。
 - **根因一：接管只依赖一次同步 `ctx.get` + 一条 `ctx.inject`（`src/bridge/compat.ts`, `src/index.ts`）**：
   - 官方 `@deepseek-ai/dsh-client-connection` 的 `apply()` 是**异步**的：内部要 `await` 凭据服务并 `BrowserAuth.create()` 落盘签名密钥后才 `new HostConnectionService(...)` 注册服务；插件 `apply` 执行的瞬间 `ctx.get('connection')` 必然是 `undefined`（0.2.2-rc.x 里这段耗时进一步拉长）。
   - 旧实现退回单条 `ctx.inject(['connection'], cb)`，而该调用的异常会被 `try/catch` 静默吞掉；一旦宿主对动态注入做了作用域隔离或注入回调抛错，接管**永久不会发生**，也再无补救。
-  - 新增导出 `bindConnectionAuth(ctx, store, options)`：**立即探测**（`ctx.get` / `ctx.root.get` / `ctx.connection`）+ **动态注入** + **`internal/service` 全局事件** + **有界轮询（默认 500ms × 30s，`unref` 不阻塞宿主退出）** 四条彼此独立的通道兜底，服务无论何时出现都会完成一次性幂等接管；插件卸载/热重载时由 `dispose()` 解绑监听与定时器。
+  - 新增导出 `bindConnectionAuth(ctx, store, options)`：**立即探测**（`ctx.get` / `ctx.root.get` / `ctx.connection`）+ **动态注入** + **`internal/service` 全局事件** + **有界轮询（默认 500ms × 30s，`unref` 不阻塞宿主退出）** 四条彼此独立的通道兜底，支持服务迟到就绪与运行期热重载后的新实例自动接管；插件卸载/热重载时由 `dispose()` 统一解绑注入句柄、事件监听与定时器。
 - **根因二：`/connect` 未纳入接管范围（`src/bridge/compat.ts`）**：
-  - 官方 `authorizeConnect` 只接受携带**本次进程 launchToken** 的请求，其余一律 401；而移动端根本拿不到桌面端启动时打印的临时 token，于是「登录成功 → 页面 401 → 未连接」。
-  - 现在 `takeOverConnectionAuth` 一并接管 `connection.authorizeConnect`：携带官方合法 token 时仍走官方换取 API Cookie（桌面端行为不变）；已通过本插件门禁（扫码配对 / 长期密码 / 免密直连）但未携带官方 token 时，直接 `302 → ./` 回到应用根路径，不再被官方 401 打断。
+  - 官方 `authorizeConnect` 只接受携带**本次进程 launchToken** 的 `GET` 请求，其余一律 401；而移动端根本拿不到桌面端启动时打印的临时 token。
+  - 现在 `takeOverConnectionAuth` 一并接管 `connection.authorizeConnect`：非 `GET`、服务已 `disposed`、未授权外部请求或显式携带 `token` 参数（含合法/错误/多值 token）的请求均交回官方处理；已通过本插件门禁（扫码配对 / 长期密码 / 免密直连）且未携带 `token` 参数的 `GET /connect` 直接 `302 → ./` 回到应用根路径。
 - **客户端插件在 DSH 0.2.2 上永远 pending（`src/client/index.jsx`, `package.json`）**：
-  - 客户端 `inject` 曾声明 `["slots", "locale", "connection", "settingsScope", "remote"]`，其中 `settingsScope` 与 `remote` 在 0.2.2（含 rc.3）浏览器端运行时中并不存在；Cordis 对数组形式 `inject` 是硬依赖，只要有一个名字取不到，整个客户端插件就停在 `pending (waiting for services: ...)`，设置面板（扫码 / 设备管理 / 样式）不会挂载。
-  - 收敛为真正使用且确实存在的 `["slots", "locale"]`（其余服务均在代码中按需 `ctx.get()` 兜底读取）；
+  - 客户端 `inject` 曾声明 `["slots", "locale", "connection", "settingsScope", "remote"]`，其中 `settingsScope` 与 `remote` 在 0.2.2（含 rc.x）浏览器端运行时中并不存在；Cordis 对数组形式 `inject` 是硬依赖，只要有一个名字取不到，整个客户端插件就停在 `pending (waiting for services: ...)`，设置面板（扫码 / 设备管理 / 样式）不会挂载。
+  - 收敛为真正使用且确实存在的 `["slots", "locale"]`（其余服务在客户端代码中并未使用）；
   - `package.json` 的 `dsh.client.inject` 移除已不存在的 `@deepseek-ai/dsh-client-runtime`，保留 connection / ui-settings / ui-sidebar 三个真实客户端模块。
-- **测试覆盖（`test/connection-binding.test.js` 新增 6 项，`test/connection-takeover.test.js` 新增 3 项）**：
-  - 覆盖服务未注册时不误接管、`internal/service` 事件迟到接管、`ctx.inject` 通道接管、注入与事件均失效时轮询兜底、`dispose` 解绑后不再接管、接管幂等；
-  - 覆盖 `/connect` 三种形态：未授权外部设备保持官方 401、已配对手机无 token 时 302 回根路径、携带官方合法 token 时仍走官方 `./api/remote.mux` 换取 Cookie。
-- **实机验证（dsh 0.2.2-rc.3，web profile）**：启动横幅恢复「官方临时 Token 鉴权已接管」；网关模拟手机配对后 `/connect` 返回 `302 location: ./`（原为 `401`），`/` 与 `/api/remote-mobile/status` 均 200。
+- **测试覆盖（`test/connection-binding.test.js`、`test/connection-takeover.test.js`、`test/client-bundle.test.js`）**：
+  - 覆盖服务未注册时不误接管、`internal/service` 事件迟到接管、`ctx.inject` 通道接管、注入与事件均失效时轮询兜底、轮询超时退出、`connection` 热重载二次接管、`onAttached` 实参校验、`dispose` 解绑注入与事件监听、接管幂等；
+  - 覆盖 `/connect` 边界形态：未授权外部设备保持官方 401、已配对手机无 token 时 302 回根路径、携带合法 token 走官方 `./api/remote.mux` 换取 Cookie、携带错误/多值 token 或非 GET / `disposed` 状态均保持交回官方处理；
+  - 覆盖客户端 bundle 的 `inject` 依赖收敛回归断言。
+- **实机验证（dsh 0.2.2-rc.3 / rc.5，web profile）**：启动横幅恢复「官方临时 Token 鉴权已接管」；网关模拟手机配对后 `/connect` 返回 `302 location: ./`（原为 `401`），`/` 与 `/api/remote-mobile/status` 均 200。
 
 ---
 

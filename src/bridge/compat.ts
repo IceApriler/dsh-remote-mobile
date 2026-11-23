@@ -1096,22 +1096,21 @@ export function takeOverConnectionAuth(connection: any, store: SessionStore): vo
   }
 
   // 4. 接管 connection.authorizeConnect (控制 GET /connect 的进程 Token 换取)
-  // 官方语义：/connect 只接受「带本次进程 launchToken」的请求并换取 API Cookie，
+  // 官方语义：/connect 只接受「带本次进程 launchToken」的 GET 请求并换取 API Cookie，
   // 其余请求一律 401。对已经通过本插件门禁（扫码配对 / 长期密码 / 免密直连）的手机而言，
-  // 这个 401 会让页面停在「未连接」——移动端根本拿不到桌面端启动时打印的临时 token。
-  // 因此：携带官方合法 token 时仍走官方换取；已授权但未携带 token 时直接回到应用根路径，
-  // 让页面继续使用本插件门禁建立的会话，而不是被官方 401 打断。
+  // 若误入无 token 的 /connect，401 会打断访问体验。
+  // 因此：
+  // - 未通过门禁、非 GET 请求、服务已 disposed、或显式携带 token 参数（无论合法还是伪造/多值）
+  //   均交回官方 origAuthorizeConnect（合法 token 换取 API Cookie，错误/非法请求保持官方 401/403）；
+  // - 仅对已授权且未携带 token 的 GET 请求返回 302 -> ./ 回到应用根路径。
   if (typeof connection.authorizeConnect === 'function') {
     const origAuthorizeConnect = connection.authorizeConnect.bind(connection)
     connection.authorizeConnect = (req: any, res: any): void => {
-      if (!isRequestAuthorizedByGate(req, store)) {
-        return origAuthorizeConnect(req, res)
-      }
-      const officialToken = extractLaunchTokenFromUrl(req?.url)
       if (
-        officialToken &&
-        connection.browserAuth?.launchToken &&
-        safeStringEqual(officialToken, connection.browserAuth.launchToken)
+        connection.disposed === true ||
+        (req?.method && req.method !== 'GET') ||
+        !isRequestAuthorizedByGate(req, store) ||
+        hasTokenQueryParam(req?.url)
       ) {
         return origAuthorizeConnect(req, res)
       }
@@ -1131,15 +1130,14 @@ export function takeOverConnectionAuth(connection: any, store: SessionStore): vo
   injectTrustedHosts(connection, [store.getActivePort(), 3080, 3081], store.getOptions().trustedHosts)
 }
 
-/** 从 /connect 请求 URL 中提取官方进程 token（仅取单值，多值视为非法，交回官方处理） */
-function extractLaunchTokenFromUrl(url?: string): string | null {
-  if (!url || !url.includes('token=')) return null
+/** 判断请求 URL 是否显式携带了 token 查询参数（含空值、错误值或多值） */
+function hasTokenQueryParam(url?: string): boolean {
+  if (!url || !url.includes('token')) return false
   try {
     const parsed = new URL(url, 'http://dsh.invalid')
-    const tokens = parsed.searchParams.getAll('token')
-    return tokens.length === 1 ? tokens[0] : null
+    return parsed.searchParams.has('token')
   } catch {
-    return null
+    return false
   }
 }
 
@@ -1267,13 +1265,19 @@ export function bindConnectionAuth(
   store: SessionStore,
   options: ConnectionAuthBindingOptions = {}
 ): ConnectionAuthBinding {
-  const retryWindowMs = options.retryWindowMs ?? 30_000
-  const retryIntervalMs = options.retryIntervalMs ?? 500
+  const retryWindowMs =
+    typeof options.retryWindowMs === 'number' && Number.isFinite(options.retryWindowMs)
+      ? Math.max(0, options.retryWindowMs)
+      : 30_000
+  const retryIntervalMs =
+    typeof options.retryIntervalMs === 'number' && Number.isFinite(options.retryIntervalMs)
+      ? Math.max(10, options.retryIntervalMs)
+      : 500
 
   let attached = false
   let disposed = false
   let timer: ReturnType<typeof setTimeout> | null = null
-  let deadline = Date.now() + retryWindowMs
+  const deadline = Date.now() + retryWindowMs
 
   const unsubscribers: Array<() => void> = []
 
@@ -1299,25 +1303,31 @@ export function bindConnectionAuth(
     }
   }
 
-  const onAttached = () => {
-    if (!attached) return
-    clearTimer()
-    try {
-      options.onAttached?.(readConnection())
-    } catch {}
-  }
-
   const tryAttach = (candidate?: any): boolean => {
-    if (attached || disposed) return attached
+    if (disposed) return false
     const connection = candidate && typeof candidate === 'object' ? candidate : readConnection()
-    if (!connection) return false
+    if (!connection) return attached
+    // 同一实例已接管过：保持幂等，不重复包装也不重复触发回调；
+    // 若宿主热重载产生新的 connection 实例（未打标记），则继续向下接管新实例。
+    if ((connection as any).__dsh_rm_auth_takeover__) {
+      attached = true
+      clearTimer()
+      return true
+    }
+    let tookOver = false
     try {
       takeOverConnectionAuth(connection, store)
-      attached = Boolean((connection as any).__dsh_rm_auth_takeover__)
+      tookOver = Boolean((connection as any).__dsh_rm_auth_takeover__)
     } catch {
-      attached = false
+      tookOver = false
     }
-    if (attached) onAttached()
+    if (tookOver) {
+      attached = true
+      clearTimer()
+      try {
+        options.onAttached?.(connection)
+      } catch {}
+    }
     return attached
   }
 
@@ -1326,13 +1336,26 @@ export function bindConnectionAuth(
     // 通道 2：标准 Cordis 动态注入
     try {
       if (typeof ctx?.inject === 'function') {
-        ctx.inject(['connection'], (connCtx: any) => {
+        const injectHandle = ctx.inject(['connection'], (connCtx: any) => {
           try {
             const conn =
               (typeof connCtx?.get === 'function' ? connCtx.get('connection') : undefined) ?? connCtx?.connection
             tryAttach(conn)
           } catch {}
         })
+        if (typeof injectHandle === 'function') {
+          unsubscribers.push(() => {
+            try {
+              injectHandle()
+            } catch {}
+          })
+        } else if (injectHandle && typeof injectHandle.dispose === 'function') {
+          unsubscribers.push(() => {
+            try {
+              injectHandle.dispose()
+            } catch {}
+          })
+        }
       }
     } catch {}
 
@@ -1378,9 +1401,11 @@ export function bindConnectionAuth(
     if (typeof (timer as any)?.unref === 'function') (timer as any).unref()
   }
 
-  // 通道 1：立即探测
-  if (!tryAttach()) {
-    subscribe()
+  // 始终订阅注入与事件通道（兼顾迟到就绪与运行期 connection 热重载）；
+  // 若通道 1 立即探测尚未命中，再启动有界轮询兜底。
+  const attachedImmediately = tryAttach()
+  subscribe()
+  if (!attachedImmediately) {
     schedulePoll()
   }
 
@@ -1398,5 +1423,3 @@ export function bindConnectionAuth(
     },
   }
 }
-
-

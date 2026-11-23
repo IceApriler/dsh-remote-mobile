@@ -3,4 +3,4 @@
  * 在 build-client.js 自动化打包时会自动同步
  */
 export const PLUGIN_VERSION = 'v1.10.5';
-export const BUILD_TIME = '2026-11-20 22:56:20';
+export const BUILD_TIME = '2026-11-23 09:53:38';

@@ -57,4 +57,17 @@ test('客户端 Bundle 实时刷新链路完整性测试', async (t) => {
       '客户端 bundle 中不应存在 window.location.port 作为对外端口来源',
     )
   })
+
+  await t.test('客户端 Cordis inject 仅声明真实存在的 slots/locale，且 package.json 不含已移除的 dsh-client-runtime', () => {
+    const clientIndexSrc = readFileSync(resolve(__dirname, '../src/client/index.jsx'), 'utf8')
+    assert.match(clientIndexSrc, /export const inject\s*=\s*\[\s*["']slots["']\s*,\s*["']locale["']\s*\]/)
+    assert.ok(!bundle.includes('"settingsScope"'), 'bundle 中不应包含已不存在的 settingsScope 依赖')
+
+    const pkg = JSON.parse(readFileSync(resolve(__dirname, '../package.json'), 'utf8'))
+    const clientInject = pkg?.dsh?.client?.inject || []
+    assert.ok(
+      !clientInject.includes('@deepseek-ai/dsh-client-runtime'),
+      'package.json dsh.client.inject 不应包含已移除的 @deepseek-ai/dsh-client-runtime',
+    )
+  })
 })
