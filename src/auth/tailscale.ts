@@ -48,6 +48,16 @@ export function getPhysicalSocketIp(req: { socket?: { remoteAddress?: string } }
 }
 
 /**
+ * 判断 IP / 主机名是否为本机回环地址
+ * 仅接受 127.0.0.1、::1 与 localhost，避免把 127.0.0.0/8 的其他地址误当成本机操作者。
+ */
+export function isLoopbackIp(rawIp?: string): boolean {
+  if (!rawIp) return false
+  const ip = rawIp.replace(/^::ffff:/, '').trim().toLowerCase()
+  return ip === '127.0.0.1' || ip === '::1' || ip === 'localhost'
+}
+
+/**
  * 提取请求的物理 Socket 来源 IP（兼容历史接口，保持物理连接语义）
  */
 export function getClientIp(req: { socket?: { remoteAddress?: string; __dsh_real_remote_address__?: string }; headers?: Record<string, string | string[] | undefined> }): string {

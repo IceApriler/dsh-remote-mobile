@@ -36,7 +36,15 @@ import net from 'node:net'
 import { timingSafeEqual } from 'node:crypto'
 import zlib from 'node:zlib'
 import type { SessionStore } from '../auth/token.js'
-import { getPhysicalSocketIp, getClientIp, isTailscaleIp, isLanIp, getAllNetworkIps } from '../auth/tailscale.js'
+import {
+  getPhysicalSocketIp,
+  getClientIp,
+  isTailscaleIp,
+  isLanIp,
+  isLoopbackIp,
+  getAllNetworkIps,
+} from '../auth/tailscale.js'
+import { markLocalOperatorRequest, clearLocalOperatorRequest } from '../auth/local-operator.js'
 import { getGatewaySecret, safeCompareSecret } from '../gateway/secret.js'
 import {
   extractBareHostname,
@@ -590,6 +598,14 @@ export function patchHttpServerWithVirtualizer(
 
       // 内部真实 IP 头始终写入（供本插件审计与路由层 getRealClientIp 读取）
       req.headers['x-dsh-real-ip'] = effectiveClientIp
+
+      // 本机操作者标记：必须在这里完成物理 socket、网关 Secret 与反代头校验后再写入。
+      // 受信网关与同机反向代理的物理连接同样是 127.0.0.1，路由层若自行看 socket 会把外部设备误判为本机。
+      const localOperator =
+        isLoopbackSocket &&
+        (trustedGateway ? isLoopbackIp(effectiveClientIp) : isLoopbackRequest(req))
+      if (localOperator) markLocalOperatorRequest(req)
+      else clearLocalOperatorRequest(req)
 
       // 消费完毕后立即抹除内部私密密钥头，防止向下游泄露
       delete req.headers['x-dsh-gateway-secret']

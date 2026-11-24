@@ -6,6 +6,7 @@ import { getPublicKeyPem, decryptWithPrivateKey, validateSecretStrength, RSA_KEY
 import { getLoginPageHtml } from './login-page.js'
 import { DEFAULT_STYLE_FILE, type StyleSnippetStore } from '../styles/style-snippets.js'
 import { getPairingBridgeState } from '../bridge/compat.js'
+import { isLocalOperatorRequest } from '../auth/local-operator.js'
 import {
   getDirectoryPickerStatus,
   enableDirectoryPickerBrowse,
@@ -95,9 +96,12 @@ export function createRoutes(
         const sessionStats = store.getSessionsList()
         const ipSecurityStats = store.getIpSecurityStats()
         const bridgeState = getPairingBridgeState()
+        // 仅本机操作者可见当前有效配对码（CLI `dsh-remote-mobile code` 用来窥视而不刷新）
+        const activeCode = isLocalOperatorRequest(_req) ? store.getActiveShortCode() : null
 
         jsonResponse(res, 200, {
           success: true,
+          pairingCode: activeCode,
           locale: readGlobalLocale(),
           tailscaleIp: tsIp,
           lanIp,

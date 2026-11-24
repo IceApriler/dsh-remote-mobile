@@ -7,13 +7,15 @@ import { createRoutes } from '../lib/routes/api.js'
 import { getPublicKeyPem } from '../lib/auth/crypto.js'
 import { StyleSnippetStore } from '../lib/styles/style-snippets.js'
 import { getLoginPageHtml } from '../lib/routes/login-page.js'
+import { markLocalOperatorRequest } from '../lib/auth/local-operator.js'
 
-function createMockReqRes({ method = 'GET', url = '/', headers = {}, body = null, socket = {} } = {}) {
+function createMockReqRes({ method = 'GET', url = '/', headers = {}, body = null, socket = {}, localOperator = false } = {}) {
   const req = new EventEmitter()
   req.method = method
   req.url = url
   req.headers = headers
   req.socket = { remoteAddress: '127.0.0.1', ...socket }
+  if (localOperator) markLocalOperatorRequest(req)
 
   let statusCode = 200
   let responseHeaders = {}
@@ -110,6 +112,39 @@ test('API 路由处理器功能与安全集成测试 (api.ts)', async (t) => {
     assert.equal(result.proxy.proxyPort, 3081)
     assert.equal(result.proxy.proxyHost, '0.0.0.0')
     assert.ok(Array.isArray(result.proxy.trustedHosts))
+  })
+
+  await t.test('GET /api/remote-mobile/status 仅向本机操作者暴露当前有效配对码', async () => {
+    const route = findRoute('GET', '/api/remote-mobile/status')
+    assert.ok(route)
+
+    // 本机回环：虚拟化层完成三重校验后会打上本机操作者标记，可见当前有效码
+    const local = createMockReqRes({ socket: { remoteAddress: '127.0.0.1' }, localOperator: true })
+    await route.handler(local.req, local.res)
+    const localJson = local.getResponse().json()
+    assert.equal(localJson.pairingCode, null, '尚未生成时为 null')
+
+    const generated = store.generateShortCode()
+    const local2 = createMockReqRes({ socket: { remoteAddress: '::1' }, localOperator: true })
+    await route.handler(local2.req, local2.res)
+    const local2Json = local2.getResponse().json()
+    assert.equal(local2Json.pairingCode?.code, generated.code)
+    assert.ok(local2Json.pairingCode?.expiresAt > Date.now())
+
+    // 外部设备：任何情况下都看不到配对码
+    const remote = createMockReqRes({ socket: { remoteAddress: '10.10.1.88' } })
+    await route.handler(remote.req, remote.res)
+    const remoteJson = remote.getResponse().json()
+    assert.equal(remoteJson.pairingCode, null)
+    assert.ok(!JSON.stringify(remoteJson).includes(generated.code), '响应体不得泄漏配对码')
+
+    // 伪造 x-dsh-real-ip 头也不能让外部设备读到配对码（路由层只认虚拟化层写入的本机标记）
+    const spoofed = createMockReqRes({
+      socket: { remoteAddress: '10.10.1.88' },
+      headers: { 'x-dsh-real-ip': '127.0.0.1' },
+    })
+    await route.handler(spoofed.req, spoofed.res)
+    assert.equal(spoofed.getResponse().json().pairingCode, null)
   })
 
   await t.test('POST /api/remote-mobile/verify 使用 RSA 密文成功验证并派发 Set-Cookie', async () => {

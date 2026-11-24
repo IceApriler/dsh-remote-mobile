@@ -1,8 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import http from 'node:http'
 import { EventEmitter } from 'node:events'
 import zlib from 'node:zlib'
 import { SessionStore } from '../lib/auth/token.js'
+import { createRoutes } from '../lib/routes/api.js'
 import {
   patchHttpServerWithVirtualizer,
   mountIndexInjections,
@@ -13,6 +15,8 @@ import {
   MOBILE_DISMISS_SNIPPET,
 } from '../lib/bridge/compat.js'
 import { getClientIp } from '../lib/auth/tailscale.js'
+import { isLocalOperatorRequest } from '../lib/auth/local-operator.js'
+import { generateGatewaySecret, setGatewaySecret, clearGatewaySecret } from '../lib/gateway/secret.js'
 import { StyleSnippetStore } from '../lib/styles/style-snippets.js'
 
 test('上下文虚拟化与兼容性补丁测试 (compat.ts)', async (t) => {
@@ -213,6 +217,143 @@ test('上下文虚拟化与兼容性补丁测试 (compat.ts)', async (t) => {
     }
 
     mockServer.emit('request', req, res)
+  })
+
+  await t.test('本机操作者标记：纯回环/网关回环为真，同机反代、受信网关外部客户端与外部直连为假', () => {
+    const runCase = ({ socket, headers, secret, expected, label }) => {
+      const mockServer = new EventEmitter()
+      const store = new SessionStore({ devicesFile: `/tmp/dsh-compat-local-${Date.now()}-${Math.random()}.json` })
+      const gateMiddleware = (req, res, next) => { next?.(); return true }
+      patchHttpServerWithVirtualizer(mockServer, gateMiddleware, store)
+      if (secret) setGatewaySecret(mockServer, secret)
+
+      const req = { headers: { ...headers }, socket: { ...socket } }
+      const res = { writeHead() {}, setHeader() {}, end() {} }
+      mockServer.emit('request', req, res)
+      assert.equal(isLocalOperatorRequest(req), expected, label)
+      if (secret) clearGatewaySecret(mockServer)
+    }
+
+    runCase({
+      label: '纯本机回环直连应标记为本机操作者',
+      socket: { remoteAddress: '127.0.0.1' },
+      headers: { host: '127.0.0.1:3080' },
+      expected: true,
+    })
+
+    runCase({
+      label: '同机反向代理带外部 Host/XFF 不得标记为本机',
+      socket: { remoteAddress: '127.0.0.1' },
+      headers: { host: 'app.example:3080', 'x-forwarded-for': '10.10.1.88' },
+      expected: false,
+    })
+
+    const secret = generateGatewaySecret()
+    runCase({
+      label: '受信网关转发的外部客户端不得标记为本机',
+      socket: { remoteAddress: '127.0.0.1' },
+      headers: { host: '127.0.0.1:3080', 'x-dsh-gateway-secret': secret, 'x-dsh-real-ip': '10.10.1.88' },
+      secret,
+      expected: false,
+    })
+
+    runCase({
+      label: '受信网关上报的回环客户端仍应标记为本机',
+      socket: { remoteAddress: '127.0.0.1' },
+      headers: { host: '127.0.0.1:3080', 'x-dsh-gateway-secret': secret, 'x-dsh-real-ip': '127.0.0.1' },
+      secret,
+      expected: true,
+    })
+
+    runCase({
+      label: '外部物理连接伪造 x-dsh-real-ip 不得标记为本机',
+      socket: { remoteAddress: '10.10.1.88' },
+      headers: { host: '10.10.1.88:3080', 'x-dsh-real-ip': '127.0.0.1' },
+      expected: false,
+    })
+
+    runCase({
+      label: '外部物理连接伪造 XFF 回环值不得标记为本机',
+      socket: { remoteAddress: '10.10.1.88' },
+      headers: { host: '10.10.1.88:3080', 'x-forwarded-for': '127.0.0.1' },
+      expected: false,
+    })
+  })
+
+  await t.test('status 接口在 proxy 模式与同机反向代理下均不向外部设备返回配对码', async () => {
+    const store = new SessionStore({
+      devicesFile: `/tmp/dsh-compat-status-${Date.now()}-${Math.random()}.json`,
+      secret: 'AdminPass2026',
+    })
+    const generated = store.generateShortCode()
+    const routes = createRoutes(store)
+    const coreServer = http.createServer(async (req, res) => {
+      const pathname = (req.url || '/').split('?')[0]
+      const route = routes.find(
+        (item) => item.path === pathname && (item.method || 'GET') === (req.method || 'GET'),
+      )
+      if (!route) {
+        res.writeHead(404)
+        res.end()
+        return
+      }
+      await route.handler(req, res)
+    })
+    const gateMiddleware = (req, res, next) => { next?.(); return true }
+    patchHttpServerWithVirtualizer(coreServer, gateMiddleware, store)
+    await new Promise((resolve) => coreServer.listen(0, '127.0.0.1', resolve))
+    const port = coreServer.address().port
+    const secret = generateGatewaySecret()
+    setGatewaySecret(coreServer, secret)
+
+    const requestStatus = (headers) => new Promise((resolve, reject) => {
+      const req = http.request(
+        { hostname: '127.0.0.1', port, path: '/api/remote-mobile/status', method: 'GET', headers },
+        (res) => {
+          let body = ''
+          res.on('data', (chunk) => (body += chunk))
+          res.on('end', () => resolve({ status: res.statusCode, data: JSON.parse(body || '{}') }))
+        },
+      )
+      req.on('error', reject)
+      req.end()
+    })
+
+    try {
+      const local = await requestStatus({ host: `127.0.0.1:${port}` })
+      assert.equal(local.status, 200)
+      assert.equal(local.data.pairingCode?.code, generated.code, '本机直连应可见配对码')
+
+      // 同机反向代理：物理连接是 127.0.0.1，但 Host/XFF 表明是外部流量
+      const sameHostProxy = await requestStatus({
+        host: `app.example:${port}`,
+        'x-forwarded-for': '10.10.1.88',
+      })
+      assert.equal(sameHostProxy.status, 200)
+      assert.equal(sameHostProxy.data.pairingCode, null)
+      assert.ok(!JSON.stringify(sameHostProxy.data).includes(generated.code))
+
+      // 受信网关转发外部客户端：Secret 合法，但上报的真实 IP 是外部地址
+      const gatewayProxy = await requestStatus({
+        host: `127.0.0.1:${port}`,
+        'x-dsh-gateway-secret': secret,
+        'x-dsh-real-ip': '10.10.1.88',
+      })
+      assert.equal(gatewayProxy.status, 200)
+      assert.equal(gatewayProxy.data.pairingCode, null)
+      assert.ok(!JSON.stringify(gatewayProxy.data).includes(generated.code))
+
+      // 同一网关上报回环客户端时仍应视为本机操作者
+      const gatewayLocal = await requestStatus({
+        host: `127.0.0.1:${port}`,
+        'x-dsh-gateway-secret': secret,
+        'x-dsh-real-ip': '127.0.0.1',
+      })
+      assert.equal(gatewayLocal.data.pairingCode?.code, generated.code)
+    } finally {
+      clearGatewaySecret(coreServer)
+      await new Promise((resolve) => coreServer.close(resolve))
+    }
   })
 
   await t.test('移动端请求注入 data-dsh-mobile 标记与样式片段，桌面端不注入', (t, done) => {
